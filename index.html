@@ -20,8 +20,12 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/esri-leaflet-geocoder/3.1.4/esri-leaflet-geocoder.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/esri-leaflet-geocoder/3.1.4/esri-leaflet-geocoder.js"></script>
 
+  <!-- Pako (Inflate/Deflate) & UTIF (TIFF / GeoTIFF In-Browser Decoder) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
+
   <!-- Custom Styling -->
-  <link rel="stylesheet" href="css/styles.css?v=20260927_02">
+  <link rel="stylesheet" href="css/styles.css?v=20260927_03">
 </head>
 <body class="bg-slate-950 text-slate-100 h-screen w-screen flex flex-col overflow-hidden select-none">
 
@@ -440,22 +444,22 @@
               <span id="calibImageStatus" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">لم يتم اختيار ملف</span>
             </div>
 
-            <!-- Drag & Drop Zone for ECW and Images -->
+            <!-- Drag & Drop Zone for ECW, TIFF and Satellite Images -->
             <div id="ecwDropZone" class="ecw-dropzone rounded-xl p-4 text-center cursor-pointer space-y-2 border border-dashed border-amber-500/40 hover:border-amber-400 bg-slate-950/50 hover:bg-amber-500/5 transition-all">
-              <input type="file" id="satelliteImageFileInput" accept=".ecw,.ers,.eww,.wld,.tif,.tiff,.jpg,.jpeg,.png,.webp,image/*" multiple class="hidden">
-              <input type="file" id="companionImageFileInput" accept="image/*" class="hidden">
+              <input type="file" id="satelliteImageFileInput" accept=".ecw,.ers,.eww,.wld,.tfw,.tif,.tiff,.jpg,.jpeg,.png,.webp,image/*" multiple class="hidden">
+              <input type="file" id="companionImageFileInput" accept="image/*,.tif,.tiff,image/tiff" class="hidden">
               
               <div class="w-10 h-10 mx-auto rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 text-lg shadow-inner">
                 <i class="fa-solid fa-file-zipper"></i>
               </div>
               <div>
-                <div class="text-xs font-bold text-slate-200">اسحب وأفلت ملف ECW هنا أو انقر للاستعراض</div>
-                <div class="text-[11px] text-slate-400 mt-0.5">يدعم صيغ <span class="font-mono text-amber-300">.ecw</span> مع ملفات الإسناد (<span class="font-mono text-slate-300">.ers, .eww</span>) والصور الفضائية (<span class="font-mono text-slate-300">TIFF, PNG, JPG</span>)</div>
+                <div class="text-xs font-bold text-slate-200">اسحب وأفلت ملف ECW أو TIFF / GeoTIFF هنا أو انقر للاستعراض</div>
+                <div class="text-[11px] text-slate-400 mt-0.5">يدعم ملفات <span class="font-mono text-amber-300">.ecw</span> وصور <span class="font-mono text-emerald-300">TIFF / GeoTIFF</span> مع ملفات الإسناد (<span class="font-mono text-slate-300">.ers, .eww, .tfw, .wld</span>) والصور الفضائية (<span class="font-mono text-slate-300">PNG, JPG</span>)</div>
               </div>
               <div class="flex items-center justify-center gap-2 pt-1">
                 <button type="button" id="triggerUploadBtn" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-medium transition-colors shadow flex items-center gap-1.5">
                   <i class="fa-solid fa-folder-open text-xs"></i>
-                  <span>اختيار ملف من الجهاز</span>
+                  <span>اختيار ملف (TIFF / ECW / صورة)</span>
                 </button>
               </div>
             </div>
@@ -608,15 +612,18 @@
                   </button>
                 </div>
 
-                <!-- Direct Image Upload for Gemini (most reliable method) -->
-                <input type="file" id="geminiImageFileInput" accept="image/png,image/jpeg,image/webp" class="hidden">
+                <!-- Direct Image Upload for Gemini (supports TIFF, GeoTIFF, PNG, JPG, WEBP) -->
+                <input type="file" id="geminiImageFileInput" accept="image/png,image/jpeg,image/webp,.tif,.tiff,image/tiff" class="hidden">
                 <div class="bg-purple-950/30 border border-purple-700/40 rounded-lg p-2 space-y-1.5">
-                  <p class="text-[10px] text-purple-200 font-semibold">📸 ارفع صورة الخريطة للتحليل:</p>
-                  <p class="text-[10px] text-slate-400 leading-snug">ارفع نسخة PNG/JPG من الخريطة الفضائية ليحدد الذكاء الاصطناعي موقعها الجغرافي تلقائياً.</p>
+                  <div class="flex items-center justify-between">
+                    <p class="text-[10px] text-purple-200 font-semibold">📸 ارفع صورة الخريطة للتحليل (TIFF / GeoTIFF / PNG / JPG):</p>
+                    <span class="text-[9px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded font-mono border border-purple-500/30">TIFF & GeoTIFF مدعوم</span>
+                  </div>
+                  <p class="text-[10px] text-slate-400 leading-snug">ارفع خريطة فضائية بصيغة TIFF أو GeoTIFF أو PNG أو JPG ليقوم النظام بقراءة إحداثياتها وتحليل معالمها بالذكاء الاصطناعي.</p>
                   <button type="button" id="geminiPickImageBtn"
                     class="w-full py-1.5 px-2.5 bg-slate-800 hover:bg-purple-900/60 border border-slate-600 hover:border-purple-500 rounded-lg text-[11px] text-slate-200 hover:text-white flex items-center justify-center gap-2 transition-all">
-                    <i class="fa-solid fa-image text-purple-400 text-[10px]"></i>
-                    <span id="geminiPickImageBtnText">اختر صورة PNG/JPG للتحليل...</span>
+                    <i class="fa-solid fa-file-image text-purple-400 text-[11px]"></i>
+                    <span id="geminiPickImageBtnText">اختر صورة TIFF / GeoTIFF / PNG / JPG...</span>
                   </button>
                 </div>
 
@@ -1250,13 +1257,13 @@
        Scripts
        ========================================================================= -->
   <!-- Curated Catalog Data -->
-  <script src="js/catalog-data.js?v=20260927_02"></script>
+  <script src="js/catalog-data.js?v=20260927_03"></script>
 
   <!-- Curated Official Archaeological Sites of Iraq -->
-  <script src="js/archaeology-data.js?v=20260927_02"></script>
+  <script src="js/archaeology-data.js?v=20260927_03"></script>
 
   <!-- Living Atlas Engine Entry -->
-  <script src="js/atlas-core.js?v=20260927_02"></script>
+  <script src="js/atlas-core.js?v=20260927_03"></script>
 
 </body>
 </html>

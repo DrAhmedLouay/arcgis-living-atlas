@@ -777,6 +777,54 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * Convert TIFF/GeoTIFF ArrayBuffer into a PNG DataURL via Canvas
+     * Uses UTIF.js to decode standard TIFF compressions and pixel formats
+     */
+    function convertTiffToPngDataUrl(buffer) {
+      if (typeof UTIF === 'undefined') {
+        console.warn('UTIF library not loaded');
+        return null;
+      }
+      try {
+        const ifds = UTIF.decode(buffer);
+        if (!ifds || ifds.length === 0) return null;
+        UTIF.decodeImage(buffer, ifds[0]);
+        const rgba = UTIF.toRGBA8(ifds[0]);
+        const width = ifds[0].width;
+        const height = ifds[0].height;
+
+        if (!rgba || width <= 0 || height <= 0) return null;
+
+        const srcCanvas = document.createElement('canvas');
+        srcCanvas.width = width;
+        srcCanvas.height = height;
+        const srcCtx = srcCanvas.getContext('2d');
+        const imgData = srcCtx.createImageData(width, height);
+        imgData.data.set(rgba);
+        srcCtx.putImageData(imgData, 0, 0);
+
+        // Downsample if large (> 2500px) for smooth web performance and fast Gemini AI analysis
+        const maxDim = 2500;
+        if (width > maxDim || height > maxDim) {
+          const scale = Math.min(maxDim / width, maxDim / height);
+          const targetW = Math.round(width * scale);
+          const targetH = Math.round(height * scale);
+          const destCanvas = document.createElement('canvas');
+          destCanvas.width = targetW;
+          destCanvas.height = targetH;
+          const destCtx = destCanvas.getContext('2d');
+          destCtx.drawImage(srcCanvas, 0, 0, targetW, targetH);
+          return destCanvas.toDataURL('image/png');
+        }
+
+        return srcCanvas.toDataURL('image/png');
+      } catch (err) {
+        console.error('TIFF decode error:', err);
+        return null;
+      }
+    }
+
+    /**
      * Parse ECW Binary Header with AI Deep Scanner, IEEE 754 Search, and Iraq Heuristics
      */
     function parseECWHeader(buffer, fileName, fileSize = 0) {
@@ -1718,21 +1766,38 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isTiff) {
           const arrayReader = new FileReader();
           arrayReader.onload = (ae) => {
-            const geoMeta = parseTIFFGeoHeader(ae.target.result, imageFile.name);
+            const buffer = ae.target.result;
+            const geoMeta = parseTIFFGeoHeader(buffer, imageFile.name);
             let customBounds = null;
             if (geoMeta) {
               customBounds = computeBoundsFromMeta(geoMeta);
               displayECWMetadata(geoMeta, customBounds);
             } else {
-              const metaFallback = parseECWHeader(ae.target.result, imageFile.name, imageFile.size);
+              const metaFallback = parseECWHeader(buffer, imageFile.name, imageFile.size);
               customBounds = computeBoundsFromMeta(metaFallback);
             }
-            const dataReader = new FileReader();
-            dataReader.onload = (de) => {
-              initCalibrationOverlay(de.target.result, imageFile.name, customBounds);
-              if (geoMeta) showToast(`تم استيراد GeoTIFF: ${geoMeta.detectionSource}`, 'success');
-            };
-            dataReader.readAsDataURL(imageFile);
+
+            // Convert TIFF to PNG DataURL so browsers can render it in Leaflet!
+            const pngDataUrl = convertTiffToPngDataUrl(buffer);
+            const imageSrcToUse = pngDataUrl || generateEcwPlaceholderDataUrl(geoMeta || { fileName: imageFile.name });
+
+            initCalibrationOverlay(imageSrcToUse, imageFile.name, customBounds);
+
+            // Also prepare for Gemini Vision analysis
+            if (pngDataUrl) {
+              const parts = pngDataUrl.split(',');
+              geminiSelectedImageBase64 = parts[1];
+              geminiSelectedImageMime = 'image/png';
+              if (geminiPickImageBtnText) {
+                geminiPickImageBtnText.textContent = `✅ ${imageFile.name} (TIFF جاهز للتحليل)`;
+              }
+            }
+
+            if (geoMeta) {
+              showToast(`تم استيراد GeoTIFF بنجاح: ${geoMeta.detectionSource}`, 'success');
+            } else {
+              showToast(`تم استيراد وعرض صورة TIFF بنجاح`, 'success');
+            }
           };
           arrayReader.readAsArrayBuffer(imageFile);
         } else {
@@ -1794,20 +1859,37 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // Attach Companion Converted Image
+    // Attach Companion Converted Image (PNG, JPG, TIFF)
     if (triggerCompanionUploadBtn && companionFileInput) {
       triggerCompanionUploadBtn.addEventListener('click', () => companionFileInput.click());
       companionFileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file && overlay && bounds) {
-          const imgReader = new FileReader();
-          imgReader.onload = (evt) => {
-            overlay.setUrl(evt.target.result);
-            showToast(`تم إقران الصورة المحولة (${file.name}) بنطاق ECW بنجاح!`, 'success');
-          };
-          imgReader.readAsDataURL(file);
+          const lower = file.name.toLowerCase();
+          const isTiff = lower.endsWith('.tif') || lower.endsWith('.tiff');
+
+          if (isTiff) {
+            const arrReader = new FileReader();
+            arrReader.onload = (ae) => {
+              const pngData = convertTiffToPngDataUrl(ae.target.result);
+              if (pngData) {
+                overlay.setUrl(pngData);
+                showToast(`تم إقران صورة TIFF المحولة (${file.name}) بنطاق الخارطة بنجاح!`, 'success');
+              } else {
+                showToast(`تعذّر فك ضغط ملف TIFF: ${file.name}`, 'error');
+              }
+            };
+            arrReader.readAsArrayBuffer(file);
+          } else {
+            const imgReader = new FileReader();
+            imgReader.onload = (evt) => {
+              overlay.setUrl(evt.target.result);
+              showToast(`تم إقران الصورة المحولة (${file.name}) بنطاق الخارطة بنجاح!`, 'success');
+            };
+            imgReader.readAsDataURL(file);
+          }
         } else if (!bounds) {
-          showToast('يرجى استيراد ملف ECW أولاً', 'warning');
+          showToast('يرجى استيراد ملف ECW أو تحديد نطاق الخريطة أولاً', 'warning');
         }
       });
     }
@@ -2191,24 +2273,74 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // Open file picker
+    // Open file picker (supports TIFF, GeoTIFF, PNG, JPG, WEBP)
     if (geminiPickImageBtn && geminiImageFileInput) {
       geminiPickImageBtn.addEventListener('click', () => geminiImageFileInput.click());
       geminiImageFileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          const dataUrl = ev.target.result; // data:image/jpeg;base64,....
-          const parts = dataUrl.split(',');
-          geminiSelectedImageBase64 = parts[1];
-          geminiSelectedImageMime   = file.type || 'image/jpeg';
-          if (geminiPickImageBtnText) {
-            geminiPickImageBtnText.textContent = `✅ ${file.name} (جاهزة للتحليل)`;
-          }
-          showToast(`تم تحديد الصورة: ${file.name}`, 'success');
-        };
-        reader.readAsDataURL(file);
+
+        const lowerName = file.name.toLowerCase();
+        const isTiff = lowerName.endsWith('.tif') || lowerName.endsWith('.tiff') || (file.type && file.type.includes('tiff'));
+
+        if (isTiff) {
+          if (geminiPickImageBtnText) geminiPickImageBtnText.textContent = `⏳ جاري معالجة TIFF: ${file.name}...`;
+          const arrReader = new FileReader();
+          arrReader.onload = (ev) => {
+            const buffer = ev.target.result;
+            // Check for GeoTIFF metadata
+            const geoMeta = parseTIFFGeoHeader(buffer, file.name);
+            let tiffBounds = null;
+            if (geoMeta) {
+              tiffBounds = computeBoundsFromMeta(geoMeta);
+              displayECWMetadata(geoMeta, tiffBounds);
+            }
+
+            const pngDataUrl = convertTiffToPngDataUrl(buffer);
+            if (pngDataUrl) {
+              const parts = pngDataUrl.split(',');
+              geminiSelectedImageBase64 = parts[1];
+              geminiSelectedImageMime = 'image/png';
+
+              if (geminiPickImageBtnText) {
+                geminiPickImageBtnText.textContent = `✅ ${file.name} (TIFF محوّل وجاهز للتحليل)`;
+              }
+
+              // Auto-place on map if GeoTIFF coordinates exist
+              if (tiffBounds) {
+                initCalibrationOverlay(pngDataUrl, file.name, tiffBounds);
+                showToast(`تم استيراد GeoTIFF وإسقاطه تلقائياً بالإحداثيات!`, 'success');
+              } else if (!overlay) {
+                initCalibrationOverlay(pngDataUrl, file.name, null);
+                showToast(`تم تحويل وعرض صورة TIFF! يمكنك الآن تحليلها بالذكاء الاصطناعي`, 'success');
+              } else {
+                overlay.setUrl(pngDataUrl);
+                showToast(`تم تحميل صورة TIFF بنجاح!`, 'success');
+              }
+            } else {
+              if (geminiPickImageBtnText) geminiPickImageBtnText.textContent = `❌ تعذّر فك ضغط TIFF: ${file.name}`;
+              showToast('تعذّر فك ضغط ملف TIFF، تأكد من صحة الملف', 'error');
+            }
+          };
+          arrReader.readAsArrayBuffer(file);
+        } else {
+          // Standard image (PNG / JPG / WEBP)
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            const dataUrl = ev.target.result;
+            const parts = dataUrl.split(',');
+            geminiSelectedImageBase64 = parts[1];
+            geminiSelectedImageMime = file.type || 'image/jpeg';
+            if (geminiPickImageBtnText) {
+              geminiPickImageBtnText.textContent = `✅ ${file.name} (جاهزة للتحليل)`;
+            }
+            if (!overlay) {
+              initCalibrationOverlay(dataUrl, file.name, null);
+            }
+            showToast(`تم تحديد الصورة: ${file.name}`, 'success');
+          };
+          reader.readAsDataURL(file);
+        }
       });
     }
 
@@ -2223,7 +2355,7 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
         if (!geminiSelectedImageBase64) {
-          showToast('يرجى اختيار صورة PNG/JPG للتحليل أولاً', 'warning');
+          showToast('يرجى اختيار صورة TIFF أو PNG أو JPG للتحليل أولاً', 'warning');
           return;
         }
 
