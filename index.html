@@ -166,6 +166,11 @@
           <i class="fa-solid fa-compass text-[11px]"></i>
           <span>المستكشف</span>
         </button>
+        <button class="sidebar-tab-btn px-3 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="archaeology">
+          <i class="fa-solid fa-landmark text-[11px] text-amber-400"></i>
+          <span>آثار العراق</span>
+          <span class="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded-full font-mono border border-amber-500/30">40</span>
+        </button>
         <button class="sidebar-tab-btn px-3 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="active">
           <i class="fa-solid fa-layer-group text-[11px]"></i>
           <span>النشطة</span>
@@ -214,6 +219,75 @@
           <!-- Layers Cards List -->
           <div id="catalogList" class="space-y-2.5 pt-1">
             <!-- Dynamically populated from ATLAS_LAYERS -->
+          </div>
+        </div>
+
+        <!-- =================== Panel: Official Iraqi Archaeology =================== -->
+        <div class="tab-panel hidden space-y-3.5" data-panel="archaeology">
+          <!-- Overview Card -->
+          <div class="bg-gradient-to-br from-amber-950/40 via-slate-900 to-slate-900 border border-amber-500/40 rounded-xl p-3.5 space-y-2.5 shadow-lg">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30 text-sm">
+                  <i class="fa-solid fa-landmark"></i>
+                </span>
+                <div>
+                  <h4 class="text-xs font-bold text-amber-200">سجل الآثار والتراث العالمي في العراق</h4>
+                  <div class="text-[10px] text-slate-400 font-mono">UNESCO & SBAH Official Registry</div>
+                </div>
+              </div>
+              <span class="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/40 font-mono">40 موقع</span>
+            </div>
+            
+            <p class="text-[11px] text-slate-300 leading-relaxed">
+              قاعدة بيانات جغرافية رسمية ومحدثة (2025/2026) تتضمن مواقع التراث العالمي لليونسكو الـ 6، والقائمة التمهيدية لليونسكو الـ 15 (بما فيها عقرقوف المحدثة 2025)، والمعالم الأثرية الوطنية المسجلة لدى الهيئة العامة للآثار والتراث.
+            </p>
+
+            <!-- Quick Map Toggle -->
+            <div class="pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
+              <button type="button" id="toggleArchLayerQuickBtn" class="flex-1 py-1.5 px-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all">
+                <i id="archLayerToggleEyeIcon" class="fa-solid fa-eye text-amber-400"></i>
+                <span id="archLayerToggleText">الطبقة معروضة</span>
+              </button>
+              <button type="button" id="zoomAllArchBtn" class="py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs flex items-center gap-1 transition-all" title="استعراض كافة المواقع في نطاق العراق">
+                <i class="fa-solid fa-expand text-[10px] text-sky-400"></i>
+                <span>عرض الكل</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Search & Filter Controls -->
+          <div class="space-y-2">
+            <div class="relative">
+              <i class="fa-solid fa-search absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+              <input 
+                type="text" 
+                id="archSearchInput" 
+                placeholder="ابحث عن موقع أثري، حضارة، أو محافظة..." 
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl py-2 pr-9 pl-3 text-xs text-slate-100 placeholder-slate-400 focus:outline-none focus:border-amber-500 transition-colors"
+              >
+            </div>
+
+            <!-- Classification Filter Chips -->
+            <div class="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-[11px]">
+              <button type="button" class="arch-filter-chip active px-2.5 py-1 rounded-lg font-semibold bg-amber-500 text-slate-950 transition-all shrink-0" data-cat="all">
+                الكل (40)
+              </button>
+              <button type="button" class="arch-filter-chip px-2.5 py-1 rounded-lg font-medium bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-all shrink-0" data-cat="unesco_inscribed">
+                اليونسكو (6)
+              </button>
+              <button type="button" class="arch-filter-chip px-2.5 py-1 rounded-lg font-medium bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-all shrink-0" data-cat="unesco_tentative">
+                التمهيدية (15)
+              </button>
+              <button type="button" class="arch-filter-chip px-2.5 py-1 rounded-lg font-medium bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-all shrink-0" data-cat="national_registered">
+                المعالم الوطنية (19)
+              </button>
+            </div>
+          </div>
+
+          <!-- Archaeological Sites List -->
+          <div id="archaeologySitesList" class="space-y-2.5 max-h-[calc(100vh-340px)] overflow-y-auto pr-0.5">
+            <!-- Dynamically populated -->
           </div>
         </div>
 
@@ -765,6 +839,9 @@
        ========================================================================= -->
   <!-- Curated Catalog Data -->
   <script src="js/catalog-data.js"></script>
+
+  <!-- Curated Official Archaeological Sites of Iraq -->
+  <script src="js/archaeology-data.js"></script>
 
   <!-- Living Atlas Engine Entry -->
   <script src="js/atlas-core.js"></script>

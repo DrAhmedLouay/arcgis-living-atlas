@@ -20,7 +20,10 @@ document.addEventListener('DOMContentLoaded', () => {
     layersMetadata: new Map(),
     activeCategory: 'iraq',
     searchQuery: '',
-    customLayersCount: 0
+    customLayersCount: 0,
+    archaeologyMarkers: new Map(),
+    archCategoryFilter: 'all',
+    archSearchQuery: ''
   };
 
   // 1. Initialize Leaflet Map (Centered on Iraq)
@@ -1750,6 +1753,9 @@ document.addEventListener('DOMContentLoaded', () => {
       updateActiveCountBadge();
       renderActiveLayersTab();
     }
+    if (layerId === 'iraq-archaeology' && typeof updateArchToggleBtnState === 'function') {
+      updateArchToggleBtnState();
+    }
   }
 
   /**
@@ -1758,7 +1764,146 @@ document.addEventListener('DOMContentLoaded', () => {
   function createEsriLeafletLayer(meta) {
     let layer;
 
-    if (meta.id === 'iraq-governorates') {
+    if (meta.id === 'iraq-archaeology') {
+      const geojson = window.IRAQ_ARCHAEOLOGY_DATA ? window.IRAQ_ARCHAEOLOGY_DATA.toGeoJSON() : null;
+      if (!geojson) return L.layerGroup();
+
+      state.archaeologyMarkers.clear();
+
+      layer = L.geoJSON(geojson, {
+        pointToLayer: (feature, latlng) => {
+          const props = feature.properties;
+          let iconClass = 'fa-landmark';
+          let pulseBorder = 'border-amber-400 shadow-amber-500/50';
+          let bgGradient = 'from-amber-500 via-amber-600 to-amber-800';
+          let pinDot = 'bg-amber-300';
+
+          if (props.category === 'unesco_tentative') {
+            iconClass = 'fa-monument';
+            pulseBorder = 'border-sky-400 shadow-sky-500/50';
+            bgGradient = 'from-sky-500 via-sky-600 to-sky-800';
+            pinDot = 'bg-sky-300';
+          } else if (props.category === 'national_registered') {
+            iconClass = 'fa-archway';
+            pulseBorder = 'border-emerald-400 shadow-emerald-500/50';
+            bgGradient = 'from-emerald-500 via-emerald-600 to-emerald-800';
+            pinDot = 'bg-emerald-300';
+          }
+
+          const iconHtml = `
+            <div class="relative group cursor-pointer flex items-center justify-center">
+              <div class="w-8 h-8 rounded-full bg-gradient-to-tr ${bgGradient} border-2 ${pulseBorder} flex items-center justify-center text-white text-xs shadow-xl transition-all duration-200 group-hover:scale-125">
+                <i class="fa-solid ${iconClass}"></i>
+              </div>
+              <span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ${pinDot} border border-slate-900 shadow-sm"></span>
+            </div>
+          `;
+
+          const customIcon = L.divIcon({
+            html: iconHtml,
+            className: 'archaeology-marker-icon',
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
+            popupAnchor: [0, -18]
+          });
+
+          const marker = L.marker(latlng, { icon: customIcon });
+          if (props.id) {
+            state.archaeologyMarkers.set(props.id, marker);
+          }
+          return marker;
+        },
+
+        onEachFeature: (feature, l) => {
+          const p = feature.properties;
+
+          const catLabel = p.category === 'unesco_inscribed'
+            ? 'موقع تراث عالمي (UNESCO)'
+            : p.category === 'unesco_tentative'
+              ? 'القائمة التمهيدية لليونسكو'
+              : 'معلم أثري وطني مسجل (SBAH)';
+
+          const catBadgeClass = p.category === 'unesco_inscribed'
+            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+            : p.category === 'unesco_tentative'
+              ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+              : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+
+          l.bindTooltip(`
+            <div class="text-right p-1 font-sans">
+              <div class="font-bold text-xs text-white">${p.nameAr}</div>
+              <div class="text-[10px] text-slate-300 font-mono">${p.nameEn}</div>
+              <div class="text-[10px] text-amber-400 mt-0.5 font-semibold">${catLabel}</div>
+            </div>
+          `, { direction: 'top', className: 'archaeology-tooltip' });
+
+          l.bindPopup(() => {
+            const prop = feature.properties;
+            const monumentsHtml = (prop.keyMonuments && prop.keyMonuments.length > 0)
+              ? `
+                <div class="mt-2.5 pt-2 border-t border-slate-700/80">
+                  <div class="text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
+                    <i class="fa-solid fa-gem text-amber-400 text-[10px]"></i>
+                    <span>أبرز المعالم المكتشفة:</span>
+                  </div>
+                  <div class="flex flex-wrap gap-1">
+                    ${prop.keyMonuments.map(m => `<span class="px-1.5 py-0.5 bg-slate-800 rounded text-[10px] text-slate-200 border border-slate-700">${m}</span>`).join('')}
+                  </div>
+                </div>
+              `
+              : '';
+
+            const unescoBtn = prop.unescoUrl
+              ? `
+                <a href="${prop.unescoUrl}" target="_blank" rel="noopener noreferrer" class="px-2.5 py-1 rounded-lg bg-sky-600/30 hover:bg-sky-600/50 text-sky-200 border border-sky-500/40 text-[11px] flex items-center gap-1 transition-all" title="فتح صفحة اليونسكو الرسمية">
+                  <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                  <span>تقرير اليونسكو الرسمي</span>
+                </a>
+              `
+              : '';
+
+            return `
+              <div class="text-right p-1 max-w-[340px] space-y-2 font-sans">
+                <div class="border-b border-slate-700 pb-2">
+                  <div class="flex items-center justify-between gap-2 mb-1.5">
+                    <span class="text-[10px] px-2 py-0.5 rounded-full border ${catBadgeClass} font-bold">
+                      ${catLabel}
+                    </span>
+                    <span class="text-[10px] text-slate-400 font-mono">سنة التسجيل: ${prop.inscribedYear}</span>
+                  </div>
+                  <h4 class="text-sm font-bold text-white flex items-center gap-1.5">
+                    <i class="fa-solid fa-landmark text-amber-400"></i>
+                    <span>${prop.nameAr}</span>
+                  </h4>
+                  <div class="text-[11px] text-slate-400 font-mono">${prop.nameEn}</div>
+                  ${prop.ancientName ? `<div class="text-[10px] text-amber-400/90 font-mono mt-0.5">الاسم القديم: ${prop.ancientName}</div>` : ''}
+                </div>
+
+                <div class="grid grid-cols-2 gap-1.5 text-[11px] bg-slate-900/80 p-2 rounded-lg border border-slate-700/60">
+                  <div><span class="text-slate-400">المحافظة:</span> <strong class="text-slate-100">${prop.governorate}</strong></div>
+                  <div><span class="text-slate-400">الرمز:</span> <strong class="text-slate-100 font-mono">${prop.unescoRef}</strong></div>
+                  <div class="col-span-2"><span class="text-slate-400">الحضارة / العصر:</span> <span class="text-slate-200">${prop.civilization}</span></div>
+                </div>
+
+                <p class="text-xs text-slate-300 leading-relaxed max-h-36 overflow-y-auto pr-1">
+                  ${prop.descriptionAr}
+                </p>
+
+                ${monumentsHtml}
+
+                <div class="pt-2 border-t border-slate-700 flex items-center justify-between gap-1.5">
+                  <button type="button" class="zoom-to-arch-site-btn px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold flex items-center gap-1 transition-all" data-lat="${prop.lat}" data-lng="${prop.lng}">
+                    <i class="fa-solid fa-crosshairs text-[10px]"></i>
+                    <span>تكبير للموقع</span>
+                  </button>
+                  ${unescoBtn}
+                </div>
+              </div>
+            `;
+          });
+        }
+      });
+    } else if (meta.id === 'iraq-governorates') {
       layer = L.esri.featureLayer({
         url: meta.url,
         style: {
@@ -1933,6 +2078,17 @@ document.addEventListener('DOMContentLoaded', () => {
   function zoomToLayer(layerId) {
     if (!state.layersMap.has(layerId)) return;
     const layer = state.layersMap.get(layerId);
+    if (layer.getBounds && typeof layer.getBounds === 'function') {
+      try {
+        const b = layer.getBounds();
+        if (b && b.isValid && b.isValid()) {
+          map.fitBounds(b, { padding: [35, 35] });
+          return;
+        }
+      } catch (err) {
+        // Fallback to query
+      }
+    }
     if (layer.query) {
       layer.query().bounds((err, latlngbounds) => {
         if (!err && latlngbounds && latlngbounds.isValid()) {
@@ -2230,6 +2386,215 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
+   * Setup Official Archaeology Browser
+   */
+  function setupArchaeologyBrowser() {
+    const searchInput = document.getElementById('archSearchInput');
+    const filterChips = document.querySelectorAll('.arch-filter-chip');
+    const toggleQuickBtn = document.getElementById('toggleArchLayerQuickBtn');
+    const zoomAllBtn = document.getElementById('zoomAllArchBtn');
+
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        state.archSearchQuery = e.target.value.trim().toLowerCase();
+        renderArchaeologyPanel();
+      });
+    }
+
+    filterChips.forEach(chip => {
+      chip.addEventListener('click', () => {
+        filterChips.forEach(c => {
+          c.classList.remove('active', 'bg-amber-500', 'text-slate-950', 'font-semibold');
+          c.classList.add('bg-slate-800', 'text-slate-300', 'font-medium', 'border', 'border-slate-700');
+        });
+        chip.classList.add('active', 'bg-amber-500', 'text-slate-950', 'font-semibold');
+        chip.classList.remove('bg-slate-800', 'text-slate-300', 'font-medium', 'border', 'border-slate-700');
+
+        state.archCategoryFilter = chip.getAttribute('data-cat') || 'all';
+        renderArchaeologyPanel();
+      });
+    });
+
+    if (toggleQuickBtn) {
+      toggleQuickBtn.addEventListener('click', () => {
+        const isCurrentActive = state.layersMap.has('iraq-archaeology') && map.hasLayer(state.layersMap.get('iraq-archaeology'));
+        toggleLayer('iraq-archaeology', !isCurrentActive);
+        updateArchToggleBtnState();
+        renderCatalogList();
+      });
+    }
+
+    if (zoomAllBtn) {
+      zoomAllBtn.addEventListener('click', () => {
+        if (!state.layersMap.has('iraq-archaeology') || !map.hasLayer(state.layersMap.get('iraq-archaeology'))) {
+          toggleLayer('iraq-archaeology', true);
+          updateArchToggleBtnState();
+        }
+        zoomToLayer('iraq-archaeology');
+        showToast('عرض جميع المواقع الأثرية في العراق', 'info');
+      });
+    }
+
+    // Delegate click for popup zoom button
+    document.addEventListener('click', (e) => {
+      const zoomBtn = e.target.closest('.zoom-to-arch-site-btn');
+      if (zoomBtn) {
+        const lat = parseFloat(zoomBtn.getAttribute('data-lat'));
+        const lng = parseFloat(zoomBtn.getAttribute('data-lng'));
+        if (!isNaN(lat) && !isNaN(lng)) {
+          map.flyTo([lat, lng], 16, { duration: 1.2 });
+        }
+      }
+    });
+
+    renderArchaeologyPanel();
+    updateArchToggleBtnState();
+  }
+
+  /**
+   * Update Archaeology Layer Toggle Button State in Panel
+   */
+  function updateArchToggleBtnState() {
+    const isVis = state.layersMap.has('iraq-archaeology') && map.hasLayer(state.layersMap.get('iraq-archaeology'));
+    const toggleQuickBtn = document.getElementById('toggleArchLayerQuickBtn');
+    const eyeIcon = document.getElementById('archLayerToggleEyeIcon');
+    const toggleText = document.getElementById('archLayerToggleText');
+
+    if (toggleQuickBtn && eyeIcon && toggleText) {
+      if (isVis) {
+        eyeIcon.className = 'fa-solid fa-eye text-amber-400';
+        toggleText.textContent = 'الطبقة معروضة';
+        toggleQuickBtn.className = 'flex-1 py-1.5 px-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all';
+      } else {
+        eyeIcon.className = 'fa-solid fa-eye-slash text-slate-500';
+        toggleText.textContent = 'الطبقة مخفية';
+        toggleQuickBtn.className = 'flex-1 py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all';
+      }
+    }
+  }
+
+  /**
+   * Render Archaeology Panel List
+   */
+  function renderArchaeologyPanel() {
+    const container = document.getElementById('archaeologySitesList');
+    if (!container) return;
+
+    if (!window.IRAQ_ARCHAEOLOGY_DATA || !window.IRAQ_ARCHAEOLOGY_DATA.sites) {
+      container.innerHTML = '<div class="text-xs text-slate-400 text-center py-4">جاري تحميل سجل المواقع الأثرية...</div>';
+      return;
+    }
+
+    const sites = window.IRAQ_ARCHAEOLOGY_DATA.sites;
+    const catFilter = state.archCategoryFilter || 'all';
+    const query = state.archSearchQuery || '';
+
+    const filtered = sites.filter(site => {
+      if (catFilter !== 'all' && site.category !== catFilter) {
+        return false;
+      }
+      if (query) {
+        const str = `${site.nameAr} ${site.nameEn} ${site.ancientName || ''} ${site.governorate} ${site.civilization} ${site.period || ''} ${site.descriptionAr}`.toLowerCase();
+        if (!str.includes(query)) return false;
+      }
+      return true;
+    });
+
+    if (filtered.length === 0) {
+      container.innerHTML = `
+        <div class="p-6 text-center text-slate-400 space-y-2 bg-slate-900/40 rounded-xl border border-slate-800">
+          <i class="fa-solid fa-monument text-2xl text-slate-600"></i>
+          <p class="text-xs font-semibold text-slate-300">لم يتم العثور على مواقع أثرية مطابقة</p>
+          <p class="text-[11px] text-slate-500">جرب تعديل كلمات البحث أو تغيير الفلتر.</p>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = filtered.map(site => {
+      let catBadge = 'bg-amber-500/20 text-amber-300 border-amber-500/40';
+      let catText = 'موقع يونسكو معتمد';
+      let iconColor = 'text-amber-400 bg-amber-500/10 border-amber-500/30';
+      let icon = 'fa-landmark';
+
+      if (site.category === 'unesco_tentative') {
+        catBadge = 'bg-sky-500/20 text-sky-300 border-sky-500/40';
+        catText = 'القائمة التمهيدية';
+        iconColor = 'text-sky-400 bg-sky-500/10 border-sky-500/30';
+        icon = 'fa-monument';
+      } else if (site.category === 'national_registered') {
+        catBadge = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+        catText = 'معلم وطني مسجل';
+        iconColor = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
+        icon = 'fa-archway';
+      }
+
+      return `
+        <div class="arch-site-card bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 hover:border-amber-500/50 rounded-xl p-3 flex flex-col gap-2 transition-all cursor-pointer group shadow-sm hover:shadow-md" data-id="${site.id}" data-lat="${site.lat}" data-lng="${site.lng}">
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex items-start gap-2.5">
+              <span class="w-8 h-8 rounded-lg flex items-center justify-center border text-xs shrink-0 mt-0.5 ${iconColor}">
+                <i class="fa-solid ${icon}"></i>
+              </span>
+              <div>
+                <h5 class="text-xs font-bold text-slate-100 group-hover:text-amber-300 transition-colors">${site.nameAr}</h5>
+                <div class="text-[10px] text-slate-400 font-mono">${site.nameEn}</div>
+                ${site.ancientName ? `<div class="text-[10px] text-amber-400/90 font-mono mt-0.5">الاسم القديم: ${site.ancientName}</div>` : ''}
+              </div>
+            </div>
+            <span class="text-[9px] px-2 py-0.5 rounded-full border ${catBadge} font-bold shrink-0 font-mono">
+              ${catText}
+            </span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-1 text-[10px] text-slate-300 bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+            <div><span class="text-slate-500">المحافظة:</span> <strong class="text-slate-200">${site.governorate}</strong></div>
+            <div><span class="text-slate-500">التسجيل:</span> <span class="text-slate-200 font-mono">${site.inscribedYear}</span></div>
+            <div class="col-span-2 text-[10px] text-slate-400 truncate"><span class="text-slate-500">العصر:</span> ${site.civilization}</div>
+          </div>
+
+          <div class="flex items-center justify-between pt-1 border-t border-slate-700/60 text-[11px]">
+            <button type="button" class="fly-to-site-btn text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1 group-hover:translate-x-[-2px] transition-transform">
+              <i class="fa-solid fa-location-crosshairs text-[10px]"></i>
+              <span>الذهاب للموقع والتفاصيل</span>
+            </button>
+            ${site.unescoUrl ? `
+              <a href="${site.unescoUrl}" target="_blank" rel="noopener noreferrer" class="text-slate-400 hover:text-sky-300 text-[10px] flex items-center gap-1" onclick="event.stopPropagation()">
+                <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+                <span>اليونسكو</span>
+              </a>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Attach click listener to each site card
+    container.querySelectorAll('.arch-site-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const id = card.getAttribute('data-id');
+        const lat = parseFloat(card.getAttribute('data-lat'));
+        const lng = parseFloat(card.getAttribute('data-lng'));
+
+        if (!state.layersMap.has('iraq-archaeology') || !map.hasLayer(state.layersMap.get('iraq-archaeology'))) {
+          toggleLayer('iraq-archaeology', true);
+          updateArchToggleBtnState();
+          renderCatalogList();
+        }
+
+        map.flyTo([lat, lng], 15, { duration: 1.2 });
+
+        setTimeout(() => {
+          const marker = state.archaeologyMarkers.get(id);
+          if (marker) {
+            marker.openPopup();
+          }
+        }, 1300);
+      });
+    });
+  }
+
+  /**
    * UI Events & Tabs
    */
   function setupUIEvents() {
@@ -2240,6 +2605,8 @@ document.addEventListener('DOMContentLoaded', () => {
         renderCatalogList();
       });
     }
+
+    setupArchaeologyBrowser();
 
     const tabButtons = document.querySelectorAll('.sidebar-tab-btn');
     const tabPanels = document.querySelectorAll('.tab-panel');
@@ -2260,6 +2627,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (tab === 'active') {
           renderActiveLayersTab();
+        } else if (tab === 'archaeology') {
+          renderArchaeologyPanel();
+          updateArchToggleBtnState();
         }
       });
     });

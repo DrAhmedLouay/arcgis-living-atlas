@@ -17,6 +17,38 @@ const ATLAS_LAYERS = [
   // 1. العراق وبلاد الرافدين (Iraq Datasets)
   // ==========================================
   {
+    id: 'iraq-archaeology',
+    category: 'iraq',
+    titleAr: 'المواقع الأثرية والتراث العالمي في العراق (UNESCO & SBAH)',
+    titleEn: 'Archaeological & World Heritage Sites of Iraq',
+    descriptionAr: 'قاعدة بيانات جغرافية رسمية ومحدثة (2025/2026) تضم مواقع التراث العالمي لليونسكو الـ 6، والقائمة التمهيدية لليونسكو الـ 15 (بما فيها عقرقوف المحدثة 2025)، والمعالم الأثرية المسجلة لدى الهيئة العامة للآثار والتراث (SBAH).',
+    descriptionEn: 'Official and updated geospatial registry of UNESCO World Heritage Sites, UNESCO Tentative List, and State Board of Antiquities & Heritage (SBAH) monuments across Iraq.',
+    provider: 'UNESCO World Heritage Centre • SBAH Iraq',
+    updateFrequency: 'محدث رسمياً (2025/2026)',
+    type: 'geojson',
+    url: 'local://iraq-archaeology',
+    icon: 'fa-monument',
+    badge: 'آثار العراق • Official',
+    badgeColor: 'amber',
+    defaultOpacity: 1.0,
+    defaultVisible: true,
+    popupTemplate: {
+      title: '{nameAr} ({nameEn})',
+      content: [
+        {
+          type: 'fields',
+          fieldInfos: [
+            { fieldName: 'nameAr', label: 'الموقع الأثري' },
+            { fieldName: 'ancientName', label: 'الاسم القديم' },
+            { fieldName: 'governorate', label: 'المحافظة' },
+            { fieldName: 'civilization', label: 'الحضارة / العصر' },
+            { fieldName: 'unescoRef', label: 'رقم تسجيل اليونسكو / SBAH' }
+          ]
+        }
+      ]
+    }
+  },
+  {
     id: 'iraq-governorates',
     category: 'iraq',
     titleAr: 'محافظات جمهورية العراق (الحدود الإدارية الـ 18)',
