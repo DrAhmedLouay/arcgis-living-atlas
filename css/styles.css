@@ -170,12 +170,20 @@ html, body {
 }
 
 /* Calibrated Satellite Image Overlay */
-.calibrated-satellite-overlay {
+.calibrated-satellite-overlay,
+.leaflet-image-layer.calibrated-satellite-overlay {
   transition: filter 0.15s ease-out;
   transform-origin: center center;
   pointer-events: auto !important;
-  image-rendering: auto;
-  image-rendering: -webkit-optimize-contrast;
+  image-rendering: -webkit-optimize-contrast !important;
+  image-rendering: crisp-edges !important;
+}
+
+.calibrated-satellite-overlay.sharp-crisp,
+.leaflet-image-layer.calibrated-satellite-overlay.sharp-crisp {
+  image-rendering: -webkit-optimize-contrast !important;
+  image-rendering: crisp-edges !important;
+  image-rendering: pixelated !important;
 }
 
 /* Georeferencing Interactive Handle Markers */

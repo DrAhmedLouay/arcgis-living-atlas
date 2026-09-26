@@ -27,7 +27,7 @@
   <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 
   <!-- Custom Styling -->
-  <link rel="stylesheet" href="css/styles.css?v=20260927_05">
+  <link rel="stylesheet" href="css/styles.css?v=20260927_07">
 </head>
 <body class="bg-slate-950 text-slate-100 h-screen w-screen flex flex-col overflow-hidden select-none">
 
@@ -633,11 +633,10 @@
                 <div class="flex items-center gap-2">
                   <label class="text-[10px] text-slate-400 shrink-0">النموذج:</label>
                   <select id="geminiModelSelect" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-[11px] font-mono text-slate-200 focus:outline-none focus:border-purple-500">
-                    <option value="gemini-2.5-flash">gemini-2.5-flash</option>
-                    <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite</option>
-                    <option value="gemini-1.5-flash" selected>gemini-1.5-flash</option>
-                    <option value="gemini-1.5-pro">gemini-1.5-pro</option>
-                    <option value="gemini-1.5-flash-8b">gemini-1.5-flash-8b</option>
+                    <option value="gemini-2.5-flash" selected>gemini-2.5-flash (الموصى به من Google)</option>
+                    <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (سريع)</option>
+                    <option value="gemini-2.5-pro">gemini-2.5-pro (عالي الدقة)</option>
+                    <option value="gemini-1.5-flash">gemini-1.5-flash</option>
                   </select>
                 </div>
 
@@ -930,6 +929,18 @@
                 <label class="relative inline-flex items-center cursor-pointer">
                   <input type="checkbox" id="calibInvertToggle" class="sr-only peer">
                   <div class="w-8 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-purple-600"></div>
+                </label>
+              </div>
+
+              <!-- Crisp Details Mode Toggle -->
+              <div class="flex items-center justify-between pt-1 border-t border-slate-800/80">
+                <div class="flex flex-col">
+                  <span class="text-xs text-emerald-300 font-medium">أقصى حدة للتفاصيل عند التقريب</span>
+                  <span class="text-[10px] text-slate-400">منع الضبابية والحفاظ على حواف المعالم والبكسل</span>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="calibSharpToggle" checked class="sr-only peer">
+                  <div class="w-8 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
                 </label>
               </div>
             </div>
@@ -1259,13 +1270,13 @@
        Scripts
        ========================================================================= -->
   <!-- Curated Catalog Data -->
-  <script src="js/catalog-data.js?v=20260927_05"></script>
+  <script src="js/catalog-data.js?v=20260927_07"></script>
 
   <!-- Curated Official Archaeological Sites of Iraq -->
-  <script src="js/archaeology-data.js?v=20260927_05"></script>
+  <script src="js/archaeology-data.js?v=20260927_07"></script>
 
   <!-- Living Atlas Engine Entry -->
-  <script src="js/atlas-core.js?v=20260927_05"></script>
+  <script src="js/atlas-core.js?v=20260927_07"></script>
 
 </body>
 </html>

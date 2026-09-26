@@ -278,6 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const saturationSlider = document.getElementById('calibSaturationSlider');
     const saturationLabel = document.getElementById('calibSaturationLabel');
     const invertToggle = document.getElementById('calibInvertToggle');
+    const sharpToggle = document.getElementById('calibSharpToggle');
     const resetVisualsBtn = document.getElementById('resetVisualsBtn');
 
     // Export & Readout controls
@@ -508,7 +509,8 @@ document.addEventListener('DOMContentLoaded', () => {
       brightness: 100,
       contrast: 100,
       saturation: 100,
-      invert: false
+      invert: false,
+      crisp: true
     };
 
     /**
@@ -864,19 +866,26 @@ document.addEventListener('DOMContentLoaded', () => {
             };
           }
 
-          // Select best image to render (main image or optimal high-res overview <= 4096px)
+          // Select best resolution image to render (highest available up to 6144px for ultra clarity)
+          const MAX_UHD_DIM = 6144;
           let renderImage = mainImage;
-          if (imageCount > 1 && (width > 4096 || height > 4096)) {
+          if (imageCount > 1 && (width > MAX_UHD_DIM || height > MAX_UHD_DIM)) {
+            let bestOverview = null;
+            let bestDim = 0;
             for (let idx = 1; idx < imageCount; idx++) {
               try {
                 const ov = await tiff.getImage(idx);
                 const ow = ov.getWidth();
                 const oh = ov.getHeight();
-                if (ow >= 1024 && ow <= 4096 && oh >= 1024 && oh <= 4096) {
-                  renderImage = ov;
-                  break;
+                const maxO = Math.max(ow, oh);
+                if (maxO <= MAX_UHD_DIM && maxO > bestDim) {
+                  bestOverview = ov;
+                  bestDim = maxO;
                 }
               } catch (ove) {}
+            }
+            if (bestOverview && bestDim >= 1024) {
+              renderImage = bestOverview;
             }
           }
 
@@ -901,9 +910,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const b1 = rasters.length > 1 ? rasters[1] : b0;
                 const b2 = rasters.length > 2 ? rasters[2] : b0;
 
-                // Handle 16-bit or float normalization
+                // Handle 16-bit or float normalization with uniform sampling across entire image
                 let maxVal = 255;
-                for (let k = 0; k < Math.min(1000, b0.length); k++) {
+                const sampleStep = Math.max(1, Math.floor(b0.length / 3000));
+                for (let k = 0; k < b0.length; k += sampleStep) {
                   if (b0[k] > maxVal) maxVal = b0[k];
                 }
                 const norm = 255 / (maxVal || 1);
@@ -919,9 +929,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           }
 
-          // Build High-Definition Canvas (4K UHD support up to 4096px)
+          // Build High-Definition Canvas (Ultra-Crisp 6K / 4K UHD support up to 6144px)
           if (rawRgb && rawRgb.length >= curW * curH * 3) {
-            const maxDim = 4096; // Crystal clear 4K UHD!
+            const maxDim = 6144; // Crystal clear 6K/4K UHD
             let targetW = curW;
             let targetH = curH;
             if (targetW > maxDim || targetH > maxDim) {
@@ -944,7 +954,7 @@ document.addEventListener('DOMContentLoaded', () => {
             srcCtx.putImageData(imgData, 0, 0);
 
             if (targetW === curW && targetH === curH) {
-              pngDataUrl = srcCanvas.toDataURL('image/jpeg', 0.94);
+              pngDataUrl = srcCanvas.toDataURL('image/jpeg', 0.96);
             } else {
               const destCanvas = document.createElement('canvas');
               destCanvas.width = targetW;
@@ -953,7 +963,7 @@ document.addEventListener('DOMContentLoaded', () => {
               destCtx.imageSmoothingEnabled = true;
               destCtx.imageSmoothingQuality = 'high';
               destCtx.drawImage(srcCanvas, 0, 0, targetW, targetH);
-              pngDataUrl = destCanvas.toDataURL('image/jpeg', 0.94);
+              pngDataUrl = destCanvas.toDataURL('image/jpeg', 0.96);
             }
           }
         } catch (gtErr) {
@@ -986,7 +996,7 @@ document.addEventListener('DOMContentLoaded', () => {
               imgData.data.set(rgba);
               srcCtx.putImageData(imgData, 0, 0);
 
-              const maxDim = 3840;
+              const maxDim = 6144;
               if (w > maxDim || h > maxDim) {
                 const sc = Math.min(maxDim / w, maxDim / h);
                 const tw = Math.round(w * sc);
@@ -995,9 +1005,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 destCanvas.width = tw;
                 destCanvas.height = th;
                 destCanvas.getContext('2d').drawImage(srcCanvas, 0, 0, tw, th);
-                pngDataUrl = destCanvas.toDataURL('image/jpeg', 0.94);
+                pngDataUrl = destCanvas.toDataURL('image/jpeg', 0.96);
               } else {
-                pngDataUrl = srcCanvas.toDataURL('image/jpeg', 0.94);
+                pngDataUrl = srcCanvas.toDataURL('image/jpeg', 0.96);
               }
             }
           }
@@ -2445,7 +2455,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Load saved API key from localStorage
     const _savedKey = localStorage.getItem('atlas_gemini_api_key');
-    if (_savedKey && geminiApiKeyInput) geminiApiKeyInput.value = _savedKey;
+    if (_savedKey && geminiApiKeyInput) {
+      geminiApiKeyInput.value = _savedKey;
+      refreshGeminiModelsDropdown(_savedKey);
+    }
 
     // Save key button
     if (saveGeminiKeyBtn && geminiApiKeyInput) {
@@ -2453,11 +2466,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const k = geminiApiKeyInput.value.trim();
         if (k) {
           localStorage.setItem('atlas_gemini_api_key', k);
-          showToast('تم حفظ مفتاح Gemini API', 'success');
+          refreshGeminiModelsDropdown(k);
+          showToast('تم حفظ مفتاح Gemini API وتحديث قائمة النماذج', 'success');
         } else {
           localStorage.removeItem('atlas_gemini_api_key');
           showToast('تم حذف المفتاح المحفوظ', 'info');
         }
+      });
+    }
+
+    if (geminiApiKeyInput) {
+      geminiApiKeyInput.addEventListener('blur', () => {
+        const k = geminiApiKeyInput.value.trim();
+        if (k && k.length > 20) refreshGeminiModelsDropdown(k);
       });
     }
 
@@ -2611,54 +2632,187 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Call Gemini Vision API with fallback model chain
+     * Query Google API to get list of active models for this API key
+     */
+    async function fetchLiveGeminiModels(apiKey) {
+      try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.models)) {
+            const list = data.models
+              .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
+              .map(m => m.name.replace(/^models\//, ''))
+              .filter(name => !name.includes('embedding') && !name.includes('aqa') && !name.includes('imagen') && name !== 'gemini-1.5-flash-8b');
+            if (list.length > 0) return list;
+          }
+        }
+      } catch (e) {
+        console.warn('Live models fetch error:', e);
+      }
+      return null;
+    }
+
+    /**
+     * Refresh models dropdown dynamically based on user's API key
+     */
+    async function refreshGeminiModelsDropdown(apiKey) {
+      if (!apiKey) return;
+      const modelSelect = document.getElementById('geminiModelSelect');
+      if (!modelSelect) return;
+      try {
+        const live = await fetchLiveGeminiModels(apiKey);
+        if (live && live.length > 0) {
+          const cur = modelSelect.value;
+          const best = live.includes(cur) ? cur : (live.find(m => m.includes('2.5-flash') || m.includes('2.0-flash')) || live[0]);
+          modelSelect.innerHTML = live.map(m => `<option value="${m}" ${m === best ? 'selected' : ''}>${m}</option>`).join('');
+        }
+      } catch (e) {
+        console.warn('Could not refresh dropdown:', e);
+      }
+    }
+
+    /**
+     * Optimize image specifically for Gemini Vision API prompt payload (<= 1536px)
+     * Keeps map overlay at full 6K UHD while ensuring fast API response without 413 payload limits
+     */
+    function optimizeImageForGemini(base64Data, mimeType) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const maxDim = 1536;
+          let w = img.width;
+          let h = img.height;
+          if (w > maxDim || h > maxDim) {
+            const sc = Math.min(maxDim / w, maxDim / h);
+            w = Math.max(32, Math.round(w * sc));
+            h = Math.max(32, Math.round(h * sc));
+          }
+          const c = document.createElement('canvas');
+          c.width = w;
+          c.height = h;
+          const ctx = c.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          const dataUrl = c.toDataURL('image/jpeg', 0.88);
+          resolve({ base64: dataUrl.split(',')[1], mime: 'image/jpeg' });
+        };
+        img.onerror = () => resolve({ base64: base64Data, mime: mimeType || 'image/jpeg' });
+        img.src = 'data:' + (mimeType || 'image/jpeg') + ';base64,' + base64Data;
+      });
+    }
+
+    /**
+     * Call Gemini Vision API with dynamic model discovery, optimized payload, and multi-version fallback
      */
     async function callGeminiVision(apiKey, base64Data, mimeType) {
       const modelSelect = document.getElementById('geminiModelSelect');
-      const chosen = modelSelect?.value || 'gemini-1.5-flash';
+      const chosen = (modelSelect?.value || '').trim();
 
-      const modelChain = [chosen, 'gemini-1.5-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash-8b', 'gemini-2.5-flash']
-        .filter((v, i, a) => a.indexOf(v) === i);
+      if (geminiAnalysisStatus) {
+        geminiAnalysisStatus.innerHTML = `<span class="text-purple-400">🔍 جاري التحقق من النماذج المتاحة في حسابك لدى Google...</span>`;
+      }
 
-      const prompt = `You are a GIS expert specializing in Iraq and the Middle East.
-Analyze this satellite/aerial image and identify its geographic location.
-Look for: rivers (Tigris/Euphrates), cities, roads, agriculture patterns, terrain, landmarks.
+      // Step 1: Discover live models from Google for this key
+      const liveModels = await fetchLiveGeminiModels(apiKey);
+
+      // If we got live models, update select dropdown
+      if (liveModels && liveModels.length > 0 && modelSelect) {
+        const cur = chosen && liveModels.includes(chosen) ? chosen : liveModels[0];
+        modelSelect.innerHTML = liveModels.map(m => `<option value="${m}" ${m === cur ? 'selected' : ''}>${m}</option>`).join('');
+      }
+
+      // Candidate models to try in order
+      const primaryModels = [
+        chosen,
+        'gemini-2.5-flash',
+        'gemini-2.0-flash',
+        'gemini-2.0-flash-lite',
+        'gemini-2.5-pro',
+        'gemini-1.5-flash',
+        'gemini-1.5-pro'
+      ];
+
+      const rawChain = [chosen, ...(liveModels || []), ...primaryModels];
+      const modelChain = rawChain.filter((v, i, a) => v && v !== 'gemini-1.5-flash-8b' && a.indexOf(v) === i);
+
+      // Step 2: Optimize image payload specifically for API request
+      let payloadBase64 = base64Data;
+      let payloadMime = mimeType || 'image/jpeg';
+      if (base64Data && base64Data.length > 1000000) {
+        try {
+          const opt = await optimizeImageForGemini(base64Data, payloadMime);
+          payloadBase64 = opt.base64;
+          payloadMime = opt.mime;
+        } catch (oe) {
+          console.warn('Image optimization fallback to original:', oe);
+        }
+      }
+
+      const prompt = `You are a professional GIS expert and geographer specializing in Iraq and the Middle East.
+Analyze this satellite or aerial image carefully and identify its exact geographic location.
+Look for: rivers (Tigris, Euphrates, Diyala, Shatt al-Arab), cities, highways, agricultural canals, citadels, landmarks.
 The image is most likely from Iraq (lat 29-38°N, lon 38-49°E).
 
-Respond ONLY in valid JSON (no markdown, no extra text):
-{"location":"city or region name","landmarks":["landmark1","landmark2"],"confidence":"high|medium|low","bbox":{"north":33.4,"south":33.3,"east":44.5,"west":44.4},"notes":"brief observation"}`;
+Respond ONLY in this exact JSON format (no markdown, no other text):
+{"location":"city or district name","landmarks":["landmark 1","landmark 2"],"confidence":"high|medium|low","bbox":{"north":33.45,"south":33.25,"east":44.55,"west":44.25},"notes":"geographic observations"}`;
 
       const body = JSON.stringify({
-        contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType, data: base64Data } }] }],
+        contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: payloadMime, data: payloadBase64 } }] }],
         generationConfig: { temperature: 0.1, maxOutputTokens: 512 }
       });
 
       let lastErr = null;
       for (const model of modelChain) {
-        if (geminiAnalysisStatus) {
-          geminiAnalysisStatus.innerHTML = `<span class="text-purple-400">🔄 جاري تجربة النموذج: ${model}...</span>`;
-        }
-        try {
-          const resp = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }
-          );
-          if (!resp.ok) {
-            const txt = await resp.text();
-            lastErr = new Error(`${model} [${resp.status}]: ${txt.substring(0, 200)}`);
-            continue;
+        for (const apiVer of ['v1beta', 'v1']) {
+          if (geminiAnalysisStatus) {
+            geminiAnalysisStatus.innerHTML = `<span class="text-purple-400">🤖 جاري التحليل عبر النموذج: <b class="text-white">${model}</b> (${apiVer})...</span>`;
           }
-          const data = await resp.json();
-          const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          const m = raw.match(/\{[\s\S]*\}/);
-          if (!m) { lastErr = new Error(`${model}: رد غير صالح من API`); continue; }
-          if (modelSelect) modelSelect.value = model; // mark which worked
-          return JSON.parse(m[0]);
-        } catch (e) {
-          lastErr = e;
+          try {
+            const resp = await fetch(
+              `https://generativelanguage.googleapis.com/${apiVer}/models/${model}:generateContent?key=${apiKey}`,
+              { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }
+            );
+
+            if (!resp.ok) {
+              const txt = await resp.text();
+              let parsedMsg = '';
+              try {
+                const j = JSON.parse(txt);
+                parsedMsg = j.error?.message || txt;
+              } catch (pe) {
+                parsedMsg = txt;
+              }
+
+              // Friendly Arabic translations for known API errors
+              if (parsedMsg.includes('API_KEY_INVALID') || parsedMsg.includes('API key not valid')) {
+                lastErr = new Error('مفتاح Gemini API غير صالح. يرجى التأكد من نسخه بدقة من Google AI Studio.');
+                throw lastErr;
+              } else if (parsedMsg.includes('RESOURCE_EXHAUSTED')) {
+                lastErr = new Error(`${model}: تم تجاوز حد الحصة المجانية المؤقت لمفتاحك، جاري تجربة نموذج بديل...`);
+              } else {
+                lastErr = new Error(`${model}: ${parsedMsg.substring(0, 180)}`);
+              }
+              continue;
+            }
+
+            const data = await resp.json();
+            const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            const m = raw.match(/\{[\s\S]*\}/);
+            if (!m) {
+              lastErr = new Error(`${model}: لم يُرجع الذكاء الاصطناعي بيانات JSON صالحة`);
+              continue;
+            }
+
+            if (modelSelect) modelSelect.value = model; // reflect working model
+            return JSON.parse(m[0]);
+          } catch (e) {
+            lastErr = e;
+            if (e.message && e.message.includes('Google AI Studio')) throw e;
+          }
         }
       }
-      throw lastErr || new Error('فشلت جميع النماذج');
+
+      throw lastErr || new Error('تعذّر الاتصال بنماذج Google Gemini. يرجى التأكد من صلاحية المفتاح والاتصال.');
     }
 
 
@@ -2957,7 +3111,7 @@ Respond ONLY in valid JSON (no markdown, no extra text):
     }
 
     /**
-     * Apply Radiometric & Visual Corrections (Brightness, Contrast, Saturation, Invert, Opacity)
+     * Apply Radiometric & Visual Corrections (Brightness, Contrast, Saturation, Invert, Opacity, Crisp Zoom)
      */
     function applyVisualFilters() {
       if (!overlay) return;
@@ -2965,6 +3119,14 @@ Respond ONLY in valid JSON (no markdown, no extra text):
       const el = overlay.getElement();
       if (el) {
         el.style.filter = `brightness(${visualState.brightness}%) contrast(${visualState.contrast}%) saturate(${visualState.saturation}%) ${visualState.invert ? 'invert(100%)' : ''}`;
+        if (visualState.crisp) {
+          el.classList.add('sharp-crisp');
+          el.style.imageRendering = '-webkit-optimize-contrast';
+          el.style.imageRendering = 'crisp-edges';
+        } else {
+          el.classList.remove('sharp-crisp');
+          el.style.imageRendering = 'auto';
+        }
       }
     }
 
@@ -3103,6 +3265,13 @@ Respond ONLY in valid JSON (no markdown, no extra text):
       });
     }
 
+    if (sharpToggle) {
+      sharpToggle.addEventListener('change', (e) => {
+        visualState.crisp = e.target.checked;
+        applyVisualFilters();
+      });
+    }
+
     if (resetVisualsBtn) {
       resetVisualsBtn.addEventListener('click', () => {
         visualState = {
@@ -3110,7 +3279,8 @@ Respond ONLY in valid JSON (no markdown, no extra text):
           brightness: 100,
           contrast: 100,
           saturation: 100,
-          invert: false
+          invert: false,
+          crisp: true
         };
         if (opacitySlider) opacitySlider.value = 85;
         if (opacityLabel) opacityLabel.textContent = '85%';
@@ -3121,6 +3291,7 @@ Respond ONLY in valid JSON (no markdown, no extra text):
         if (saturationSlider) saturationSlider.value = 100;
         if (saturationLabel) saturationLabel.textContent = '100%';
         if (invertToggle) invertToggle.checked = false;
+        if (sharpToggle) sharpToggle.checked = true;
         applyVisualFilters();
         showToast('تمت إعادة ضبط المرشحات البصرية', 'info');
       });
