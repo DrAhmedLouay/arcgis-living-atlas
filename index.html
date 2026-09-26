@@ -115,6 +115,32 @@
         </button>
       </div>
 
+      <!-- Floating Live Measurement Bar on Map -->
+      <div id="floatingMeasureBar" class="hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-4 py-2.5 bg-slate-900/95 backdrop-blur-md border border-sky-500/60 rounded-2xl shadow-2xl transition-all">
+        <div class="flex items-center gap-2.5">
+          <span id="floatingMeasureIcon" class="w-8 h-8 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/40 flex items-center justify-center text-sm shadow-sm">
+            <i class="fa-solid fa-ruler"></i>
+          </span>
+          <div>
+            <div class="flex items-center gap-1.5">
+              <span id="floatingMeasureTitle" class="text-xs font-bold text-sky-300">قياس المسافة</span>
+              <span id="floatingMeasurePointsBadge" class="text-[9px] bg-slate-800 text-slate-300 px-1.5 py-0.2 rounded font-mono">0 نقاط</span>
+            </div>
+            <div id="floatingMeasureResult" class="text-sm font-extrabold text-white font-mono leading-none mt-0.5">0.00 كم</div>
+          </div>
+        </div>
+        <div class="h-7 w-px bg-slate-700/80 mx-1"></div>
+        <div class="flex items-center gap-1.5">
+          <button type="button" id="floatFinishMeasureBtn" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg shadow transition-colors flex items-center gap-1" title="إنهاء وتثبيت القياس (أو نقر مزدوج على الخريطة)">
+            <i class="fa-solid fa-check text-[10px]"></i>
+            <span>إنهاء</span>
+          </button>
+          <button type="button" id="floatClearMeasureBtn" class="px-2.5 py-1.5 bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-300 border border-slate-700 rounded-lg text-xs transition-colors" title="إلغاء ومسح القياس">
+            <i class="fa-solid fa-trash-can text-[11px]"></i>
+          </button>
+        </div>
+      </div>
+
       <!-- Floating Quick Basemap Selector Bar on Map -->
       <div class="absolute top-3 right-3 z-20 hidden md:flex items-center gap-1 p-1 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl shadow-2xl">
         <button class="quick-basemap-btn px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-blue-600 shadow transition-all flex items-center gap-1.5" data-bm="dark-gray">
@@ -845,30 +871,84 @@
         </div>
 
         <!-- =================== Panel 4: Measurement Tools =================== -->
-        <div class="tab-panel hidden space-y-4" data-panel="tools">
-          <div class="text-xs text-slate-400">
-            أدوات القياس المكاني الدقيقة على مسقط الخريطة الجيوديسي:
+        <div class="tab-panel hidden space-y-3.5" data-panel="tools">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+              <i class="fa-solid fa-compass-drafting text-sky-400"></i>
+              <span>أدوات القياس المكاني الجيوديسي</span>
+            </span>
+            <span id="measureActiveStatusBadge" class="text-[9px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono border border-slate-700">خامل</span>
           </div>
 
+          <!-- Tool Selector Buttons -->
           <div class="grid grid-cols-2 gap-2.5">
-            <button id="measureDistBtn" class="p-3 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 flex flex-col items-center gap-2 transition-all">
-              <i class="fa-solid fa-ruler text-sky-400 text-lg"></i>
-              <span class="text-xs font-semibold">قياس المسافة</span>
+            <button type="button" id="measureDistBtn" class="p-3 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-800 flex flex-col items-center gap-2 transition-all relative overflow-hidden group">
+              <div class="w-10 h-10 rounded-xl bg-sky-500/10 group-hover:bg-sky-500/20 text-sky-400 flex items-center justify-center transition-colors">
+                <i class="fa-solid fa-ruler text-lg"></i>
+              </div>
+              <div class="text-center">
+                <span class="text-xs font-bold block text-slate-100">قياس المسافة</span>
+                <span class="text-[10px] text-slate-400 font-mono">Distance & Path</span>
+              </div>
+              <span id="distBtnBadge" class="hidden text-[9px] px-2 py-0.5 rounded-full bg-sky-500/30 text-sky-300 font-bold">نشط الآن</span>
             </button>
 
-            <button id="measureAreaBtn" class="p-3 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 flex flex-col items-center gap-2 transition-all">
-              <i class="fa-solid fa-draw-polygon text-emerald-400 text-lg"></i>
-              <span class="text-xs font-semibold">قياس المساحة</span>
+            <button type="button" id="measureAreaBtn" class="p-3 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-800 flex flex-col items-center gap-2 transition-all relative overflow-hidden group">
+              <div class="w-10 h-10 rounded-xl bg-emerald-500/10 group-hover:bg-emerald-500/20 text-emerald-400 flex items-center justify-center transition-colors">
+                <i class="fa-solid fa-draw-polygon text-lg"></i>
+              </div>
+              <div class="text-center">
+                <span class="text-xs font-bold block text-slate-100">قياس المساحة</span>
+                <span class="text-[10px] text-slate-400 font-mono">Area & Polygon</span>
+              </div>
+              <span id="areaBtnBadge" class="hidden text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-300 font-bold">نشط الآن</span>
             </button>
           </div>
 
-          <button id="clearMeasureBtn" class="w-full py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-xs text-rose-400 flex items-center justify-center gap-2 transition-colors">
-            <i class="fa-solid fa-eraser"></i>
-            <span>إلغاء وتفريغ القياس</span>
-          </button>
+          <!-- Measurement Unit & Actions Selector -->
+          <div class="bg-slate-900/90 border border-slate-700/80 rounded-xl p-3 space-y-2.5">
+            <div class="flex items-center justify-between text-xs text-slate-300">
+              <span class="text-[11px] font-semibold flex items-center gap-1 text-slate-300">
+                <i class="fa-solid fa-scale-balanced text-amber-400 text-[10px]"></i>
+                <span>وحدة العرض الرئيسية:</span>
+              </span>
+              <select id="measureUnitSelect" class="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-sky-500">
+                <optgroup label="المسافة:">
+                  <option value="km" selected>كيلومتر (كم)</option>
+                  <option value="m">متر (م)</option>
+                  <option value="nm">ميل بحري (NM)</option>
+                </optgroup>
+                <optgroup label="المساحة:">
+                  <option value="dunam">دونم عراقي (2,500 م²)</option>
+                  <option value="sqkm">كيلومتر مربع (كم²)</option>
+                  <option value="sqm">متر مربع (م²)</option>
+                  <option value="hectare">هكتار (10,000 م²)</option>
+                </optgroup>
+              </select>
+            </div>
 
-          <!-- Measurement readout container -->
-          <div id="measurementWidgetDiv" class="pt-2"></div>
+            <!-- Action buttons: Finish & Clear -->
+            <div class="grid grid-cols-2 gap-2 pt-1">
+              <button type="button" id="finishMeasureBtn" class="py-2 px-3 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors" title="إنهاء وتثبيت القياس (أو نقر مزدوج على الخريطة)">
+                <i class="fa-solid fa-check text-[11px]"></i>
+                <span>إنهاء وتثبيت</span>
+              </button>
+
+              <button type="button" id="clearMeasureBtn" class="py-2 px-3 rounded-lg bg-slate-800 hover:bg-rose-950/40 text-rose-300 border border-slate-700 hover:border-rose-800/50 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors" title="إلغاء ومسح الرسم">
+                <i class="fa-solid fa-eraser text-[11px]"></i>
+                <span>إلغاء وتفريغ</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Dynamic Live Readout Container -->
+          <div id="measurementWidgetDiv" class="space-y-2">
+            <!-- Dynamically populated -->
+            <div class="p-3 bg-slate-900/60 border border-slate-800 rounded-xl text-center text-xs text-slate-400">
+              <i class="fa-solid fa-mouse-pointer text-slate-500 text-sm mb-1 block"></i>
+              اختر أداة (مسافة أو مساحة) ثم انقر على الخريطة لتحديد النقاط.
+            </div>
+          </div>
         </div>
 
         <!-- =================== Panel 5: Bookmarks =================== -->

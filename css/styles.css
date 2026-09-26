@@ -249,4 +249,55 @@ html, body {
   border-top-color: rgba(15, 23, 42, 0.95) !important;
 }
 
+/* ==========================================================================
+   Interactive Measurement Tools & Cursor Styles
+   ========================================================================== */
+.measuring-mode-active,
+.measuring-mode-active .leaflet-container {
+  cursor: crosshair !important;
+}
+
+/* Prevent interactive feature layers from absorbing clicks during measurement */
+.measuring-mode-active .leaflet-interactive:not(.measure-element) {
+  pointer-events: none !important;
+}
+
+.measure-vertex-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.measure-segment-tooltip {
+  background: rgba(15, 23, 42, 0.92) !important;
+  border: 1px solid rgba(56, 189, 248, 0.6) !important;
+  color: #38bdf8 !important;
+  font-family: 'JetBrains Mono', 'Cairo', monospace !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  border-radius: 6px !important;
+  padding: 1px 6px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+  pointer-events: none !important;
+  direction: ltr !important;
+}
+
+.measure-segment-tooltip::before {
+  border-top-color: rgba(15, 23, 42, 0.92) !important;
+}
+
+.measure-result-popup .leaflet-popup-content-wrapper {
+  background: rgba(15, 23, 42, 0.96) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+  border: 1px solid rgba(56, 189, 248, 0.5) !important;
+  border-radius: 14px !important;
+  color: #f8fafc !important;
+  padding: 6px !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7) !important;
+}
+
+.measure-result-popup .leaflet-popup-tip {
+  background: rgba(15, 23, 42, 0.96) !important;
+}
+
 

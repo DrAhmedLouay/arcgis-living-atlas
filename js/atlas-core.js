@@ -2186,91 +2186,651 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
-   * Measurement Tools (Distance & Area on Map)
+   * Advanced Geodesic Measurement Tools (Distance & Area on Map)
+   * Formulated for WGS84 Geodesic distances and Iraqi units (Dunams / m² / km²)
    */
   function setupMeasurementTools() {
     const distBtn = document.getElementById('measureDistBtn');
     const areaBtn = document.getElementById('measureAreaBtn');
+    const distBtnBadge = document.getElementById('distBtnBadge');
+    const areaBtnBadge = document.getElementById('areaBtnBadge');
+    const measureActiveStatusBadge = document.getElementById('measureActiveStatusBadge');
+    const finishBtn = document.getElementById('finishMeasureBtn');
     const clearBtn = document.getElementById('clearMeasureBtn');
+    const unitSelect = document.getElementById('measureUnitSelect');
     const measureDiv = document.getElementById('measurementWidgetDiv');
 
-    let mode = null;
-    let points = [];
-    let shapeLayer = null;
+    const floatingMeasureBar = document.getElementById('floatingMeasureBar');
+    const floatingMeasureIcon = document.getElementById('floatingMeasureIcon');
+    const floatingMeasureTitle = document.getElementById('floatingMeasureTitle');
+    const floatingMeasurePointsBadge = document.getElementById('floatingMeasurePointsBadge');
+    const floatingMeasureResult = document.getElementById('floatingMeasureResult');
+    const floatFinishMeasureBtn = document.getElementById('floatFinishMeasureBtn');
+    const floatClearMeasureBtn = document.getElementById('floatClearMeasureBtn');
 
-    function reset() {
+    let measureMode = null; // 'distance' | 'area' | null
+    let points = [];
+    let vertexMarkers = [];
+    let segmentMarkers = [];
+    let shapeLayer = null;
+    let rubberBandLayer = null;
+    let isFinished = false;
+    let currentUnit = 'km'; // default distance unit
+
+    /**
+     * Exact Spherical Excess Geodesic Area (m²)
+     */
+    function calculatePolygonArea(latlngs) {
+      if (!latlngs || latlngs.length < 3) return 0;
+      const RADIUS = 6378137.0; // WGS84 mean earth radius (meters)
+      let total = 0;
+      const len = latlngs.length;
+
+      for (let i = 0; i < len; i++) {
+        const p1 = latlngs[i];
+        const p2 = latlngs[(i + 1) % len];
+        const dLng = (p2.lng - p1.lng) * (Math.PI / 180);
+        const lat1 = p1.lat * (Math.PI / 180);
+        const lat2 = p2.lat * (Math.PI / 180);
+        total += dLng * (2 + Math.sin(lat1) + Math.sin(lat2));
+      }
+
+      return Math.abs(total * RADIUS * RADIUS / 2.0);
+    }
+
+    /**
+     * Total Geodesic Distance along Path (meters)
+     */
+    function calculateDistance(latlngs) {
+      if (!latlngs || latlngs.length < 2) return 0;
+      let total = 0;
+      for (let i = 0; i < latlngs.length - 1; i++) {
+        total += latlngs[i].distanceTo(latlngs[i + 1]);
+      }
+      return total;
+    }
+
+    /**
+     * Format Distance Value with unit
+     */
+    function formatDistance(meters, unit = 'km') {
+      if (meters <= 0) return '0 م';
+      if (unit === 'm') {
+        return `${Math.round(meters).toLocaleString('ar-IQ')} م`;
+      } else if (unit === 'nm') {
+        return `${(meters / 1852).toFixed(2)} ميل بحري`;
+      }
+      return meters < 1000
+        ? `${Math.round(meters).toLocaleString('ar-IQ')} م`
+        : `${(meters / 1000).toFixed(2)} كم`;
+    }
+
+    /**
+     * Format Area Value with Iraqi Dunams & Metric units
+     */
+    function formatArea(sqMeters, unit = 'dunam') {
+      if (sqMeters <= 0) return '0 م²';
+      const dunams = (sqMeters / 2500).toFixed(2);
+      const sqKm = (sqMeters / 1000000).toFixed(3);
+      const hectares = (sqMeters / 10000).toFixed(2);
+      const sqM = Math.round(sqMeters).toLocaleString('ar-IQ');
+
+      if (unit === 'dunam') {
+        return `${dunams} دونم عراقي`;
+      } else if (unit === 'sqkm') {
+        return `${sqKm} كم²`;
+      } else if (unit === 'hectare') {
+        return `${hectares} هكتار`;
+      } else {
+        return `${sqM} م²`;
+      }
+    }
+
+    /**
+     * Set active measurement mode
+     */
+    function setMeasureMode(newMode) {
+      resetMeasurement();
+      measureMode = newMode;
+      isFinished = false;
+
+      if (measureMode) {
+        currentUnit = (measureMode === 'area') ? 'dunam' : 'km';
+        if (unitSelect) unitSelect.value = currentUnit;
+
+        map.getContainer().classList.add('measuring-mode-active');
+        map.doubleClickZoom.disable();
+
+        if (floatingMeasureBar) floatingMeasureBar.classList.remove('hidden');
+        updateButtonStates();
+        renderReadout();
+        updateFloatingWidget();
+
+        showToast(
+          measureMode === 'distance'
+            ? 'وضع قياس المسافة مفعل: انقر على الخريطة لتحديد النقاط'
+            : 'وضع قياس المساحة مفعل: انقر على الخريطة لتحديد الأركان',
+          'info'
+        );
+      }
+    }
+
+    /**
+     * Reset and clear all measurements
+     */
+    function resetMeasurement() {
       points = [];
-      if (shapeLayer) {
+      isFinished = false;
+
+      if (shapeLayer && map.hasLayer(shapeLayer)) {
         map.removeLayer(shapeLayer);
         shapeLayer = null;
       }
-      if (measureDiv) measureDiv.innerHTML = '';
-      if (distBtn) distBtn.classList.remove('bg-blue-600', 'text-white');
-      if (areaBtn) areaBtn.classList.remove('bg-blue-600', 'text-white');
-      mode = null;
+      if (rubberBandLayer && map.hasLayer(rubberBandLayer)) {
+        map.removeLayer(rubberBandLayer);
+        rubberBandLayer = null;
+      }
+
+      vertexMarkers.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); });
+      vertexMarkers = [];
+      segmentMarkers.forEach(l => { if (map.hasLayer(l)) map.removeLayer(l); });
+      segmentMarkers = [];
+
+      map.getContainer().classList.remove('measuring-mode-active');
+      map.doubleClickZoom.enable();
+
+      if (floatingMeasureBar) floatingMeasureBar.classList.add('hidden');
+      updateButtonStates();
+      renderReadout();
     }
 
+    /**
+     * Update visual states of selector buttons
+     */
+    function updateButtonStates() {
+      const isDist = measureMode === 'distance';
+      const isArea = measureMode === 'area';
+
+      if (distBtn) {
+        distBtn.className = isDist
+          ? 'p-3 rounded-xl border border-sky-400 bg-sky-950/80 ring-2 ring-sky-400/50 flex flex-col items-center gap-2 transition-all relative overflow-hidden group shadow-lg shadow-sky-900/40 text-sky-200'
+          : 'p-3 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-800 flex flex-col items-center gap-2 transition-all relative overflow-hidden group text-slate-100';
+      }
+      if (distBtnBadge) {
+        distBtnBadge.classList.toggle('hidden', !isDist);
+      }
+
+      if (areaBtn) {
+        areaBtn.className = isArea
+          ? 'p-3 rounded-xl border border-emerald-400 bg-emerald-950/80 ring-2 ring-emerald-400/50 flex flex-col items-center gap-2 transition-all relative overflow-hidden group shadow-lg shadow-emerald-900/40 text-emerald-200'
+          : 'p-3 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-800 flex flex-col items-center gap-2 transition-all relative overflow-hidden group text-slate-100';
+      }
+      if (areaBtnBadge) {
+        areaBtnBadge.classList.toggle('hidden', !isArea);
+      }
+
+      if (measureActiveStatusBadge) {
+        if (measureMode) {
+          measureActiveStatusBadge.textContent = isDist ? 'قياس مسافة نشط' : 'قياس مساحة نشط';
+          measureActiveStatusBadge.className = isDist
+            ? 'text-[9px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 font-bold border border-sky-500/40'
+            : 'text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40';
+        } else {
+          measureActiveStatusBadge.textContent = 'خامل';
+          measureActiveStatusBadge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono border border-slate-700';
+        }
+      }
+    }
+
+    /**
+     * Add interactive numbered vertex marker
+     */
+    function addVertexMarker(latlng, index) {
+      const isArea = measureMode === 'area';
+      const bg = isArea ? '#059669' : '#0284c7';
+      const border = isArea ? '#34d399' : '#38bdf8';
+
+      const icon = L.divIcon({
+        className: 'measure-vertex-icon',
+        html: `<div style="background-color: ${bg}; border-color: ${border};" class="w-5 h-5 rounded-full text-white font-mono font-bold text-[9px] flex items-center justify-center border-2 shadow-lg cursor-pointer transform hover:scale-125 transition-transform">${index + 1}</div>`,
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+      });
+
+      const marker = L.marker(latlng, { icon: icon, interactive: true }).addTo(map);
+
+      // Clicking first marker in area mode finishes the polygon
+      if (index === 0) {
+        marker.on('click', (e) => {
+          if (measureMode === 'area' && points.length >= 3 && !isFinished) {
+            L.DomEvent.stopPropagation(e);
+            finishMeasurement();
+          }
+        });
+      }
+
+      vertexMarkers.push(marker);
+      return marker;
+    }
+
+    /**
+     * Render distance tags on line segments
+     */
+    function updateSegmentMarkers() {
+      segmentMarkers.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); });
+      segmentMarkers = [];
+
+      if (points.length < 2) return;
+
+      const count = (measureMode === 'area' && isFinished) ? points.length : points.length - 1;
+      for (let i = 0; i < count; i++) {
+        const p1 = points[i];
+        const p2 = points[(i + 1) % points.length];
+        const mid = L.latLng((p1.lat + p2.lat) / 2, (p1.lng + p2.lng) / 2);
+        const d = p1.distanceTo(p2);
+        const dText = formatDistance(d, currentUnit === 'm' ? 'm' : 'km');
+
+        const icon = L.divIcon({
+          className: 'measure-segment-tooltip',
+          html: dText,
+          iconSize: [60, 16],
+          iconAnchor: [30, 8]
+        });
+
+        const m = L.marker(mid, { icon: icon, interactive: false }).addTo(map);
+        segmentMarkers.push(m);
+      }
+    }
+
+    /**
+     * Update active shape layer and all readouts
+     */
+    function updateShapeAndUI() {
+      if (shapeLayer && map.hasLayer(shapeLayer)) {
+        map.removeLayer(shapeLayer);
+        shapeLayer = null;
+      }
+
+      if (measureMode === 'distance') {
+        if (points.length >= 2) {
+          shapeLayer = L.polyline(points, {
+            color: '#38bdf8',
+            weight: 3.5,
+            opacity: 0.95,
+            className: 'measure-element'
+          }).addTo(map);
+        }
+      } else if (measureMode === 'area') {
+        if (points.length >= 3) {
+          shapeLayer = L.polygon(points, {
+            color: '#10b981',
+            weight: 2.5,
+            fillColor: '#10b981',
+            fillOpacity: 0.28,
+            className: 'measure-element'
+          }).addTo(map);
+        } else if (points.length === 2) {
+          shapeLayer = L.polyline(points, {
+            color: '#10b981',
+            weight: 2,
+            dashArray: '5, 6',
+            className: 'measure-element'
+          }).addTo(map);
+        }
+      }
+
+      updateSegmentMarkers();
+      renderReadout();
+      updateFloatingWidget();
+    }
+
+    /**
+     * Update Sidebar Readout HTML
+     */
+    function renderReadout() {
+      if (!measureDiv) return;
+
+      if (!measureMode) {
+        measureDiv.innerHTML = `
+          <div class="p-3 bg-slate-900/60 border border-slate-800 rounded-xl text-center text-xs text-slate-400">
+            <i class="fa-solid fa-mouse-pointer text-slate-500 text-sm mb-1 block"></i>
+            اختر أداة (مسافة أو مساحة) ثم انقر على الخريطة لتحديد النقاط.
+          </div>
+        `;
+        return;
+      }
+
+      if (points.length === 0) {
+        measureDiv.innerHTML = `
+          <div class="p-3 bg-slate-900 border border-slate-700/80 rounded-xl text-xs space-y-2">
+            <div class="flex items-center gap-2 text-sky-400 font-semibold">
+              <i class="fa-solid fa-circle-dot animate-pulse"></i>
+              <span>${measureMode === 'distance' ? 'جاهز لقياس المسافة' : 'جاهز لقياس المساحة'}</span>
+            </div>
+            <p class="text-slate-300 text-[11px] leading-relaxed">
+              انقر فوق أي مكان على سطح الخريطة لتحديد النقطة الأولى للبدء.
+            </p>
+          </div>
+        `;
+        return;
+      }
+
+      if (measureMode === 'distance') {
+        const totalMeters = calculateDistance(points);
+        const distKm = (totalMeters / 1000).toFixed(2);
+        const distM = Math.round(totalMeters).toLocaleString('ar-IQ');
+        const distNm = (totalMeters / 1852).toFixed(2);
+
+        measureDiv.innerHTML = `
+          <div class="bg-gradient-to-br from-slate-900 to-slate-950 border border-sky-500/40 rounded-xl p-3.5 space-y-3 shadow-lg">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+              <span class="text-xs font-bold text-sky-300 flex items-center gap-1.5">
+                <i class="fa-solid fa-ruler"></i>
+                <span>إجمالي المسافة المقاسة:</span>
+              </span>
+              <span class="text-[10px] bg-sky-500/20 text-sky-300 border border-sky-500/40 px-2 py-0.5 rounded-full font-mono font-bold">${points.length} نقاط</span>
+            </div>
+
+            <div>
+              <div class="text-2xl font-black text-white font-mono tracking-tight">${formatDistance(totalMeters, currentUnit)}</div>
+              <div class="text-[10px] text-slate-400 mt-1 flex items-center gap-3">
+                <span><strong>${distM}</strong> متر</span>
+                <span>&bull;</span>
+                <span><strong>${distKm}</strong> كم</span>
+                <span>&bull;</span>
+                <span><strong>${distNm}</strong> ميل بحري</span>
+              </div>
+            </div>
+
+            ${points.length >= 2 ? `
+              <div class="pt-2 border-t border-slate-800/80 space-y-1 text-[10px]">
+                <span class="text-slate-400 font-semibold block mb-1">أطوال الأقسام المقاسة:</span>
+                <div class="max-h-24 overflow-y-auto space-y-1 font-mono pr-1">
+                  ${points.slice(0, -1).map((p, idx) => {
+                    const segDist = p.distanceTo(points[idx + 1]);
+                    return `
+                      <div class="flex items-center justify-between bg-slate-950/60 px-2 py-1 rounded border border-slate-800">
+                        <span class="text-slate-400">قطعة ${idx + 1} &rarr; ${idx + 2}:</span>
+                        <span class="text-sky-300 font-bold">${formatDistance(segDist, currentUnit)}</span>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+            ` : ''}
+
+            <div class="pt-1 text-[10px] text-slate-400 flex items-center gap-1">
+              <i class="fa-solid fa-circle-info text-amber-400"></i>
+              <span>${isFinished ? 'اكتمل القياس وتثبتت النتيجة على الخريطة.' : 'انقر لإضافة نقاط أخرى، أو نقر مزدوج للإنهاء.'}</span>
+            </div>
+          </div>
+        `;
+      } else if (measureMode === 'area') {
+        const sqMeters = points.length >= 3 ? calculatePolygonArea(points) : 0;
+        const perimeterMeters = calculateDistance(points) + (points.length >= 3 ? points[points.length - 1].distanceTo(points[0]) : 0);
+
+        const dunams = (sqMeters / 2500).toFixed(2);
+        const sqKm = (sqMeters / 1000000).toFixed(3);
+        const hectares = (sqMeters / 10000).toFixed(2);
+        const sqM = Math.round(sqMeters).toLocaleString('ar-IQ');
+
+        measureDiv.innerHTML = `
+          <div class="bg-gradient-to-br from-slate-900 to-slate-950 border border-emerald-500/40 rounded-xl p-3.5 space-y-3 shadow-lg">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+              <span class="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                <i class="fa-solid fa-draw-polygon"></i>
+                <span>المساحة الجيوديسية الإجمالية:</span>
+              </span>
+              <span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-mono font-bold">${points.length} أركان</span>
+            </div>
+
+            <div>
+              <div class="text-2xl font-black text-white font-mono tracking-tight">${points.length >= 3 ? formatArea(sqMeters, currentUnit) : '--'}</div>
+              ${points.length >= 3 ? `
+                <div class="text-[10px] text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
+                  <span class="text-amber-300 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded">${dunams} دونم عراقي</span>
+                  <span>&bull;</span>
+                  <span><strong>${sqKm}</strong> كم²</span>
+                  <span>&bull;</span>
+                  <span><strong>${hectares}</strong> هكتار</span>
+                </div>
+                <div class="text-[10px] text-slate-400 mt-1.5">
+                  المحيط الإجمالي: <strong class="text-slate-200 font-mono">${formatDistance(perimeterMeters, 'km')}</strong>
+                </div>
+              ` : `
+                <p class="text-[11px] text-amber-300 mt-1">يلزم تحديد 3 نقاط على الأقل لحساب مساحة المضلع.</p>
+              `}
+            </div>
+
+            <div class="pt-1 text-[10px] text-slate-400 flex items-center gap-1 border-t border-slate-800/80">
+              <i class="fa-solid fa-circle-info text-amber-400"></i>
+              <span>${isFinished ? 'اكتملت مساحة المضلع وثبتت النتيجة على الخريطة.' : 'انقر لتحديد بقية الأركان، أو انقر نقراً مزدوجاً للإنهاء.'}</span>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    /**
+     * Update Floating HUD Bar on Map
+     */
+    function updateFloatingWidget(livePoint = null) {
+      if (!floatingMeasureBar) return;
+      if (!measureMode) {
+        floatingMeasureBar.classList.add('hidden');
+        return;
+      }
+      floatingMeasureBar.classList.remove('hidden');
+
+      const isArea = measureMode === 'area';
+      if (floatingMeasureIcon) {
+        floatingMeasureIcon.innerHTML = isArea ? '<i class="fa-solid fa-draw-polygon"></i>' : '<i class="fa-solid fa-ruler"></i>';
+        floatingMeasureIcon.className = isArea
+          ? 'w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center text-sm shadow-sm'
+          : 'w-8 h-8 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/40 flex items-center justify-center text-sm shadow-sm';
+      }
+
+      if (floatingMeasureTitle) {
+        floatingMeasureTitle.textContent = isArea ? 'قياس المساحة' : 'قياس المسافة';
+        floatingMeasureTitle.className = isArea ? 'text-xs font-bold text-emerald-300' : 'text-xs font-bold text-sky-300';
+      }
+
+      const pts = livePoint ? [...points, livePoint] : points;
+      if (floatingMeasurePointsBadge) {
+        floatingMeasurePointsBadge.textContent = `${pts.length} نقاط`;
+      }
+
+      if (floatingMeasureResult) {
+        if (!isArea) {
+          const d = calculateDistance(pts);
+          floatingMeasureResult.textContent = formatDistance(d, currentUnit);
+        } else {
+          if (pts.length >= 3) {
+            const a = calculatePolygonArea(pts);
+            floatingMeasureResult.textContent = formatArea(a, currentUnit);
+          } else {
+            floatingMeasureResult.textContent = pts.length === 2 ? 'حدد النقطة 3...' : 'حدد النقطة 2...';
+          }
+        }
+      }
+    }
+
+    /**
+     * Complete and lock measurement
+     */
+    function finishMeasurement() {
+      if (!measureMode || isFinished) return;
+      if (measureMode === 'distance' && points.length < 2) {
+        showToast('يرجى تحديد نقطتين على الأقل لإتمام قياس المسافة', 'warning');
+        return;
+      }
+      if (measureMode === 'area' && points.length < 3) {
+        showToast('يرجى تحديد 3 نقاط على الأقل لإتمام قياس المساحة', 'warning');
+        return;
+      }
+
+      isFinished = true;
+      if (rubberBandLayer && map.hasLayer(rubberBandLayer)) {
+        map.removeLayer(rubberBandLayer);
+        rubberBandLayer = null;
+      }
+
+      map.getContainer().classList.remove('measuring-mode-active');
+      map.doubleClickZoom.enable();
+
+      updateShapeAndUI();
+
+      // Show summary popup on map
+      if (measureMode === 'distance') {
+        const total = calculateDistance(points);
+        const lastPt = points[points.length - 1];
+        const popupContent = `
+          <div class="p-2 text-right font-sans space-y-1">
+            <div class="text-xs font-bold text-sky-400 flex items-center gap-1">
+              <i class="fa-solid fa-ruler"></i>
+              <span>نتيجة قياس المسافة</span>
+            </div>
+            <div class="text-lg font-black font-mono text-white">${formatDistance(total, currentUnit)}</div>
+            <div class="text-[10px] text-slate-300">
+              عدد المقاطع: <strong>${points.length - 1}</strong> &bull; النقاط: <strong>${points.length}</strong>
+            </div>
+          </div>
+        `;
+        L.popup({ className: 'measure-result-popup', offset: [0, -10] })
+          .setLatLng(lastPt)
+          .setContent(popupContent)
+          .openOn(map);
+      } else if (measureMode === 'area') {
+        const area = calculatePolygonArea(points);
+        const perim = calculateDistance(points) + points[points.length - 1].distanceTo(points[0]);
+        const center = shapeLayer.getBounds().getCenter();
+        const popupContent = `
+          <div class="p-2 text-right font-sans space-y-1">
+            <div class="text-xs font-bold text-emerald-400 flex items-center gap-1">
+              <i class="fa-solid fa-draw-polygon"></i>
+              <span>نتيجة قياس المساحة</span>
+            </div>
+            <div class="text-lg font-black font-mono text-white">${formatArea(area, currentUnit)}</div>
+            <div class="text-[10px] text-amber-300 font-semibold bg-amber-500/10 px-1.5 py-0.5 rounded inline-block">
+              ${(area / 2500).toFixed(2)} دونم عراقي
+            </div>
+            <div class="text-[10px] text-slate-300">
+              المحيط: <strong>${formatDistance(perim, 'km')}</strong> &bull; الأركان: <strong>${points.length}</strong>
+            </div>
+          </div>
+        `;
+        L.popup({ className: 'measure-result-popup' })
+          .setLatLng(center)
+          .setContent(popupContent)
+          .openOn(map);
+      }
+
+      showToast('اكتمل القياس بنجاح وتم تثبيت النتيجة على الخريطة!', 'success');
+    }
+
+    // Attach Click Handlers to Tool Buttons
     if (distBtn) {
       distBtn.addEventListener('click', () => {
-        reset();
-        mode = 'distance';
-        distBtn.classList.add('bg-blue-600', 'text-white');
-        showToast('انقر على الخريطة لتحديد النقاط وقياس المسافة', 'info');
+        setMeasureMode(measureMode === 'distance' ? null : 'distance');
       });
     }
 
     if (areaBtn) {
       areaBtn.addEventListener('click', () => {
-        reset();
-        mode = 'area';
-        areaBtn.classList.add('bg-blue-600', 'text-white');
-        showToast('انقر لتحديد أركان المضلع وحساب المساحة', 'info');
+        setMeasureMode(measureMode === 'area' ? null : 'area');
       });
+    }
+
+    if (finishBtn) {
+      finishBtn.addEventListener('click', finishMeasurement);
+    }
+    if (floatFinishMeasureBtn) {
+      floatFinishMeasureBtn.addEventListener('click', finishMeasurement);
     }
 
     if (clearBtn) {
       clearBtn.addEventListener('click', () => {
-        reset();
+        resetMeasurement();
+        showToast('تم تفريغ أداة القياس', 'info');
+      });
+    }
+    if (floatClearMeasureBtn) {
+      floatClearMeasureBtn.addEventListener('click', () => {
+        resetMeasurement();
         showToast('تم تفريغ أداة القياس', 'info');
       });
     }
 
+    if (unitSelect) {
+      unitSelect.addEventListener('change', (e) => {
+        currentUnit = e.target.value;
+        updateShapeAndUI();
+      });
+    }
+
+    // Map Click & Mouse Interaction
     map.on('click', (e) => {
-      if (!mode) return;
-      points.push(e.latlng);
+      if (!measureMode || isFinished) return;
+      const pt = e.latlng;
+      points.push(pt);
+      addVertexMarker(pt, points.length - 1);
+      updateShapeAndUI();
+    });
 
-      if (shapeLayer) map.removeLayer(shapeLayer);
+    map.on('mousemove', (e) => {
+      if (!measureMode || isFinished || points.length === 0) return;
+      const curr = e.latlng;
+      const lastPt = points[points.length - 1];
 
-      if (mode === 'distance') {
-        shapeLayer = L.polyline(points, { color: '#38bdf8', weight: 3, dashArray: '5, 8' }).addTo(map);
-        let totalMeters = 0;
-        for (let i = 0; i < points.length - 1; i++) {
-          totalMeters += points[i].distanceTo(points[i + 1]);
-        }
-        const km = (totalMeters / 1000).toFixed(2);
-        if (measureDiv) {
-          measureDiv.innerHTML = `
-            <div class="p-3 bg-slate-900 border border-slate-700 rounded-xl text-xs space-y-1">
-              <span class="text-slate-400">إجمالي المسافة المقاسة:</span>
-              <div class="text-base font-bold text-sky-400 font-mono">${km} كم</div>
-              <div class="text-[10px] text-slate-500">عدد النقاط: ${points.length}</div>
-            </div>
-          `;
-        }
-      } else if (mode === 'area') {
-        if (points.length >= 3) {
-          shapeLayer = L.polygon(points, { color: '#10b981', weight: 2, fillColor: '#10b981', fillOpacity: 0.25 }).addTo(map);
-          if (measureDiv) {
-            measureDiv.innerHTML = `
-              <div class="p-3 bg-slate-900 border border-slate-700 rounded-xl text-xs space-y-1">
-                <span class="text-slate-400">المضلع المحدد:</span>
-                <div class="text-sm font-bold text-emerald-400">تم تحديد ${points.length} نقاط</div>
-              </div>
-            `;
-          }
+      if (rubberBandLayer && map.hasLayer(rubberBandLayer)) {
+        map.removeLayer(rubberBandLayer);
+      }
+
+      if (measureMode === 'distance') {
+        rubberBandLayer = L.polyline([lastPt, curr], {
+          color: '#38bdf8',
+          weight: 2,
+          dashArray: '4, 6',
+          opacity: 0.75,
+          className: 'measure-element'
+        }).addTo(map);
+      } else if (measureMode === 'area') {
+        if (points.length >= 2) {
+          rubberBandLayer = L.polygon([...points, curr], {
+            color: '#10b981',
+            weight: 1.5,
+            dashArray: '4, 5',
+            fillColor: '#10b981',
+            fillOpacity: 0.14,
+            className: 'measure-element'
+          }).addTo(map);
         } else {
-          shapeLayer = L.polyline(points, { color: '#10b981', weight: 2, dashArray: '4, 8' }).addTo(map);
+          rubberBandLayer = L.polyline([lastPt, curr], {
+            color: '#10b981',
+            weight: 1.5,
+            dashArray: '4, 5',
+            className: 'measure-element'
+          }).addTo(map);
         }
+      }
+
+      updateFloatingWidget(curr);
+    });
+
+    map.on('dblclick', (e) => {
+      if (measureMode && !isFinished) {
+        L.DomEvent.stopPropagation(e);
+        // Leaflet double click may register a duplicated point, prune if necessary
+        if (points.length > 2) {
+          const pLast = points[points.length - 1];
+          const pPrev = points[points.length - 2];
+          if (pLast.distanceTo(pPrev) < 5) {
+            points.pop();
+            const lastMarker = vertexMarkers.pop();
+            if (lastMarker && map.hasLayer(lastMarker)) map.removeLayer(lastMarker);
+          }
+        }
+        finishMeasurement();
       }
     });
   }
