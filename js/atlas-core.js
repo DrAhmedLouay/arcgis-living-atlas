@@ -777,51 +777,204 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Convert TIFF/GeoTIFF ArrayBuffer into a PNG DataURL via Canvas
-     * Uses UTIF.js to decode standard TIFF compressions and pixel formats
+     * Advanced Dual-Engine TIFF & GeoTIFF Decoder
+     * Engine 1: GeoTIFF.js (Standard for satellite, BigTIFF, and tiled raster mosaics)
+     * Engine 2: UTIF.js (Fallback for classic stripped TIFF images)
+     * Engine 3: Native GeoTIFF Binary Header Scanner
      */
-    function convertTiffToPngDataUrl(buffer) {
-      if (typeof UTIF === 'undefined') {
-        console.warn('UTIF library not loaded');
-        return null;
-      }
-      try {
-        const ifds = UTIF.decode(buffer);
-        if (!ifds || ifds.length === 0) return null;
-        UTIF.decodeImage(buffer, ifds[0]);
-        const rgba = UTIF.toRGBA8(ifds[0]);
-        const width = ifds[0].width;
-        const height = ifds[0].height;
+    async function decodeTiffDataset(buffer, fileName) {
+      let geoMeta = null;
+      let pngDataUrl = null;
+      let width = 0;
+      let height = 0;
 
-        if (!rgba || width <= 0 || height <= 0) return null;
+      // 1. Try GeoTIFF.js first (Supports BigTIFF, Tiled, Overviews, LZW, Deflate, JPEG)
+      if (typeof GeoTIFF !== 'undefined') {
+        try {
+          const tiff = await GeoTIFF.fromArrayBuffer(buffer);
+          const image = await tiff.getImage(0);
+          width = image.getWidth();
+          height = image.getHeight();
 
-        const srcCanvas = document.createElement('canvas');
-        srcCanvas.width = width;
-        srcCanvas.height = height;
-        const srcCtx = srcCanvas.getContext('2d');
-        const imgData = srcCtx.createImageData(width, height);
-        imgData.data.set(rgba);
-        srcCtx.putImageData(imgData, 0, 0);
+          // Geographic bounding box: [minX, minY, maxX, maxY]
+          let bbox = null;
+          try {
+            bbox = image.getBoundingBox();
+          } catch (be) {}
 
-        // Downsample if large (> 2500px) for smooth web performance and fast Gemini AI analysis
-        const maxDim = 2500;
-        if (width > maxDim || height > maxDim) {
-          const scale = Math.min(maxDim / width, maxDim / height);
-          const targetW = Math.round(width * scale);
-          const targetH = Math.round(height * scale);
-          const destCanvas = document.createElement('canvas');
-          destCanvas.width = targetW;
-          destCanvas.height = targetH;
-          const destCtx = destCanvas.getContext('2d');
-          destCtx.drawImage(srcCanvas, 0, 0, targetW, targetH);
-          return destCanvas.toDataURL('image/png');
+          let originX = null, originY = null, resX = 0.5, resY = 0.5;
+          try {
+            const origin = image.getOrigin();
+            if (origin && origin.length >= 2) {
+              originX = origin[0];
+              originY = origin[1];
+            }
+          } catch (oe) {}
+
+          try {
+            const res = image.getResolution();
+            if (res && res.length >= 2) {
+              resX = Math.abs(res[0]);
+              resY = Math.abs(res[1]);
+            }
+          } catch (re) {}
+
+          let epsgCode = 32638;
+          try {
+            const geoKeys = image.getGeoKeys();
+            if (geoKeys) {
+              epsgCode = geoKeys.ProjectedCSTypeGeoKey || geoKeys.GeographicTypeGeoKey || 32638;
+            }
+          } catch (ge) {}
+
+          if (bbox && bbox.length >= 4) {
+            const minX = bbox[0];
+            const minY = bbox[1];
+            const maxX = bbox[2];
+            const maxY = bbox[3];
+
+            let utmZone = 38;
+            let proj = `UTM Zone 38N (EPSG:${epsgCode})`;
+            if (epsgCode === 32637 || (minX > 100000 && minX < 500000 && fileName.includes('37'))) {
+              utmZone = 37;
+              proj = 'UTM Zone 37N (EPSG:32637)';
+            } else if (epsgCode === 32639) {
+              utmZone = 39;
+              proj = 'UTM Zone 39N (EPSG:32639)';
+            } else if (epsgCode === 4326 || (minX >= -180 && maxX <= 180 && minY >= -90 && maxY <= 90)) {
+              proj = 'WGS84 Geodetic (EPSG:4326)';
+            }
+
+            geoMeta = {
+              fileName: fileName,
+              isECW: false,
+              width: width,
+              height: height,
+              bands: image.getSamplesPerPixel() || 3,
+              compression: 1,
+              originX: minX,
+              originY: maxY,
+              cellIncrementX: resX,
+              cellIncrementY: -resY,
+              projection: proj,
+              utmZone: utmZone,
+              datum: 'WGS84',
+              detectionSource: `بيانات GeoTIFF الأصلية (EPSG:${epsgCode})`
+            };
+          }
+
+          // Raster decoding: downscaled to max 1280px for instant rendering of large ortho mosaics
+          const maxDim = 1280;
+          const scale = Math.min(1, maxDim / Math.max(width, height));
+          const targetW = Math.max(16, Math.round(width * scale));
+          const targetH = Math.max(16, Math.round(height * scale));
+
+          try {
+            const rgb = await image.readRGB({ width: targetW, height: targetH });
+            if (rgb && rgb.length >= targetW * targetH * 3) {
+              const canvas = document.createElement('canvas');
+              canvas.width = targetW;
+              canvas.height = targetH;
+              const ctx = canvas.getContext('2d');
+              const imgData = ctx.createImageData(targetW, targetH);
+              for (let i = 0, j = 0; i < rgb.length; i += 3, j += 4) {
+                imgData.data[j] = rgb[i];
+                imgData.data[j + 1] = rgb[i + 1];
+                imgData.data[j + 2] = rgb[i + 2];
+                imgData.data[j + 3] = 255;
+              }
+              ctx.putImageData(imgData, 0, 0);
+              pngDataUrl = canvas.toDataURL('image/png');
+            }
+          } catch (rgbErr) {
+            console.warn('GeoTIFF readRGB fallback to readRasters:', rgbErr);
+            try {
+              const rasters = await image.readRasters({ width: targetW, height: targetH });
+              if (rasters && rasters.length > 0) {
+                const canvas = document.createElement('canvas');
+                canvas.width = targetW;
+                canvas.height = targetH;
+                const ctx = canvas.getContext('2d');
+                const imgData = ctx.createImageData(targetW, targetH);
+                const b0 = rasters[0];
+                const b1 = rasters.length > 1 ? rasters[1] : b0;
+                const b2 = rasters.length > 2 ? rasters[2] : b0;
+                const bA = rasters.length > 3 ? rasters[3] : null;
+
+                let maxVal = 255;
+                for (let k = 0; k < Math.min(500, b0.length); k++) if (b0[k] > maxVal) maxVal = b0[k];
+                const norm = 255 / (maxVal || 1);
+
+                for (let idx = 0, p = 0; idx < targetW * targetH; idx++, p += 4) {
+                  imgData.data[p] = Math.min(255, Math.max(0, b0[idx] * norm));
+                  imgData.data[p + 1] = Math.min(255, Math.max(0, b1[idx] * norm));
+                  imgData.data[p + 2] = Math.min(255, Math.max(0, b2[idx] * norm));
+                  imgData.data[p + 3] = bA ? Math.min(255, Math.max(0, bA[idx])) : 255;
+                }
+                ctx.putImageData(imgData, 0, 0);
+                pngDataUrl = canvas.toDataURL('image/png');
+              }
+            } catch (rastErr) {
+              console.warn('GeoTIFF readRasters error:', rastErr);
+            }
+          }
+        } catch (gtErr) {
+          console.warn('GeoTIFF.js could not decode, will try UTIF:', gtErr);
         }
-
-        return srcCanvas.toDataURL('image/png');
-      } catch (err) {
-        console.error('TIFF decode error:', err);
-        return null;
       }
+
+      // 2. Fallback to parseTIFFGeoHeader if GeoTIFF.js didn't extract coordinates
+      if (!geoMeta) {
+        geoMeta = parseTIFFGeoHeader(buffer, fileName);
+      }
+
+      // 3. Fallback to UTIF.js if GeoTIFF.js didn't produce visual raster
+      if (!pngDataUrl && typeof UTIF !== 'undefined') {
+        try {
+          const ifds = UTIF.decode(buffer);
+          if (ifds && ifds.length > 0) {
+            UTIF.decodeImage(buffer, ifds[0]);
+            const rgba = UTIF.toRGBA8(ifds[0]);
+            const w = ifds[0].width;
+            const h = ifds[0].height;
+            if (rgba && w > 0 && h > 0) {
+              width = width || w;
+              height = height || h;
+              const srcCanvas = document.createElement('canvas');
+              srcCanvas.width = w;
+              srcCanvas.height = h;
+              const srcCtx = srcCanvas.getContext('2d');
+              const imgData = srcCtx.createImageData(w, h);
+              imgData.data.set(rgba);
+              srcCtx.putImageData(imgData, 0, 0);
+
+              const maxDim = 1280;
+              if (w > maxDim || h > maxDim) {
+                const sc = Math.min(maxDim / w, maxDim / h);
+                const tw = Math.round(w * sc);
+                const th = Math.round(h * sc);
+                const destCanvas = document.createElement('canvas');
+                destCanvas.width = tw;
+                destCanvas.height = th;
+                destCanvas.getContext('2d').drawImage(srcCanvas, 0, 0, tw, th);
+                pngDataUrl = destCanvas.toDataURL('image/png');
+              } else {
+                pngDataUrl = srcCanvas.toDataURL('image/png');
+              }
+            }
+          }
+        } catch (utifErr) {
+          console.warn('UTIF.js fallback error:', utifErr);
+        }
+      }
+
+      // 4. If visual raster STILL failed (e.g. unsupported compression),
+      // generate an informative vector footprint with the real metadata so it never fails!
+      if (!pngDataUrl && geoMeta) {
+        pngDataUrl = generateEcwPlaceholderDataUrl(geoMeta);
+      }
+
+      return { geoMeta, pngDataUrl, width, height };
     }
 
     /**
@@ -1092,6 +1245,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (lowerName.includes('diyala') || lowerName.includes('baqubah') || lowerName.includes('ديالى') || lowerName.includes('بعقوبة')) {
           meta.originX = 472000; meta.originY = 3734000; meta.utmZone = 38;
           meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (ديالى)';
+        } else if (lowerName.includes('fadileh') || lowerName.includes('fadhili') || lowerName.includes('fadili') || lowerName.includes('فضيلية') || lowerName.includes('فاضلية')) {
+          meta.originX = 458000; meta.originY = 3690000; meta.utmZone = 38;
+          meta.detectionSource = 'مطابقة ذكية لاسم المنطقة (الفضيلية / شرق بغداد)';
         } else if (lowerName.includes('baghdad') || lowerName.includes('بغداد')) {
           meta.originX = 444500; meta.originY = 3687500; meta.utmZone = 38;
           meta.detectionSource = 'مطابقة ذكية لاسم العاصمة (بغداد)';
@@ -1765,27 +1921,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const isTiff = imageFile.name.toLowerCase().endsWith('.tif') || imageFile.name.toLowerCase().endsWith('.tiff');
         if (isTiff) {
           const arrayReader = new FileReader();
-          arrayReader.onload = (ae) => {
+          arrayReader.onload = async (ae) => {
             const buffer = ae.target.result;
-            const geoMeta = parseTIFFGeoHeader(buffer, imageFile.name);
-            let customBounds = null;
-            if (geoMeta) {
-              customBounds = computeBoundsFromMeta(geoMeta);
-              displayECWMetadata(geoMeta, customBounds);
-            } else {
-              const metaFallback = parseECWHeader(buffer, imageFile.name, imageFile.size);
-              customBounds = computeBoundsFromMeta(metaFallback);
-            }
+            showToast(`جاري معالجة وفك ضغط خريطة TIFF: ${imageFile.name}...`, 'info');
 
-            // Convert TIFF to PNG DataURL so browsers can render it in Leaflet!
-            const pngDataUrl = convertTiffToPngDataUrl(buffer);
-            const imageSrcToUse = pngDataUrl || generateEcwPlaceholderDataUrl(geoMeta || { fileName: imageFile.name });
+            const decoded = await decodeTiffDataset(buffer, imageFile.name);
+            const geoMeta = decoded.geoMeta || parseECWHeader(buffer, imageFile.name, imageFile.size);
+            const customBounds = computeBoundsFromMeta(geoMeta);
+            displayECWMetadata(geoMeta, customBounds);
 
+            const imageSrcToUse = decoded.pngDataUrl || generateEcwPlaceholderDataUrl(geoMeta);
             initCalibrationOverlay(imageSrcToUse, imageFile.name, customBounds);
 
             // Also prepare for Gemini Vision analysis
-            if (pngDataUrl) {
-              const parts = pngDataUrl.split(',');
+            if (decoded.pngDataUrl && decoded.pngDataUrl.startsWith('data:image/')) {
+              const parts = decoded.pngDataUrl.split(',');
               geminiSelectedImageBase64 = parts[1];
               geminiSelectedImageMime = 'image/png';
               if (geminiPickImageBtnText) {
@@ -1793,8 +1943,8 @@ document.addEventListener('DOMContentLoaded', () => {
               }
             }
 
-            if (geoMeta) {
-              showToast(`تم استيراد GeoTIFF بنجاح: ${geoMeta.detectionSource}`, 'success');
+            if (decoded.geoMeta && decoded.geoMeta.originX) {
+              showToast(`تم استيراد GeoTIFF بنجاح: ${decoded.geoMeta.detectionSource}`, 'success');
             } else {
               showToast(`تم استيراد وعرض صورة TIFF بنجاح`, 'success');
             }
@@ -1870,10 +2020,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
           if (isTiff) {
             const arrReader = new FileReader();
-            arrReader.onload = (ae) => {
-              const pngData = convertTiffToPngDataUrl(ae.target.result);
-              if (pngData) {
-                overlay.setUrl(pngData);
+            arrReader.onload = async (ae) => {
+              const decoded = await decodeTiffDataset(ae.target.result, file.name);
+              if (decoded && decoded.pngDataUrl) {
+                overlay.setUrl(decoded.pngDataUrl);
                 showToast(`تم إقران صورة TIFF المحولة (${file.name}) بنطاق الخارطة بنجاح!`, 'success');
               } else {
                 showToast(`تعذّر فك ضغط ملف TIFF: ${file.name}`, 'error');
@@ -2286,36 +2436,34 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isTiff) {
           if (geminiPickImageBtnText) geminiPickImageBtnText.textContent = `⏳ جاري معالجة TIFF: ${file.name}...`;
           const arrReader = new FileReader();
-          arrReader.onload = (ev) => {
+          arrReader.onload = async (ev) => {
             const buffer = ev.target.result;
-            // Check for GeoTIFF metadata
-            const geoMeta = parseTIFFGeoHeader(buffer, file.name);
-            let tiffBounds = null;
-            if (geoMeta) {
-              tiffBounds = computeBoundsFromMeta(geoMeta);
-              displayECWMetadata(geoMeta, tiffBounds);
-            }
+            showToast(`جاري معالجة وفك ضغط خريطة TIFF: ${file.name}...`, 'info');
 
-            const pngDataUrl = convertTiffToPngDataUrl(buffer);
-            if (pngDataUrl) {
-              const parts = pngDataUrl.split(',');
-              geminiSelectedImageBase64 = parts[1];
-              geminiSelectedImageMime = 'image/png';
+            const decoded = await decodeTiffDataset(buffer, file.name);
+            const geoMeta = decoded.geoMeta || parseECWHeader(buffer, file.name, file.size);
+            const tiffBounds = computeBoundsFromMeta(geoMeta);
+            displayECWMetadata(geoMeta, tiffBounds);
 
-              if (geminiPickImageBtnText) {
-                geminiPickImageBtnText.textContent = `✅ ${file.name} (TIFF محوّل وجاهز للتحليل)`;
+            const displaySrc = decoded.pngDataUrl || generateEcwPlaceholderDataUrl(geoMeta);
+            if (displaySrc) {
+              if (decoded.pngDataUrl && decoded.pngDataUrl.startsWith('data:image/')) {
+                const parts = decoded.pngDataUrl.split(',');
+                geminiSelectedImageBase64 = parts[1];
+                geminiSelectedImageMime = 'image/png';
               }
 
-              // Auto-place on map if GeoTIFF coordinates exist
-              if (tiffBounds) {
-                initCalibrationOverlay(pngDataUrl, file.name, tiffBounds);
+              if (geminiPickImageBtnText) {
+                geminiPickImageBtnText.textContent = `✅ ${file.name} (TIFF جاهز للتحليل)`;
+              }
+
+              // Auto-place on map with detected coordinates
+              initCalibrationOverlay(displaySrc, file.name, tiffBounds);
+
+              if (geoMeta && geoMeta.originX) {
                 showToast(`تم استيراد GeoTIFF وإسقاطه تلقائياً بالإحداثيات!`, 'success');
-              } else if (!overlay) {
-                initCalibrationOverlay(pngDataUrl, file.name, null);
-                showToast(`تم تحويل وعرض صورة TIFF! يمكنك الآن تحليلها بالذكاء الاصطناعي`, 'success');
               } else {
-                overlay.setUrl(pngDataUrl);
-                showToast(`تم تحميل صورة TIFF بنجاح!`, 'success');
+                showToast(`تم استيراد وعرض صورة TIFF بنجاح!`, 'success');
               }
             } else {
               if (geminiPickImageBtnText) geminiPickImageBtnText.textContent = `❌ تعذّر فك ضغط TIFF: ${file.name}`;
