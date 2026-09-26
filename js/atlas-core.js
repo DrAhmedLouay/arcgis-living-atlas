@@ -913,60 +913,78 @@ document.addEventListener('DOMContentLoaded', () => {
             };
           }
 
-          // Robust raster downsampling using tiered target resolutions (2.5K, HD, Web)
-          const targetDimensions = [2560, 1600, 1024];
-
-          for (const targetMax of targetDimensions) {
-            const sc = Math.min(1, targetMax / Math.max(width, height));
-            const tw = Math.max(32, Math.round(width * sc));
-            const th = Math.max(32, Math.round(height * sc));
-
-            try {
-              const rasters = await mainImage.readRasters({ width: tw, height: th });
-              if (rasters && rasters.length > 0 && rasters[0] && rasters[0].length === tw * th) {
-                const canvas = document.createElement('canvas');
-                canvas.width = tw;
-                canvas.height = th;
-                const ctx = canvas.getContext('2d');
-                const imgData = ctx.createImageData(tw, th);
-
-                const b0 = rasters[0];
-                const b1 = rasters.length > 1 ? rasters[1] : b0;
-                const b2 = rasters.length > 2 ? rasters[2] : b0;
-                const bA = rasters.length > 3 ? rasters[3] : null;
-
-                const rStat = getTiffBandStats(b0);
-                const gStat = rasters.length > 1 ? getTiffBandStats(b1) : rStat;
-                const bStat = rasters.length > 2 ? getTiffBandStats(b2) : rStat;
-
-                for (let idx = 0, p = 0; idx < tw * th; idx++, p += 4) {
-                  imgData.data[p]     = normalizeTiffVal(b0[idx], rStat);
-                  imgData.data[p + 1] = normalizeTiffVal(b1[idx], gStat);
-                  imgData.data[p + 2] = normalizeTiffVal(b2[idx], bStat);
-                  imgData.data[p + 3] = bA ? Math.min(255, Math.max(0, Math.round(bA[idx]))) : 255;
+          // Select best resolution image to render: if overviews exist, pick overview closest to 3840px
+          const targetUHD = 3840;
+          let renderImage = mainImage;
+          if (imageCount > 1 && (width > targetUHD || height > targetUHD)) {
+            let bestOverview = null;
+            let bestDiff = Infinity;
+            for (let idx = 1; idx < imageCount; idx++) {
+              try {
+                const ov = await tiff.getImage(idx);
+                const ow = ov.getWidth();
+                const oh = ov.getHeight();
+                const maxO = Math.max(ow, oh);
+                const diff = Math.abs(maxO - targetUHD);
+                if (diff < bestDiff) {
+                  bestDiff = diff;
+                  bestOverview = ov;
                 }
-                ctx.putImageData(imgData, 0, 0);
-                pngDataUrl = canvas.toDataURL('image/jpeg', 0.92);
-                break;
-              }
-            } catch (rastE) {
-              console.warn(`GeoTIFF readRasters at ${tw}x${th} failed:`, rastE);
+              } catch (ove) {}
+            }
+            if (bestOverview) {
+              renderImage = bestOverview;
             }
           }
 
-          // If downsampling option was unhandled by format/driver, try direct read if <= 16MP
-          if (!pngDataUrl && (width * height <= 16777216)) {
-            try {
-              const rasters = await mainImage.readRasters();
-              if (rasters && rasters.length > 0 && rasters[0]) {
-                const tw = width;
-                const th = height;
-                const canvas = document.createElement('canvas');
-                canvas.width = tw;
-                canvas.height = th;
-                const ctx = canvas.getContext('2d');
-                const imgData = ctx.createImageData(tw, th);
+          const rw = renderImage.getWidth();
+          const rh = renderImage.getHeight();
 
+          // Strategy A: readRGB directly on renderImage (Proven fast and high quality)
+          try {
+            const rgb = await renderImage.readRGB();
+            if (rgb && rgb.length >= rw * rh * 3) {
+              const srcCanvas = document.createElement('canvas');
+              srcCanvas.width = rw;
+              srcCanvas.height = rh;
+              const ctx = srcCanvas.getContext('2d');
+              const imgData = ctx.createImageData(rw, rh);
+              for (let i = 0, j = 0; i < rgb.length && j < rw * rh * 4; i += 3, j += 4) {
+                imgData.data[j]     = rgb[i];
+                imgData.data[j + 1] = rgb[i + 1];
+                imgData.data[j + 2] = rgb[i + 2];
+                imgData.data[j + 3] = 255;
+              }
+              ctx.putImageData(imgData, 0, 0);
+
+              const maxDim = 3840;
+              if (rw > maxDim || rh > maxDim) {
+                const sc = Math.min(maxDim / rw, maxDim / rh);
+                const tw = Math.round(rw * sc);
+                const th = Math.round(rh * sc);
+                const destCanvas = document.createElement('canvas');
+                destCanvas.width = tw;
+                destCanvas.height = th;
+                destCanvas.getContext('2d').drawImage(srcCanvas, 0, 0, tw, th);
+                pngDataUrl = destCanvas.toDataURL('image/jpeg', 0.94);
+              } else {
+                pngDataUrl = srcCanvas.toDataURL('image/jpeg', 0.94);
+              }
+            }
+          } catch (rgbE) {
+            console.warn('readRGB on renderImage failed, trying readRasters:', rgbE);
+          }
+
+          // Strategy B: readRasters on renderImage (for multi-band / satellite rasters)
+          if (!pngDataUrl) {
+            try {
+              const rasters = await renderImage.readRasters();
+              if (rasters && rasters.length > 0 && rasters[0]) {
+                const srcCanvas = document.createElement('canvas');
+                srcCanvas.width = rw;
+                srcCanvas.height = rh;
+                const ctx = srcCanvas.getContext('2d');
+                const imgData = ctx.createImageData(rw, rh);
                 const b0 = rasters[0];
                 const b1 = rasters.length > 1 ? rasters[1] : b0;
                 const b2 = rasters.length > 2 ? rasters[2] : b0;
@@ -976,7 +994,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const gStat = rasters.length > 1 ? getTiffBandStats(b1) : rStat;
                 const bStat = rasters.length > 2 ? getTiffBandStats(b2) : rStat;
 
-                for (let idx = 0, p = 0; idx < tw * th; idx++, p += 4) {
+                for (let idx = 0, p = 0; idx < rw * rh && idx < b0.length; idx++, p += 4) {
                   imgData.data[p]     = normalizeTiffVal(b0[idx], rStat);
                   imgData.data[p + 1] = normalizeTiffVal(b1[idx], gStat);
                   imgData.data[p + 2] = normalizeTiffVal(b2[idx], bStat);
@@ -984,21 +1002,58 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 ctx.putImageData(imgData, 0, 0);
 
-                if (tw > 2560 || th > 2560) {
-                  const sc = Math.min(2560 / tw, 2560 / th);
-                  const dw = Math.round(tw * sc);
-                  const dh = Math.round(th * sc);
+                const maxDim = 3840;
+                if (rw > maxDim || rh > maxDim) {
+                  const sc = Math.min(maxDim / rw, maxDim / rh);
+                  const tw = Math.round(rw * sc);
+                  const th = Math.round(rh * sc);
                   const destCanvas = document.createElement('canvas');
-                  destCanvas.width = dw;
-                  destCanvas.height = dh;
-                  destCanvas.getContext('2d').drawImage(canvas, 0, 0, dw, dh);
-                  pngDataUrl = destCanvas.toDataURL('image/jpeg', 0.92);
+                  destCanvas.width = tw;
+                  destCanvas.height = th;
+                  destCanvas.getContext('2d').drawImage(srcCanvas, 0, 0, tw, th);
+                  pngDataUrl = destCanvas.toDataURL('image/jpeg', 0.94);
                 } else {
-                  pngDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+                  pngDataUrl = srcCanvas.toDataURL('image/jpeg', 0.94);
                 }
               }
-            } catch (fullE) {
-              console.warn('Full GeoTIFF read failed:', fullE);
+            } catch (rastE) {
+              console.warn('readRasters on renderImage failed:', rastE);
+            }
+          }
+
+          // Strategy C: If renderImage was an overview and failed, try mainImage directly
+          if (!pngDataUrl && renderImage !== mainImage && width * height <= 20000000) {
+            try {
+              const rgb = await mainImage.readRGB();
+              if (rgb && rgb.length >= width * height * 3) {
+                const srcCanvas = document.createElement('canvas');
+                srcCanvas.width = width;
+                srcCanvas.height = height;
+                const ctx = srcCanvas.getContext('2d');
+                const imgData = ctx.createImageData(width, height);
+                for (let i = 0, j = 0; i < rgb.length && j < width * height * 4; i += 3, j += 4) {
+                  imgData.data[j]     = rgb[i];
+                  imgData.data[j + 1] = rgb[i + 1];
+                  imgData.data[j + 2] = rgb[i + 2];
+                  imgData.data[j + 3] = 255;
+                }
+                ctx.putImageData(imgData, 0, 0);
+                const maxDim = 3840;
+                if (width > maxDim || height > maxDim) {
+                  const sc = Math.min(maxDim / width, maxDim / height);
+                  const tw = Math.round(width * sc);
+                  const th = Math.round(height * sc);
+                  const destCanvas = document.createElement('canvas');
+                  destCanvas.width = tw;
+                  destCanvas.height = th;
+                  destCanvas.getContext('2d').drawImage(srcCanvas, 0, 0, tw, th);
+                  pngDataUrl = destCanvas.toDataURL('image/jpeg', 0.94);
+                } else {
+                  pngDataUrl = srcCanvas.toDataURL('image/jpeg', 0.94);
+                }
+              }
+            } catch (mainE) {
+              console.warn('mainImage readRGB failed:', mainE);
             }
           }
         } catch (gtErr) {
@@ -1031,7 +1086,7 @@ document.addEventListener('DOMContentLoaded', () => {
               imgData.data.set(rgba);
               srcCtx.putImageData(imgData, 0, 0);
 
-              const maxDim = 2560;
+              const maxDim = 3840;
               if (w > maxDim || h > maxDim) {
                 const sc = Math.min(maxDim / w, maxDim / h);
                 const tw = Math.round(w * sc);
@@ -1040,9 +1095,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 destCanvas.width = tw;
                 destCanvas.height = th;
                 destCanvas.getContext('2d').drawImage(srcCanvas, 0, 0, tw, th);
-                pngDataUrl = destCanvas.toDataURL('image/jpeg', 0.92);
+                pngDataUrl = destCanvas.toDataURL('image/jpeg', 0.94);
               } else {
-                pngDataUrl = srcCanvas.toDataURL('image/jpeg', 0.92);
+                pngDataUrl = srcCanvas.toDataURL('image/jpeg', 0.94);
               }
             }
           }
@@ -2208,6 +2263,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (fileInput) {
       fileInput.addEventListener('change', (e) => {
         handleSelectedFiles(e.target.files);
+        fileInput.value = '';
       });
     }
 
@@ -2274,6 +2330,7 @@ document.addEventListener('DOMContentLoaded', () => {
       triggerCompanionUploadBtn.addEventListener('click', () => companionFileInput.click());
       companionFileInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
+        companionFileInput.value = '';
         if (!file) return;
 
         if (overlay && bounds) {
@@ -3101,6 +3158,15 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       // Clean up previous
       removeOverlay();
 
+      // Reset rotation and scale state for newly loaded image
+      rotationDeg = 0;
+      scalePercent = 100;
+      if (rotationSlider) rotationSlider.value = 0;
+      if (rotationLabel) rotationLabel.textContent = '0°';
+      if (boundRot) boundRot.textContent = '0°';
+      if (scaleSlider) scaleSlider.value = 100;
+      if (scaleLabel) scaleLabel.textContent = '100%';
+
       // Determine initial bounds
       if (customBounds) {
         bounds = customBounds;
@@ -3139,7 +3205,9 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       // Create boundary outline & corner handles
       createHandles();
       applyVisualFilters();
-      applyRotation();
+      if (rotationDeg !== 0) {
+        applyRotation();
+      }
       isOverlayVisible = true;
       if (floatingVisibilityBar) floatingVisibilityBar.classList.remove('hidden');
       updateVisibilityUI();
@@ -3256,7 +3324,9 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
     function updateOverlayGeometry() {
       if (overlay && bounds) {
         overlay.setBounds(bounds);
-        applyRotation();
+        if (rotationDeg !== 0) {
+          applyRotation();
+        }
         if (boundaryBox) boundaryBox.setBounds(bounds);
         updateReadout();
       }
@@ -3268,9 +3338,13 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
     function applyRotation() {
       if (!overlay) return;
       const el = overlay.getElement();
-      if (el) {
-        el.style.transformOrigin = 'center center';
-        el.style.transform = (el.style.transform || '').replace(/\s*rotate\([^)]*\)/g, '') + ` rotate(${rotationDeg}deg)`;
+      if (!el) return;
+      el.style.transformOrigin = 'center center';
+      const cleanTransform = (el.style.transform || '').replace(/\s*rotate\([^)]*\)/g, '').trim();
+      if (rotationDeg !== 0) {
+        el.style.transform = cleanTransform ? `${cleanTransform} rotate(${rotationDeg}deg)` : `rotate(${rotationDeg}deg)`;
+      } else {
+        el.style.transform = cleanTransform;
       }
     }
 
@@ -3568,6 +3642,13 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       }
       clearHandles();
       bounds = null;
+      rotationDeg = 0;
+      scalePercent = 100;
+      if (rotationSlider) rotationSlider.value = 0;
+      if (rotationLabel) rotationLabel.textContent = '0°';
+      if (boundRot) boundRot.textContent = '0°';
+      if (scaleSlider) scaleSlider.value = 100;
+      if (scaleLabel) scaleLabel.textContent = '100%';
       isOverlayVisible = false;
       if (floatingVisibilityBar) floatingVisibilityBar.classList.add('hidden');
       if (controlsContainer) controlsContainer.classList.add('hidden');
