@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ArcGIS Living Atlas • أطلس البيانات المكانية التفاعلي</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+
+  <!-- Esri Leaflet & Geocoder -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/esri-leaflet/3.0.12/esri-leaflet.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/esri-leaflet-geocoder/3.1.4/esri-leaflet-geocoder.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/esri-leaflet-geocoder/3.1.4/esri-leaflet-geocoder.js"></script>
+
+  <!-- Custom Styling -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-slate-950 text-slate-100 h-screen w-screen flex flex-col overflow-hidden select-none">
+
+  <!-- =========================================================================
+       Top Application Header
+       ========================================================================= -->
+  <header class="h-14 glass-header z-30 px-4 flex items-center justify-between gap-4 shrink-0 shadow-md">
+    <!-- Brand / Title -->
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-700 to-sky-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/25">
+        <i class="fa-solid fa-earth-americas text-lg animate-pulse"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="font-bold text-sm md:text-base text-white tracking-wide">ArcGIS Living Atlas</h1>
+          <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-medium flex items-center gap-1">
+            <i class="fa-solid fa-location-dot text-[9px]"></i>
+            جمهورية العراق
+          </span>
+        </div>
+        <div class="text-[10px] text-slate-400">بوابة الخرائط والبيانات المكانية الحية والموثوقة &bull; العراق والشرق الأوسط</div>
+      </div>
+    </div>
+
+    <!-- Center Search Container (Docked ArcGIS Search Widget) -->
+    <div class="flex-1 max-w-md mx-2 hidden md:block">
+      <div id="geosearchContainer" class="w-full"></div>
+    </div>
+
+    <!-- Header Actions -->
+    <div class="flex items-center gap-2">
+      <!-- Basemaps Toggle -->
+      <button id="toggleBasemapBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700/80 text-xs font-medium text-slate-200 flex items-center gap-1.5 transition-colors" title="خرائط الأساس">
+        <i class="fa-solid fa-map text-blue-400"></i>
+        <span class="hidden sm:inline">خرائط الأساس</span>
+      </button>
+
+      <!-- Legend Toggle -->
+      <button id="toggleLegendBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700/80 text-xs font-medium text-slate-200 flex items-center gap-1.5 transition-colors" title="مفتاح الخريطة">
+        <i class="fa-solid fa-list-check text-emerald-400"></i>
+        <span class="hidden sm:inline">مفتاح الخريطة</span>
+      </button>
+
+      <!-- Export Screenshot -->
+      <button id="screenshotBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700/80 text-xs font-medium text-slate-200 flex items-center gap-1.5 transition-colors" title="تصدير لقطة للخريطة">
+        <i class="fa-solid fa-camera text-amber-400"></i>
+        <span class="hidden sm:inline">تصدير</span>
+      </button>
+
+      <!-- Active Layer Counter Badge -->
+      <div class="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-mono">
+        <i class="fa-solid fa-layer-group text-[11px]"></i>
+        <span>طبقات نشطة:</span>
+        <span id="activeLayersHeaderBadge" class="font-bold">0</span>
+      </div>
+
+      <!-- Mobile Sidebar Toggle -->
+      <button id="toggleSidebarBtn" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 md:hidden border border-slate-700">
+        <i class="fa-solid fa-bars text-sm"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- =========================================================================
+       Main Workspace (Sidebar + Map)
+       ========================================================================= -->
+  <div class="flex-1 flex relative overflow-hidden" style="flex: 1 1 0%; position: relative; width: 100%; height: calc(100vh - 56px);">
+    
+    <!-- Map Container -->
+    <main class="flex-1 relative h-full" style="flex: 1 1 0%; position: relative; width: 100%; height: 100%;">
+      <div id="viewDiv"></div>
+
+      <!-- Floating Map Comparison & Visibility Controls -->
+      <div id="floatingVisibilityBar" class="hidden absolute top-3 left-3 z-20 flex items-center gap-1.5 p-1 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-xl shadow-2xl">
+        <!-- Toggle Imported Map -->
+        <button type="button" id="floatToggleImportedBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-sky-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1.5 shadow-sm" title="إظهار / إخفاء الخريطة المستوردة">
+          <i id="floatImportedEyeIcon" class="fa-solid fa-eye text-sky-400"></i>
+          <span>المستوردة: <strong id="floatImportedStatusText" class="text-white">ظاهرة</strong></span>
+        </button>
+
+        <!-- Toggle Original Basemap -->
+        <button type="button" id="floatToggleOriginalBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-emerald-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1.5 shadow-sm" title="إظهار / إخفاء الخريطة الأصلية (الأساس)">
+          <i id="floatOriginalEyeIcon" class="fa-solid fa-eye text-emerald-400"></i>
+          <span>الأصلية: <strong id="floatOriginalStatusText" class="text-white">ظاهرة</strong></span>
+        </button>
+
+        <!-- Quick Compare Peek Button -->
+        <button type="button" id="floatBlinkBtn" class="px-2 py-1.5 rounded-lg text-xs font-medium text-amber-300 hover:text-white bg-slate-800 hover:bg-amber-600/30 border border-slate-700 transition-all flex items-center gap-1 shadow-sm" title="مقارنة سريعة بوميض قبل وبعد">
+          <i class="fa-solid fa-code-compare text-amber-400"></i>
+          <span>مقارنة</span>
+        </button>
+      </div>
+
+      <!-- Floating Quick Basemap Selector Bar on Map -->
+      <div class="absolute top-3 right-3 z-20 hidden md:flex items-center gap-1 p-1 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl shadow-2xl">
+        <button class="quick-basemap-btn px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-blue-600 shadow transition-all flex items-center gap-1.5" data-bm="dark-gray">
+          <i class="fa-solid fa-moon text-blue-300"></i>
+          <span>داكنة</span>
+        </button>
+        <button class="quick-basemap-btn px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-1.5" data-bm="satellite">
+          <i class="fa-solid fa-satellite text-amber-400"></i>
+          <span>فضائية</span>
+        </button>
+        <button class="quick-basemap-btn px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-1.5" data-bm="streets">
+          <i class="fa-solid fa-road text-emerald-400"></i>
+          <span>عادية</span>
+        </button>
+        <button class="quick-basemap-btn px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-1.5" data-bm="osm">
+          <i class="fa-solid fa-map text-teal-400"></i>
+          <span>OpenStreetMap</span>
+        </button>
+        <button class="quick-basemap-btn px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-1.5" data-bm="topo">
+          <i class="fa-solid fa-mountain text-purple-400"></i>
+          <span>طبوغرافية</span>
+        </button>
+      </div>
+
+      <!-- Bottom Status Bar -->
+      <div class="absolute bottom-2 left-2 z-20 pointer-events-none hidden md:flex items-center gap-3 px-3 py-1.5 rounded-lg bg-slate-900/85 backdrop-blur border border-slate-800 text-[11px] text-slate-400 font-mono shadow-lg">
+        <div class="flex items-center gap-1.5">
+          <i class="fa-solid fa-crosshairs text-sky-400 text-[10px]"></i>
+          <span>خط العرض: <strong id="coordLat" class="text-slate-200">--</strong></span>
+          <span>خط الطول: <strong id="coordLon" class="text-slate-200">--</strong></span>
+        </div>
+        <span class="text-slate-600">|</span>
+        <div>المستوى: <strong id="zoomLevel" class="text-slate-200">5</strong></div>
+        <span class="text-slate-600">|</span>
+        <div>المقياس: <strong id="mapScale" class="text-slate-200">1:--</strong></div>
+        <span class="text-slate-600">|</span>
+        <div class="text-slate-500 text-[10px]">WGS 84 / Web Mercator</div>
+      </div>
+    </main>
+
+    <!-- =========================================================================
+         Sidebar Control Panel
+         ========================================================================= -->
+    <aside id="appSidebar" class="w-full md:w-[420px] lg:w-[450px] glass-panel border-r border-slate-800 z-20 flex flex-col h-full transition-transform duration-300 md:translate-x-0 shrink-0">
+      
+      <!-- Sidebar Navigation Tabs -->
+      <div class="flex border-b border-slate-800 px-3 pt-2 gap-1 overflow-x-auto no-scrollbar shrink-0 bg-slate-900/60">
+        <button class="sidebar-tab-btn active px-3 py-2 text-xs font-semibold border-b-2 border-blue-500 text-blue-400 flex items-center gap-1.5 transition-colors shrink-0" data-tab="catalog">
+          <i class="fa-solid fa-compass text-[11px]"></i>
+          <span>المستكشف</span>
+        </button>
+        <button class="sidebar-tab-btn px-3 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="active">
+          <i class="fa-solid fa-layer-group text-[11px]"></i>
+          <span>النشطة</span>
+          <span id="activeLayersTabBadge" class="bg-blue-600 text-white rounded-full px-1.5 py-0.2 text-[10px] font-mono">0</span>
+        </button>
+        <button class="sidebar-tab-btn px-3 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="add-layer">
+          <i class="fa-solid fa-plus text-[11px]"></i>
+          <span>إضافة طبقة</span>
+        </button>
+        <button class="sidebar-tab-btn px-3 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="calibrate">
+          <i class="fa-solid fa-satellite-dish text-[11px] text-amber-400"></i>
+          <span>معايرة واستيراد ECW</span>
+          <span class="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded-full font-mono border border-amber-500/30">ECW</span>
+        </button>
+        <button class="sidebar-tab-btn px-3 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="tools">
+          <i class="fa-solid fa-ruler-combined text-[11px]"></i>
+          <span>القياس</span>
+        </button>
+        <button class="sidebar-tab-btn px-3 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="bookmarks">
+          <i class="fa-solid fa-bookmark text-[11px]"></i>
+          <span>المواقع</span>
+        </button>
+      </div>
+
+      <!-- Tab Panels Container -->
+      <div class="flex-1 overflow-y-auto p-4 space-y-4">
+        
+        <!-- =================== Panel 1: Layer Catalog =================== -->
+        <div class="tab-panel space-y-3" data-panel="catalog">
+          <!-- Search in Catalog -->
+          <div class="relative">
+            <input 
+              type="text" 
+              id="catalogSearchInput" 
+              placeholder="ابحث بالاسم أو الموضوع (زلازل، طقس، أنهار، سكان...)" 
+              class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl px-3 py-2.5 pl-9 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+            >
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-xs"></i>
+          </div>
+
+          <!-- Category Filter Pills -->
+          <div id="categoryPills" class="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+            <!-- Dynamically populated -->
+          </div>
+
+          <!-- Layers Cards List -->
+          <div id="catalogList" class="space-y-2.5 pt-1">
+            <!-- Dynamically populated from ATLAS_LAYERS -->
+          </div>
+        </div>
+
+        <!-- =================== Panel 2: Active Layers =================== -->
+        <div class="tab-panel hidden space-y-3" data-panel="active">
+          <div class="flex items-center justify-between text-xs text-slate-400 pb-1 border-b border-slate-800">
+            <span>الطبقات المعروضة حالياً على الخريطة:</span>
+            <span class="text-[11px] text-slate-500">تحكم بالشفافية وإعادة الترتيب</span>
+          </div>
+          <div id="activeLayersList" class="space-y-2.5">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+
+        <!-- =================== Panel 3: Add Custom Layer =================== -->
+        <div class="tab-panel hidden space-y-4" data-panel="add-layer">
+          <div class="bg-blue-950/30 border border-blue-800/40 rounded-xl p-3 text-xs text-blue-300 leading-relaxed">
+            <i class="fa-solid fa-info-circle ml-1"></i>
+            يمكنك ربط وإضافة أي خدمة مكانية (ArcGIS FeatureServer, MapServer, VectorTileServer, أو GeoJSON) من منظمتك أو بوابة ArcGIS Online الخاصة بك.
+          </div>
+
+          <form id="customLayerForm" class="space-y-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">عنوان الطبقة (اختياري)</label>
+              <input 
+                type="text" 
+                id="customLayerTitle" 
+                placeholder="مثال: شبكة الطرق الرئيسية 2026" 
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+              >
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">نوع الخدمة المكانية</label>
+              <select 
+                id="customLayerType" 
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-blue-500"
+              >
+                <option value="feature">ArcGIS Feature Layer (FeatureServer/0)</option>
+                <option value="image-server">ArcGIS ImageServer (خدمات صور وموزاييك ECW)</option>
+                <option value="map-image">ArcGIS Map Image Layer (MapServer)</option>
+                <option value="wms">OGC WMS Layer (خرائط ECW عبر الخوادم الجغرافية)</option>
+                <option value="vector-tile">Vector Tile Layer (VectorTileServer)</option>
+                <option value="geojson">GeoJSON Layer (GeoJSON URL)</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">رابط الخدمة (ArcGIS REST Service Endpoint URL)</label>
+              <textarea 
+                id="customLayerUrl" 
+                rows="3" 
+                placeholder="https://services.arcgis.com/.../FeatureServer/0" 
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-blue-500 resize-none"
+                required
+              ></textarea>
+            </div>
+
+            <button 
+              type="submit" 
+              class="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 transition-all"
+            >
+              <i class="fa-solid fa-cloud-arrow-up"></i>
+              <span>تحميل وإضافة الطبقة للخريطة</span>
+            </button>
+          </form>
+
+          <!-- Quick Samples for testing -->
+          <div class="pt-3 border-t border-slate-800">
+            <span class="text-[11px] font-semibold text-slate-400 block mb-2">روابط تجريبية سريعة (بما في ذلك خدمات الصور الفضائية):</span>
+            <div class="space-y-1.5 text-[11px]">
+              <button type="button" onclick="document.getElementById('customLayerUrl').value='https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer'; document.getElementById('customLayerType').value='map-image'; document.getElementById('customLayerTitle').value='الصور الفضائية عالية الدقة (World Imagery)';" class="text-blue-400 hover:underline block text-right">
+                • صور الأقمار الصناعية عالية الدقة (World Imagery MapServer)
+              </button>
+              <button type="button" onclick="document.getElementById('customLayerUrl').value='https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/World_Time_Zones/FeatureServer/0'; document.getElementById('customLayerType').value='feature'; document.getElementById('customLayerTitle').value='المناطق الزمنية العالمية';" class="text-blue-400 hover:underline block text-right">
+                • المناطق الزمنية العالمية (World Time Zones FeatureServer)
+              </button>
+              <button type="button" onclick="document.getElementById('customLayerUrl').value='https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/World_Continents/FeatureServer/0'; document.getElementById('customLayerType').value='feature'; document.getElementById('customLayerTitle').value='قارات العالم';" class="text-blue-400 hover:underline block text-right">
+                • قارات العالم (World Continents)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- =================== Panel: Satellite Image & ECW Calibration =================== -->
+        <div class="tab-panel hidden space-y-4" data-panel="calibrate">
+          <!-- Intro badge -->
+          <div class="bg-amber-950/30 border border-amber-800/40 rounded-xl p-3 text-xs text-amber-300 leading-relaxed">
+            <div class="flex items-center justify-between mb-1.5">
+              <div class="flex items-center gap-1.5 font-bold">
+                <i class="fa-solid fa-satellite-dish text-amber-400"></i>
+                <span>استيراد ومعايرة خرائط ECW واللقطات الفضائية</span>
+              </div>
+              <span class="text-[9px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono border border-amber-500/40 font-bold">ECW / ERS / EWW</span>
+            </div>
+            استيراد مباشر لملفات خرائط <strong>ECW (Enhanced Compression Wavelet)</strong> وقراءة الترويسة الرقمية ونظام الإسقاط (UTM Zone 38N / WGS84) تلقائياً، مع إمكانية المعايرة الهندسية وتصحيح الانحراف البصري.
+          </div>
+
+          <!-- Step 1: Import Image / ECW -->
+          <div class="bg-slate-900/90 border border-slate-700/80 rounded-xl p-3.5 space-y-3">
+            <div class="flex items-center justify-between">
+              <h5 class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                <i class="fa-solid fa-cloud-arrow-up text-amber-400"></i>
+                <span>1. استيراد خريطة ECW أو صورة فضائية</span>
+              </h5>
+              <span id="calibImageStatus" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">لم يتم اختيار ملف</span>
+            </div>
+
+            <!-- Drag & Drop Zone for ECW and Images -->
+            <div id="ecwDropZone" class="ecw-dropzone rounded-xl p-4 text-center cursor-pointer space-y-2 border border-dashed border-amber-500/40 hover:border-amber-400 bg-slate-950/50 hover:bg-amber-500/5 transition-all">
+              <input type="file" id="satelliteImageFileInput" accept=".ecw,.ers,.eww,.wld,.tif,.tiff,.jpg,.jpeg,.png,.webp,image/*" multiple class="hidden">
+              <input type="file" id="companionImageFileInput" accept="image/*" class="hidden">
+              
+              <div class="w-10 h-10 mx-auto rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 text-lg shadow-inner">
+                <i class="fa-solid fa-file-zipper"></i>
+              </div>
+              <div>
+                <div class="text-xs font-bold text-slate-200">اسحب وأفلت ملف ECW هنا أو انقر للاستعراض</div>
+                <div class="text-[11px] text-slate-400 mt-0.5">يدعم صيغ <span class="font-mono text-amber-300">.ecw</span> مع ملفات الإسناد (<span class="font-mono text-slate-300">.ers, .eww</span>) والصور الفضائية (<span class="font-mono text-slate-300">TIFF, PNG, JPG</span>)</div>
+              </div>
+              <div class="flex items-center justify-center gap-2 pt-1">
+                <button type="button" id="triggerUploadBtn" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-medium transition-colors shadow flex items-center gap-1.5">
+                  <i class="fa-solid fa-folder-open text-xs"></i>
+                  <span>اختيار ملف من الجهاز</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Direct URL / Service Input -->
+            <div class="flex items-center gap-2">
+              <input type="url" id="satelliteImageUrlInput" placeholder="أو الصق رابط خدمة صور ImageServer أو رابط صورة مباشر..." class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500">
+              <button type="button" id="loadFromUrlBtn" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-medium text-slate-200 transition-colors">تحميل</button>
+            </div>
+
+            <!-- Ready-to-Test ECW Iraq Presets -->
+            <div class="space-y-1.5 pt-1">
+              <span class="text-[10px] font-semibold text-slate-400 block">نماذج خرائط فضائية جاهزة للمعايرة في العراق:</span>
+              <div class="grid grid-cols-1 gap-1.5">
+                <button type="button" id="loadBaghdadEcwBtn" class="w-full py-1.5 px-2.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 border border-slate-700 text-right text-[11px] text-slate-200 hover:text-white flex items-center justify-between transition-colors">
+                  <span class="flex items-center gap-1.5">
+                    <i class="fa-solid fa-map-pin text-amber-400 text-xs"></i>
+                    <strong>بغداد</strong>: موزاييك نهر دجلة والكرخ والرصافة (UTM 38N - 0.3m/px)
+                  </span>
+                  <span class="text-[10px] text-amber-300 font-mono bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">ECW Preset</span>
+                </button>
+                <button type="button" id="loadBasraEcwBtn" class="w-full py-1.5 px-2.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 border border-slate-700 text-right text-[11px] text-slate-200 hover:text-white flex items-center justify-between transition-colors">
+                  <span class="flex items-center gap-1.5">
+                    <i class="fa-solid fa-map-pin text-sky-400 text-xs"></i>
+                    <strong>البصرة</strong>: ميناء المعقل ومجرى شط العرب (UTM 38N - 0.5m/px)
+                  </span>
+                  <span class="text-[10px] text-sky-300 font-mono bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">ECW Preset</span>
+                </button>
+                <button type="button" id="loadErbilEcwBtn" class="w-full py-1.5 px-2.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 border border-slate-700 text-right text-[11px] text-slate-200 hover:text-white flex items-center justify-between transition-colors">
+                  <span class="flex items-center gap-1.5">
+                    <i class="fa-solid fa-map-pin text-emerald-400 text-xs"></i>
+                    <strong>أربيل</strong>: قلعة أربيل والمركز التاريخي (UTM 38N - 0.2m/px)
+                  </span>
+                  <span class="text-[10px] text-emerald-300 font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">ECW Preset</span>
+                </button>
+                <button type="button" id="loadSampleSatelliteBtn" class="hidden"></button>
+              </div>
+            </div>
+
+            <!-- ECW Metadata Inspector Box (appears when ECW is parsed) -->
+            <div id="ecwMetadataBox" class="hidden bg-slate-950/95 border border-amber-500/40 rounded-xl p-3 space-y-2.5">
+              <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                <div class="flex items-center gap-1.5 text-xs font-bold text-amber-300">
+                  <i class="fa-solid fa-circle-nodes text-amber-400"></i>
+                  <span id="ecwFileNameLabel">بيانات ترويسة ملف ECW</span>
+                </div>
+                <span id="ecwMetaBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono">ECW Parsed</span>
+              </div>
+
+              <!-- 4-Cell Metadata Grid -->
+              <div class="grid grid-cols-2 gap-2 text-[11px]">
+                <div class="bg-slate-900/80 p-2 rounded-lg border border-slate-800">
+                  <span class="text-slate-400 block text-[10px]">الأبعاد (Dimensions):</span>
+                  <span id="ecwMetaDimensions" class="font-mono font-semibold text-slate-200">-- × -- px</span>
+                </div>
+                <div class="bg-slate-900/80 p-2 rounded-lg border border-slate-800">
+                  <span class="text-slate-400 block text-[10px]">القنوات والضغط:</span>
+                  <span id="ecwMetaBands" class="font-mono font-semibold text-slate-200">3 Bands RGB (1:10)</span>
+                </div>
+                <div class="bg-slate-900/80 p-2 rounded-lg border border-slate-800">
+                  <span class="text-slate-400 block text-[10px]">نظام الإسقاط (CRS):</span>
+                  <span id="ecwMetaProjection" class="font-mono font-semibold text-amber-300">UTM Zone 38N (WGS84)</span>
+                </div>
+                <div class="bg-slate-900/80 p-2 rounded-lg border border-slate-800">
+                  <span class="text-slate-400 block text-[10px]">الدقة المكانية (Resolution):</span>
+                  <span id="ecwMetaResolution" class="font-mono font-semibold text-emerald-300">0.30 m/pixel</span>
+                </div>
+              </div>
+
+              <!-- Extents Readout -->
+              <div class="bg-slate-900/60 p-2 rounded-lg border border-slate-800 text-[10px] font-mono text-slate-300 space-y-0.5">
+                <div>نطاق خط العرض: <span id="ecwMetaLatRange" class="text-sky-300">--</span></div>
+                <div>نطاق خط الطول: <span id="ecwMetaLngRange" class="text-sky-300">--</span></div>
+              </div>
+
+              <!-- Companion image pairing button -->
+              <div class="pt-1 flex items-center justify-between text-xs">
+                <span class="text-slate-400 text-[11px]">إقران صورة محولة مرافقة:</span>
+                <button type="button" id="triggerCompanionUploadBtn" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-[11px] font-medium transition-colors flex items-center gap-1">
+                  <i class="fa-solid fa-paperclip text-sky-400 text-[10px]"></i>
+                  <span>إرفاق صورة PNG/JPG</span>
+                </button>
+              </div>
+
+              <!-- GDAL Conversion helper collapsible -->
+              <details class="text-[11px] bg-slate-900/70 border border-slate-800 rounded-lg p-2 text-slate-300">
+                <summary class="cursor-pointer text-amber-400 font-semibold select-none flex items-center justify-between">
+                  <span>أمر تحويل ECW محلياً (GDAL / QGIS)</span>
+                  <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                </summary>
+                <div class="mt-2 space-y-1.5 text-[10px]">
+                  <p class="text-slate-400">لتحويل ملف ECW محلياً بدقة كاملة إلى صورة متوافقة مع الويب، نفّذ الأمر التالي في الطرفية (Terminal):</p>
+                  <div class="ecw-code-box p-2 rounded text-slate-200 text-[10px] relative select-all overflow-x-auto">
+                    <code id="gdalCommandText">gdal_translate -of PNG -outsize 2048 0 input.ecw output.png</code>
+                  </div>
+                  <button type="button" id="copyGdalCmdBtn" class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 pt-1">
+                    <i class="fa-solid fa-copy text-[10px]"></i>
+                    <span>نسخ أمر التحويل</span>
+                  </button>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <!-- Step 2: Geometric Calibration (Nudge, Scale, Rotate) -->
+          <div id="calibrationControlsContainer" class="hidden space-y-3">
+            <!-- Visibility & Comparison Toolbar -->
+            <div class="bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border border-slate-700/90 rounded-xl p-3 space-y-2.5 shadow-md">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  <i class="fa-solid fa-eye text-sky-400"></i>
+                  <span>إظهار / إخفاء الخارطة والمقارنة</span>
+                </span>
+                <span class="text-[10px] text-slate-400 font-mono">Visibility Mode</span>
+              </div>
+
+              <div class="grid grid-cols-2 gap-2">
+                <!-- Toggle Imported Map Button -->
+                <button type="button" id="toggleImportedMapBtn" class="py-2 px-2.5 rounded-lg bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/40 text-sky-300 font-semibold text-xs flex items-center justify-between transition-all" title="إظهار أو إخفاء الخريطة الفضائية المستوردة">
+                  <span class="flex items-center gap-1.5">
+                    <i id="importedMapEyeIcon" class="fa-solid fa-eye text-sky-400"></i>
+                    <span>المستوردة</span>
+                  </span>
+                  <span id="importedMapStatusBadge" class="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/30 text-white font-mono font-bold">ظاهرة</span>
+                </button>
+
+                <!-- Toggle Original Basemap Button -->
+                <button type="button" id="toggleOriginalMapBtn" class="py-2 px-2.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 font-semibold text-xs flex items-center justify-between transition-all" title="إظهار أو إخفاء خريطة الأساس الأصلية">
+                  <span class="flex items-center gap-1.5">
+                    <i id="originalMapEyeIcon" class="fa-solid fa-eye text-emerald-400"></i>
+                    <span>الأصلية</span>
+                  </span>
+                  <span id="originalMapStatusBadge" class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/30 text-white font-mono font-bold">ظاهرة</span>
+                </button>
+              </div>
+
+              <!-- Quick Blink / Compare Button -->
+              <button type="button" id="blinkCompareBtn" class="w-full py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white text-xs flex items-center justify-center gap-2 transition-colors">
+                <i class="fa-solid fa-code-compare text-amber-400"></i>
+                <span>مقارنة سريعة (وميض الخارطة المستوردة والأصلية)</span>
+              </button>
+            </div>
+
+            <div class="bg-slate-900/90 border border-slate-700/80 rounded-xl p-3.5 space-y-3">
+              <div class="flex items-center justify-between">
+                <h5 class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  <i class="fa-solid fa-arrows-up-down-left-right text-emerald-400"></i>
+                  <span>2. التصحيح الهندسي والإرجاع الجغرافي</span>
+                </h5>
+                <button type="button" id="toggleLockCalibBtn" class="text-[10px] px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 flex items-center gap-1">
+                  <i class="fa-solid fa-lock-open text-amber-400"></i>
+                  <span id="lockBtnText">المعايرة مفعلة</span>
+                </button>
+              </div>
+
+              <!-- Nudge Direction Pad -->
+              <div class="flex flex-col items-center gap-1.5 py-1">
+                <span class="text-[10px] text-slate-400">تحريك وإزاحة دقيقة (Nudge Alignment):</span>
+                <div class="grid grid-cols-3 gap-1.5 w-36 text-center">
+                  <div></div>
+                  <button type="button" id="nudgeUpBtn" class="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 text-slate-200 hover:text-white transition-colors" title="إزاحة شمالاً">
+                    <i class="fa-solid fa-arrow-up text-xs"></i>
+                  </button>
+                  <div></div>
+
+                  <button type="button" id="nudgeRightBtn" class="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 text-slate-200 hover:text-white transition-colors" title="إزاحة شرقاً">
+                    <i class="fa-solid fa-arrow-right text-xs"></i>
+                  </button>
+                  <button type="button" id="fitToViewBtn" class="p-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white font-bold text-[10px] transition-colors shadow" title="مطابقة لنطاق الشاشة">
+                    <i class="fa-solid fa-expand"></i>
+                  </button>
+                  <button type="button" id="nudgeLeftBtn" class="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 text-slate-200 hover:text-white transition-colors" title="إزاحة غرباً">
+                    <i class="fa-solid fa-arrow-left text-xs"></i>
+                  </button>
+
+                  <div></div>
+                  <button type="button" id="nudgeDownBtn" class="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 text-slate-200 hover:text-white transition-colors" title="إزاحة جنوباً">
+                    <i class="fa-solid fa-arrow-down text-xs"></i>
+                  </button>
+                  <div></div>
+                </div>
+
+                <div class="flex items-center gap-2 mt-1 text-[11px] text-slate-400">
+                  <span>خطوة الإزاحة:</span>
+                  <select id="nudgeStepSelect" class="bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5 text-[11px] text-slate-200">
+                    <option value="0.001">دقيقة جداً (100م)</option>
+                    <option value="0.005" selected>متوسطة (500م)</option>
+                    <option value="0.02">كبيرة (2كم)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Rotation Slider -->
+              <div class="pt-2 border-t border-slate-800 space-y-1.5">
+                <div class="flex items-center justify-between text-xs text-slate-300">
+                  <span class="flex items-center gap-1">
+                    <i class="fa-solid fa-rotate text-purple-400 text-[11px]"></i>
+                    تدوير الخريطة (Rotation)
+                  </span>
+                  <div class="flex items-center gap-1.5">
+                    <span id="rotationValLabel" class="font-mono text-xs text-purple-400 font-bold">0°</span>
+                    <button type="button" id="resetRotationBtn" class="text-[10px] text-slate-500 hover:text-slate-300" title="إعادة تعيين للصفر">0°</button>
+                  </div>
+                </div>
+                <input type="range" id="calibRotationSlider" min="0" max="360" value="0" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500">
+              </div>
+
+              <!-- Scale Slider -->
+              <div class="pt-2 border-t border-slate-800 space-y-1.5">
+                <div class="flex items-center justify-between text-xs text-slate-300">
+                  <span class="flex items-center gap-1">
+                    <i class="fa-solid fa-up-right-and-down-left-from-center text-sky-400 text-[11px]"></i>
+                    مقياس الحجم (Scale)
+                  </span>
+                  <span id="scaleValLabel" class="font-mono text-xs text-sky-400 font-bold">100%</span>
+                </div>
+                <input type="range" id="calibScaleSlider" min="30" max="250" value="100" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500">
+              </div>
+            </div>
+
+            <!-- Step 3: Radiometric / Visual Calibration -->
+            <div class="bg-slate-900/90 border border-slate-700/80 rounded-xl p-3.5 space-y-3">
+              <div class="flex items-center justify-between">
+                <h5 class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  <i class="fa-solid fa-sliders text-amber-400"></i>
+                  <span>3. المعايرة البصرية والتصحيح اللوني</span>
+                </h5>
+                <button type="button" id="resetVisualsBtn" class="text-[10px] text-slate-400 hover:text-slate-200 transition-colors">إعادة ضبط</button>
+              </div>
+
+              <!-- Opacity / Blend Slider -->
+              <div class="space-y-1">
+                <div class="flex items-center justify-between text-xs text-slate-300">
+                  <span>الشفافية والمزج (Blend Opacity)</span>
+                  <span id="calibOpacityLabel" class="font-mono text-xs text-blue-400 font-bold">85%</span>
+                </div>
+                <input type="range" id="calibOpacitySlider" min="10" max="100" value="85" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500">
+              </div>
+
+              <!-- Brightness Slider -->
+              <div class="space-y-1">
+                <div class="flex items-center justify-between text-xs text-slate-300">
+                  <span>السطوع (Brightness)</span>
+                  <span id="calibBrightnessLabel" class="font-mono text-xs text-amber-400 font-bold">100%</span>
+                </div>
+                <input type="range" id="calibBrightnessSlider" min="50" max="200" value="100" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500">
+              </div>
+
+              <!-- Contrast Slider -->
+              <div class="space-y-1">
+                <div class="flex items-center justify-between text-xs text-slate-300">
+                  <span>التباين (Contrast)</span>
+                  <span id="calibContrastLabel" class="font-mono text-xs text-emerald-400 font-bold">100%</span>
+                </div>
+                <input type="range" id="calibContrastSlider" min="50" max="200" value="100" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500">
+              </div>
+
+              <!-- Saturation Slider -->
+              <div class="space-y-1">
+                <div class="flex items-center justify-between text-xs text-slate-300">
+                  <span>التشبع اللوني (Saturation)</span>
+                  <span id="calibSaturationLabel" class="font-mono text-xs text-pink-400 font-bold">100%</span>
+                </div>
+                <input type="range" id="calibSaturationSlider" min="0" max="200" value="100" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-pink-500">
+              </div>
+
+              <!-- Invert Colors Toggle -->
+              <div class="flex items-center justify-between pt-1">
+                <span class="text-xs text-slate-300">عكس الألوان (Invert Colors)</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="calibInvertToggle" class="sr-only peer">
+                  <div class="w-8 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-purple-600"></div>
+                </label>
+              </div>
+            </div>
+
+            <!-- Step 4: Export Georeferencing Data -->
+            <div class="bg-slate-900/90 border border-slate-700/80 rounded-xl p-3.5 space-y-3">
+              <h5 class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                <i class="fa-solid fa-file-export text-sky-400"></i>
+                <span>4. بيانات الإسناد الجغرافي المعايرة</span>
+              </h5>
+
+              <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800 font-mono text-[11px] text-slate-300 space-y-1 select-all" id="calibBoundsReadout">
+                <div>شمال (North): <span id="boundNorthVal" class="text-sky-300">--</span></div>
+                <div>جنوب (South): <span id="boundSouthVal" class="text-sky-300">--</span></div>
+                <div>شرق (East): <span id="boundEastVal" class="text-sky-300">--</span></div>
+                <div>غرب (West): <span id="boundWestVal" class="text-sky-300">--</span></div>
+                <div>زاوية التدوير: <span id="boundRotVal" class="text-purple-300">0°</span></div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-2 pt-1">
+                <button type="button" id="copyCalibJsonBtn" class="py-2 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-200 flex items-center justify-center gap-1.5 transition-colors">
+                  <i class="fa-solid fa-copy text-[11px]"></i>
+                  <span>نسخ الإحداثيات</span>
+                </button>
+                <button type="button" id="downloadCalibFileBtn" class="py-2 px-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs text-white font-medium flex items-center justify-center gap-1.5 transition-colors shadow">
+                  <i class="fa-solid fa-download text-[11px]"></i>
+                  <span>تنزيل GeoJSON</span>
+                </button>
+              </div>
+
+              <button type="button" id="removeCalibImageBtn" class="w-full py-2 rounded-lg bg-slate-800/80 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-800/50 text-xs flex items-center justify-center gap-1.5 transition-colors">
+                <i class="fa-solid fa-trash-can text-[11px]"></i>
+                <span>إزالة الصورة المعايرة من الخريطة</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- =================== Panel 4: Measurement Tools =================== -->
+        <div class="tab-panel hidden space-y-4" data-panel="tools">
+          <div class="text-xs text-slate-400">
+            أدوات القياس المكاني الدقيقة على مسقط الخريطة الجيوديسي:
+          </div>
+
+          <div class="grid grid-cols-2 gap-2.5">
+            <button id="measureDistBtn" class="p-3 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 flex flex-col items-center gap-2 transition-all">
+              <i class="fa-solid fa-ruler text-sky-400 text-lg"></i>
+              <span class="text-xs font-semibold">قياس المسافة</span>
+            </button>
+
+            <button id="measureAreaBtn" class="p-3 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 flex flex-col items-center gap-2 transition-all">
+              <i class="fa-solid fa-draw-polygon text-emerald-400 text-lg"></i>
+              <span class="text-xs font-semibold">قياس المساحة</span>
+            </button>
+          </div>
+
+          <button id="clearMeasureBtn" class="w-full py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-xs text-rose-400 flex items-center justify-center gap-2 transition-colors">
+            <i class="fa-solid fa-eraser"></i>
+            <span>إلغاء وتفريغ القياس</span>
+          </button>
+
+          <!-- Measurement readout container -->
+          <div id="measurementWidgetDiv" class="pt-2"></div>
+        </div>
+
+        <!-- =================== Panel 5: Bookmarks =================== -->
+        <div class="tab-panel hidden space-y-3" data-panel="bookmarks">
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-slate-400">مناطق جغرافية هامة:</span>
+            <button id="saveCurrentViewBookmark" class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+              <i class="fa-solid fa-plus text-[10px]"></i>
+              <span>حفظ النطاق الحالي</span>
+            </button>
+          </div>
+
+          <div id="bookmarksList" class="space-y-2">
+            <!-- Dynamically populated from ATLAS_BOOKMARKS -->
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Sidebar Footer -->
+      <div class="p-3 border-t border-slate-800 bg-slate-900/80 shrink-0 text-center text-[11px] text-slate-500">
+        مدعوم بتقنيات <span class="text-slate-300 font-semibold">Esri ArcGIS Maps SDK</span> &bull; Living Atlas
+      </div>
+    </aside>
+  </div>
+
+  <!-- =========================================================================
+       Floating Modals & Overlays
+       ========================================================================= -->
+
+  <!-- Basemap Picker Modal -->
+  <div id="basemapModal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass-panel rounded-2xl w-full max-w-lg p-5 border border-slate-700 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-map text-blue-400"></i>
+          <h3 class="font-bold text-sm text-white">اختر خريطة الأساس (Basemap)</h3>
+        </div>
+        <button id="closeBasemapBtn" class="text-slate-400 hover:text-white p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div id="basemapGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <!-- Dynamically populated -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Legend Drawer (Bottom Right) -->
+  <div id="legendPanel" class="hidden absolute top-16 left-4 z-40 w-80 glass-panel rounded-2xl border border-slate-700 shadow-2xl max-h-[75vh] flex flex-col overflow-hidden">
+    <div class="p-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-900/70">
+      <div class="flex items-center gap-2 text-xs font-bold text-slate-200">
+        <i class="fa-solid fa-list-check text-emerald-400"></i>
+        <span>مفتاح الخريطة (Legend)</span>
+      </div>
+      <button id="closeLegendBtn" class="text-slate-400 hover:text-white text-xs p-1">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div id="legendContent" class="flex-1 overflow-y-auto p-3 text-xs">
+      <!-- ArcGIS Legend Component attaches here -->
+    </div>
+  </div>
+
+  <!-- Layer Information & Metadata Modal -->
+  <div id="layerInfoModal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass-panel rounded-2xl w-full max-w-lg p-5 border border-slate-700 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-circle-info text-blue-400"></i>
+          <h3 id="infoModalTitle" class="font-bold text-sm text-white">تفاصيل الطبقة</h3>
+        </div>
+        <button id="closeInfoModalBtn" class="text-slate-400 hover:text-white p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div id="infoModalContent" class="py-2">
+        <!-- Dynamically populated -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Stack -->
+  <div id="toastContainer" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- =========================================================================
+       Scripts
+       ========================================================================= -->
+  <!-- Curated Catalog Data -->
+  <script src="js/catalog-data.js"></script>
+
+  <!-- Living Atlas Engine Entry -->
+  <script src="js/atlas-core.js"></script>
+
+</body>
+</html>

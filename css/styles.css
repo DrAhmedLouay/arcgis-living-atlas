@@ -1,0 +1,231 @@
+/* ==========================================================================
+   ArcGIS Living Atlas Custom Web App - Stylesheet
+   Design: Modern Dark Theme GIS UI with Glassmorphism & RTL Native Support
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --primary-blue: #2563eb;
+  --primary-blue-hover: #1d4ed8;
+  --bg-dark: #090d16;
+  --card-dark: #111827;
+  --border-dark: #1f2937;
+  --text-main: #f3f4f6;
+  --text-muted: #9ca3af;
+}
+
+* {
+  font-family: 'Cairo', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  overflow: hidden;
+  direction: rtl;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(17, 24, 39, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(75, 85, 99, 0.6);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.9);
+}
+
+/* Map View container */
+#viewDiv {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100%;
+  background-color: #0b0f19;
+  outline: none;
+  z-index: 10;
+}
+
+/* Glassmorphism Classes */
+.glass-panel {
+  background: rgba(17, 24, 39, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(55, 65, 81, 0.6);
+}
+
+.glass-header {
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+}
+
+/* Leaflet & Esri Leaflet Dark Theme Overrides */
+.leaflet-container {
+  background-color: #090d16 !important;
+  font-family: 'Cairo', sans-serif !important;
+}
+
+.leaflet-bar {
+  border: 1px solid rgba(51, 65, 85, 0.8) !important;
+  border-radius: 10px !important;
+  overflow: hidden;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5) !important;
+}
+
+.leaflet-bar a {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+  color: #cbd5e1 !important;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.7) !important;
+  width: 32px !important;
+  height: 32px !important;
+  line-height: 32px !important;
+  transition: all 0.2s ease !important;
+}
+
+.leaflet-bar a:hover {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border: 1px solid #334155 !important;
+  border-radius: 14px !important;
+  box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.7) !important;
+}
+
+.leaflet-popup-content {
+  font-family: 'Cairo', sans-serif !important;
+  direction: rtl !important;
+  margin: 14px !important;
+  line-height: 1.6 !important;
+}
+
+.leaflet-control-scale-line {
+  background: rgba(15, 23, 42, 0.85) !important;
+  border-color: #38bdf8 !important;
+  color: #94a3b8 !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 10px !important;
+  border-radius: 4px;
+}
+
+/* Governorate Permanent Label Styling */
+.gov-label {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #f8fafc !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  text-shadow: 0 0 3px #000, 0 0 5px #000, 0 0 7px #020617;
+  direction: rtl !important;
+}
+
+.gov-label::before {
+  display: none !important;
+}
+
+/* Responsive sidebar drawer for mobile */
+@media (max-width: 768px) {
+  #appSidebar {
+    position: fixed;
+    right: 0;
+    top: 56px;
+    bottom: 0;
+    z-index: 40;
+    width: 90%;
+    max-width: 360px;
+  }
+}
+
+/* Quick Basemap Active State */
+.quick-basemap-btn.active-quick-bm {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px -2px rgba(37, 99, 235, 0.4);
+}
+
+/* Calibrated Satellite Image Overlay */
+.calibrated-satellite-overlay {
+  transition: filter 0.15s ease-out;
+  transform-origin: center center;
+  pointer-events: auto !important;
+}
+
+/* Georeferencing Interactive Handle Markers */
+.calib-handle-icon {
+  background: #3b82f6;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  width: 14px !important;
+  height: 14px !important;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.8), 0 0 12px rgba(59, 130, 246, 0.6);
+  cursor: grab;
+}
+
+.calib-handle-icon:hover {
+  background: #f59e0b;
+  transform: scale(1.25);
+}
+
+.calib-center-icon {
+  background: #10b981;
+  border: 2px solid #ffffff;
+  border-radius: 4px;
+  width: 16px !important;
+  height: 16px !important;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+  cursor: move;
+}
+
+/* ECW Format & Calibration Extensions */
+.ecw-dropzone {
+  border: 2px dashed rgba(245, 158, 11, 0.4);
+  background: rgba(17, 24, 39, 0.6);
+  transition: all 0.2s ease-in-out;
+}
+
+.ecw-dropzone:hover, .ecw-dropzone.dragover {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  transform: translateY(-1px);
+}
+
+.ecw-badge {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(59, 130, 246, 0.2));
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.ecw-code-box {
+  background: #020617;
+  border: 1px solid rgba(51, 65, 85, 0.8);
+  font-family: 'JetBrains Mono', monospace;
+  direction: ltr;
+  text-align: left;
+}
+
+
