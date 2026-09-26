@@ -2224,6 +2224,17 @@ document.addEventListener('DOMContentLoaded', () => {
      * Call Gemini Vision API to identify geographic location from image
      */
     async function analyzeImageWithGemini(apiKey, base64Jpeg) {
+      const modelSelect = document.getElementById('geminiModelSelect');
+      const selectedModel = (modelSelect?.value || 'gemini-1.5-flash').trim();
+
+      // Fallback chain: try selected model first, then others
+      const modelChain = [
+        selectedModel,
+        'gemini-1.5-flash',
+        'gemini-2.5-flash',
+        'gemini-2.0-flash-lite',
+        'gemini-1.5-flash-8b'
+      ].filter((v, i, a) => a.indexOf(v) === i); // deduplicate
       const prompt = `You are a professional GIS expert and geographer specializing in Iraq and the Middle East.
 Analyze this satellite or aerial image carefully and identify:
 1. The specific geographic location shown (country, city, region)
@@ -2266,28 +2277,44 @@ If you cannot determine the location with confidence, still provide your best es
         }
       };
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody)
-        }
-      );
+      // Try each model in the chain until one works
+      let lastError = null;
+      for (const modelName of modelChain) {
+        try {
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(requestBody)
+            }
+          );
 
-      if (!response.ok) {
-        const err = await response.text();
-        throw new Error(`Gemini API خطأ ${response.status}: ${err.substring(0, 200)}`);
+          if (!response.ok) {
+            const errText = await response.text();
+            lastError = new Error(`${modelName}: خطأ ${response.status} - ${errText.substring(0, 150)}`);
+            continue; // try next model
+          }
+
+          const data = await response.json();
+          const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+          // Extract JSON from response
+          const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+          if (!jsonMatch) throw new Error('لم يتمكن الذكاء الاصطناعي من إرجاع إحداثيات صالحة');
+
+          // Update dropdown to reflect successful model
+          const modelSelect = document.getElementById('geminiModelSelect');
+          if (modelSelect) modelSelect.value = modelName;
+
+          return JSON.parse(jsonMatch[0]);
+        } catch (e) {
+          lastError = e;
+        }
       }
 
-      const data = await response.json();
-      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-      // Extract JSON from response
-      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error('لم يتمكن الذكاء الاصطناعي من إرجاع إحداثيات صالحة');
-
-      return JSON.parse(jsonMatch[0]);
+      // All models failed
+      throw lastError || new Error('فشلت جميع النماذج المتاحة');
     }
 
     if (geminiAnalyzeBtn) {

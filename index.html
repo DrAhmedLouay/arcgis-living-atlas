@@ -593,7 +593,7 @@
                     <i class="fa-solid fa-eye text-purple-400 text-[10px]"></i>
                     <span>0. تحديد الموقع تلقائياً بالذكاء الاصطناعي (Gemini Vision):</span>
                   </span>
-                  <span class="text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded font-mono">Gemini 2.0 Flash</span>
+                  <span class="text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded font-mono">Gemini Vision</span>
                 </div>
                 <p class="text-[10px] text-slate-400 leading-snug">يحلل الذكاء الاصطناعي معاينة الخريطة المستوردة ويستخرج الإحداثيات الجغرافية الحقيقية تلقائياً.</p>
                 <!-- Gemini API Key Input -->
@@ -608,6 +608,18 @@
                     <i class="fa-solid fa-floppy-disk text-[10px] text-purple-400"></i>
                     <span>حفظ</span>
                   </button>
+                </div>
+                <!-- Model Selector -->
+                <div>
+                  <label class="text-[10px] text-slate-400 block mb-1">النموذج:</label>
+                  <select id="geminiModelSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-[11px] font-mono text-slate-200 focus:outline-none focus:border-purple-500">
+                    <option value="gemini-2.5-flash">gemini-2.5-flash (الأحدث)</option>
+                    <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+                    <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite</option>
+                    <option value="gemini-1.5-flash" selected>gemini-1.5-flash (مستقر)</option>
+                    <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                    <option value="gemini-1.5-flash-8b">gemini-1.5-flash-8b</option>
+                  </select>
                 </div>
                 <!-- Analyze Button -->
                 <button type="button" id="geminiAnalyzeBtn" class="w-full py-2 px-3 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-xs transition-all shadow-lg border border-purple-500/40 disabled:opacity-50 disabled:cursor-not-allowed">
