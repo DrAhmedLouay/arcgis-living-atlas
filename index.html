@@ -113,6 +113,12 @@
           <i class="fa-solid fa-code-compare text-amber-400"></i>
           <span>مقارنة</span>
         </button>
+
+        <!-- AI Reality Alignment Studio Trigger -->
+        <button type="button" id="floatAiAlignBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-purple-200 hover:text-white bg-indigo-900/70 hover:bg-indigo-800 border border-indigo-500/50 transition-all flex items-center gap-1.5 shadow-sm" title="مساعد الذكاء الاصطناعي للمعايرة والمطابقة مع الواقع">
+          <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i>
+          <span>مطابقة بالذكاء الاصطناعي</span>
+        </button>
       </div>
 
       <!-- Floating Live Measurement Bar on Map -->
@@ -562,6 +568,12 @@
                 <span class="text-[9px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-bold px-2 py-0.5 rounded-full font-mono">AI Smart Mode</span>
               </div>
 
+              <!-- Main Interactive AI Modal Launcher Button -->
+              <button type="button" id="openAiAlignmentModalBtn" class="w-full py-2.5 px-3 bg-gradient-to-r from-indigo-600 via-purple-600 to-amber-600 hover:from-indigo-500 hover:via-purple-500 hover:to-amber-500 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 text-xs transition-all border border-indigo-400/40">
+                <i class="fa-solid fa-wand-magic-sparkles text-amber-300 text-sm"></i>
+                <span>فتح استوديو المطابقة والمعايرة الذكي (AI Reality Studio)</span>
+              </button>
+
               <!-- Mode 1: AI Metadata & Coords Paste Parser -->
               <div class="space-y-1.5">
                 <div class="flex items-center justify-between">
@@ -602,35 +614,43 @@
                     <i class="fa-solid fa-mountain-sun text-emerald-400 text-[10px]"></i>
                     <span>2. مطابقة المعالم البصرية في الواقع (Landmark Snapping):</span>
                   </span>
-                  <span class="text-[10px] text-slate-500">13 بصمة جغرافية</span>
+                  <span class="text-[10px] text-emerald-400 font-mono">21 بصمة جغرافية</span>
                 </div>
                 <div class="flex items-center gap-2">
                   <select id="aiLandmarkSelect" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
                     <option value="">-- اختر المعلم الجغرافي المقابل في العراق --</option>
-                    <optgroup label="📍 محافظة بغداد (دجلة والجسور والمطار)">
+                    <optgroup label="📍 محافظة بغداد">
                       <option value="baghdad-kadhimya">بغداد: انحناء دجلة والكاظمية / الأعظمية</option>
                       <option value="baghdad-center">بغداد: قلب العاصمة (التحرير، دجلة، الجسر المعلق)</option>
-                      <option value="baghdad-airport">بغداد: مطار بغداد الدولي (المدرجات والصالات)</option>
+                      <option value="baghdad-airport">بغداد: مطار بغداد الدولي والمدرجات</option>
                     </optgroup>
-                    <optgroup label="📍 محافظة البصرة (شط العرب والموانئ)">
+                    <optgroup label="📍 محافظة البصرة">
                       <option value="basra-port">البصرة: شط العرب وميناء المعقل والتنومة</option>
-                      <option value="basra-stadium">البصرة: شط البصرة وقناة المصب والمدينة الرياضية</option>
+                      <option value="basra-stadium">البصرة: شط البصرة والمدينة الرياضية</option>
                     </optgroup>
-                    <optgroup label="📍 محافظة أربيل (القلعة والمحاور)">
-                      <option value="erbil-citadel">أربيل: قلعة أربيل ومحاور الشوارع الحلقية (30م - 60م)</option>
+                    <optgroup label="📍 إقليم كردستان (أربيل / السليمانية / دهوك)">
+                      <option value="erbil-citadel">أربيل: قلعة أربيل ومحاور الشوارع الحلقية (30م-60م)</option>
+                      <option value="dukan-lake">السليمانية: بحيرة وخزان دوكان الجبلي</option>
+                      <option value="duhok-center">دهوك: سد دهوك ومجرى الوادي ومركز المدينة</option>
                     </optgroup>
-                    <optgroup label="📍 محافظة نينوى (الموصل ودجلة)">
+                    <optgroup label="📍 محافظة نينوى">
                       <option value="mosul-center">الموصل: الجسور الخمسة ودجلة والمدينة القديمة</option>
                       <option value="mosul-dam">نينوى: بحيرة وجسم سد الموصل</option>
                     </optgroup>
                     <optgroup label="📍 محافظات الفرات الأوسط والأنبار">
                       <option value="habbaniyah-lake">الأنبار: بحيرة الحبانية وسد ومجرى الفرات</option>
+                      <option value="fallujah-city">الأنبار: مجرى الفرات وجسر الفلوجة</option>
+                      <option value="karbala-shrines">كربلاء: العتبات المقدسة والمركز التاريخي</option>
                       <option value="razzaza-lake">كربلاء: بحيرة الرزازة وبادية الأخيضر</option>
+                      <option value="najaf-shrines">النجف: الروضة الحيدرية ووادي السلام وبحر النجف</option>
                       <option value="samarra-dam">صلاح الدين: سد سامراء وناظم الثرثار والملوية</option>
+                      <option value="babylon-ancient">بابل: مدينة بابل الأثرية وشط الحلة</option>
                     </optgroup>
-                    <optgroup label="📍 الجنوب وكردستان">
+                    <optgroup label="📍 محافظات الجنوب وكركوك وواسط">
+                      <option value="ur-ziggurat">ذي قار: زقورة أور والمدينة الأثرية التاريخية</option>
                       <option value="chibayish-marshes">ذي قار: أهوار الجبايش وملتقى دجلة والفرات</option>
-                      <option value="dukan-lake">السليمانية: بحيرة وخزان دوكان الجبلي</option>
+                      <option value="kut-barrage">واسط: سدة الكوت ومجرى نهر دجلة</option>
+                      <option value="kirkuk-citadel">كركوك: قلعة كركوك ومرتفع بابا كركر</option>
                     </optgroup>
                   </select>
                   <button type="button" id="aiSnapLandmarkBtn" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition-all shadow flex items-center gap-1">
@@ -1030,6 +1050,127 @@
       <div id="infoModalContent" class="py-2">
         <!-- Dynamically populated -->
       </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       AI Spatial Alignment & Landmark Reality Matching Modal
+       ========================================================================= -->
+  <div id="aiAlignmentModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="glass-panel rounded-2xl w-full max-w-2xl border border-indigo-500/60 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden my-auto animate-fadeIn">
+      
+      <!-- Modal Header -->
+      <div class="p-4 border-b border-indigo-950/80 bg-gradient-to-r from-slate-900 via-indigo-950/80 to-slate-900 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <span class="w-9 h-9 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 flex items-center justify-center text-base shadow-sm">
+            <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i>
+          </span>
+          <div>
+            <h3 class="font-bold text-sm text-white flex items-center gap-2">
+              <span>مساعد الذكاء الاصطناعي لمطابقة ومعايرة الخارطة مع الواقع</span>
+              <span class="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-mono">AI Reality Matcher</span>
+            </h3>
+            <p class="text-[11px] text-slate-400 mt-0.5">حل الإحداثيات وتطابق المعالم الجغرافية مع صور الأقمار الصناعية الواقعية في العراق</p>
+          </div>
+        </div>
+        <button id="closeAiAlignmentModalBtn" class="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Scrollable Modal Body -->
+      <div class="p-4 overflow-y-auto space-y-4 text-xs">
+
+        <!-- File Inspection Status Banner -->
+        <div class="bg-slate-950/80 rounded-xl p-3 border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center gap-1.5 font-bold text-slate-200">
+              <i class="fa-solid fa-file-lines text-amber-400"></i>
+              <span id="aiModalFileName">خريطة فضائية مستوردة</span>
+            </div>
+            <span id="aiModalSourceBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-mono">إسناد ذكي</span>
+          </div>
+          <div id="aiModalMetaDetails" class="text-[11px] text-slate-300 font-mono bg-slate-900/80 p-2 rounded-lg border border-slate-800/80 flex items-center justify-between flex-wrap gap-2">
+            <span>الأبعاد: <strong id="aiModalDims" class="text-white">--</strong></span>
+            <span>نظام الإسقاط: <strong id="aiModalCrs" class="text-amber-300">UTM Zone 38N</strong></span>
+            <span>الإحداثيات الحالية: <strong id="aiModalCoords" class="text-sky-300">--</strong></span>
+          </div>
+        </div>
+
+        <!-- Section 1: Companion Image Pairing (Essential for Web Display) -->
+        <div class="bg-gradient-to-br from-amber-950/40 via-slate-900 to-slate-900 border border-amber-500/40 rounded-xl p-3.5 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2 text-xs font-bold text-amber-200">
+              <i class="fa-solid fa-image text-amber-400"></i>
+              <span>1. إقران صورة الخارطة المصدرة (PNG / JPG / TIFF)</span>
+            </div>
+            <span class="text-[10px] text-amber-400/80">عرض فوري بدقة كاملة</span>
+          </div>
+          <p class="text-[11px] text-slate-300 leading-relaxed">
+            نظراً لأن متصفحات الويب لا تدعم فك ضغط موجات ECW داخلياً بشكل مباشر، يمكنك استعراض واختيار <strong>الصورة المصدرة أو المحولة</strong> من QGIS أو ArcGIS أو Global Mapper لعرض محتوى الخارطة الفضائية الحقيقية فوراً في هذا الموقع ومطابقتها.
+          </p>
+          <button type="button" id="aiModalPairRasterBtn" class="w-full py-2.5 px-4 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 text-xs transition-all">
+            <i class="fa-solid fa-folder-open text-sm"></i>
+            <span>اختيار صورة الخارطة المصدرة من جهازك (PNG / JPG / TIFF)</span>
+          </button>
+        </div>
+
+        <!-- Section 2: AI Landmark & Real-World Feature Snapping -->
+        <div class="bg-slate-900/90 border border-emerald-500/40 rounded-xl p-3.5 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2 text-xs font-bold text-emerald-300">
+              <i class="fa-solid fa-earth-americas text-emerald-400"></i>
+              <span>2. مطابقة شكل الخارطة مع ما يماثلها في الواقع (Landmark Snapping)</span>
+            </div>
+            <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-mono font-bold">21 معلماً جغرافياً</span>
+          </div>
+          <p class="text-[11px] text-slate-300 leading-tight">
+            اختر المعلم الجغرافي المقابل في العراق لنقل وضبط مقياس الخارطة المستوردة فوقه فوراً مع تفعيل وميض التحقق البصري:
+          </p>
+
+          <!-- Province Filter Buttons -->
+          <div class="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px]" id="aiLandmarkFilters">
+            <button type="button" data-filter="all" class="landmark-filter-btn px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-semibold transition-all">الكل</button>
+            <button type="button" data-filter="بغداد" class="landmark-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white transition-all">بغداد</button>
+            <button type="button" data-filter="نينوى" class="landmark-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white transition-all">نينوى</button>
+            <button type="button" data-filter="البصرة" class="landmark-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white transition-all">البصرة</button>
+            <button type="button" data-filter="أربيل|السليمانية|دهوك" class="landmark-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white transition-all">كردستان</button>
+            <button type="button" data-filter="الأنبار|كربلاء|النجف|صلاح الدين|بابل" class="landmark-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white transition-all">الفرات الأوسط والأنبار</button>
+            <button type="button" data-filter="ذي قار|واسط|كركوك" class="landmark-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white transition-all">الجنوب وكركوك</button>
+          </div>
+
+          <!-- Dynamic 21 Landmarks Grid -->
+          <div id="aiModalLandmarksGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+            <!-- Populated dynamically via JS from IRAQI_LANDMARKS -->
+          </div>
+        </div>
+
+        <!-- Section 3: 2-Point GCP Affine Calibration -->
+        <div class="bg-slate-900/90 border border-purple-500/40 rounded-xl p-3.5 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2 text-xs font-bold text-purple-200">
+              <i class="fa-solid fa-crosshairs text-purple-400"></i>
+              <span>3. المعايرة بنقاط الضبط الأرضية (2-Point GCP Affine Calibration)</span>
+            </div>
+            <span class="text-[10px] text-purple-300 font-mono">Affine Matrix</span>
+          </div>
+          <p class="text-[11px] text-slate-300 leading-relaxed">
+            حدد نقطتين مميزتين في الخريطة المستوردة ونفس النقطتين المقابلتين في خارطة الأساس الواقعية ليقوم النظام بحساب مصفوفة التحويل التآلفي وتطبيق زاوية الدوران والمقياس والإزاحة بدقة ميليمترية.
+          </p>
+          <button type="button" id="aiModalLaunchGcpBtn" class="w-full py-2 px-3 bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all">
+            <i class="fa-solid fa-location-crosshairs text-purple-300"></i>
+            <span>بدء وضع نقاط الضبط (GCP) التفاعلي على الخارطة</span>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-3 border-t border-slate-800 bg-slate-950 flex items-center justify-between text-[11px]">
+        <span class="text-slate-400">يمكنك أيضاً استخدام أسهم الإزاحة والتدوير من الشريط الجانبي للمعايرة اليدوية الدقيقة.</span>
+        <button type="button" id="aiModalCloseBottomBtn" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors">إغلاق</button>
+      </div>
+
     </div>
   </div>
 

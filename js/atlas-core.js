@@ -342,72 +342,154 @@ document.addEventListener('DOMContentLoaded', () => {
     let gcpMarkers = [];
     let gcpLines = [];
 
-    // Real-World Iraqi Visual Landmark Bounding Extents
+    // Real-World Iraqi Visual Landmark Bounding Extents (21 Comprehensive Landmarks)
     const IRAQI_LANDMARKS = {
       'baghdad-kadhimya': {
-        name: 'انحناء دجلة والكاظمية / الأعظمية',
+        name: 'بغداد: انحناء دجلة والكاظمية / الأعظمية',
+        province: 'بغداد',
+        icon: 'fa-city',
         bounds: L.latLngBounds([33.3450, 44.2950], [33.4250, 44.3850]),
         center: [33.3850, 44.3400]
       },
       'baghdad-center': {
-        name: 'قلب العاصمة بغداد (التحرير والكرادة ودجلة)',
+        name: 'بغداد: قلب العاصمة (التحرير والكرادة ودجلة)',
+        province: 'بغداد',
+        icon: 'fa-landmark',
         bounds: L.latLngBounds([33.2850, 44.3550], [33.3650, 44.4550]),
         center: [33.3250, 44.4050]
       },
       'baghdad-airport': {
-        name: 'مطار بغداد الدولي والمدرجات',
+        name: 'بغداد: مطار بغداد الدولي والمدرجات',
+        province: 'بغداد',
+        icon: 'fa-plane-departure',
         bounds: L.latLngBounds([33.2200, 44.1800], [33.2940, 44.2880]),
         center: [33.2570, 44.2340]
       },
       'basra-port': {
         name: 'البصرة: شط العرب وميناء المعقل والتنومة',
+        province: 'البصرة',
+        icon: 'fa-ship',
         bounds: L.latLngBounds([30.4900, 47.7500], [30.5900, 47.8700]),
         center: [30.5400, 47.8100]
       },
       'basra-stadium': {
         name: 'البصرة: شط البصرة وقناة المصب والمدينة الرياضية',
+        province: 'البصرة',
+        icon: 'fa-trophy',
         bounds: L.latLngBounds([30.3950, 47.7300], [30.4750, 47.8260]),
         center: [30.4350, 47.7780]
       },
       'erbil-citadel': {
-        name: 'أربيل: قلعة أربيل ومحاور الشوارع الحلقية',
+        name: 'أربيل: قلعة أربيل ومحاور الشوارع الحلقية (30م-60م)',
+        province: 'أربيل',
+        icon: 'fa-monument',
         bounds: L.latLngBounds([36.1600, 43.9700], [36.2224, 44.0484]),
         center: [36.1912, 44.0092]
       },
       'mosul-center': {
         name: 'الموصل: الجسور الخمسة ودجلة والمدينة القديمة',
+        province: 'نينوى',
+        icon: 'fa-archway',
         bounds: L.latLngBounds([36.3000, 43.0900], [36.3800, 43.1900]),
         center: [36.3400, 43.1400]
       },
       'mosul-dam': {
         name: 'نينوى: بحيرة وجسم سد الموصل',
+        province: 'نينوى',
+        icon: 'fa-water',
         bounds: L.latLngBounds([36.5700, 42.7500], [36.6900, 42.9000]),
         center: [36.6300, 42.8250]
       },
       'habbaniyah-lake': {
         name: 'الأنبار: بحيرة الحبانية وسد ومجرى الفرات',
+        province: 'الأنبار',
+        icon: 'fa-water',
         bounds: L.latLngBounds([33.2200, 43.4700], [33.3600, 43.6700]),
         center: [33.2900, 43.5700]
       },
+      'fallujah-city': {
+        name: 'الأنبار: مجرى الفرات وجسر الفلوجة ومحيطها',
+        province: 'الأنبار',
+        icon: 'fa-bridge',
+        bounds: L.latLngBounds([33.3250, 43.7400], [33.3850, 43.8250]),
+        center: [33.3550, 43.7820]
+      },
+      'karbala-shrines': {
+        name: 'كربلاء: العتبات المقدسة والمركز التاريخي',
+        province: 'كربلاء',
+        icon: 'fa-mosque',
+        bounds: L.latLngBounds([32.6050, 43.9950], [32.6350, 44.0500]),
+        center: [32.6160, 44.0320]
+      },
       'razzaza-lake': {
         name: 'كربلاء: بحيرة الرزازة وبادية الأخيضر',
+        province: 'كربلاء',
+        icon: 'fa-water',
         bounds: L.latLngBounds([32.5500, 43.6500], [32.8100, 43.9300]),
         center: [32.6800, 43.7900]
       },
+      'najaf-shrines': {
+        name: 'النجف: الروضة الحيدرية ووادي السلام وبحر النجف',
+        province: 'النجف',
+        icon: 'fa-mosque',
+        bounds: L.latLngBounds([31.9850, 44.3000], [32.0300, 44.3500]),
+        center: [32.0000, 44.3180]
+      },
       'samarra-dam': {
         name: 'صلاح الدين: سد سامراء وناظم الثرثار والملوية',
+        province: 'صلاح الدين',
+        icon: 'fa-monument',
         bounds: L.latLngBounds([34.1600, 43.7500], [34.2700, 43.8800]),
         center: [34.2150, 43.8150]
       },
+      'babylon-ancient': {
+        name: 'بابل: مدينة بابل الأثرية وشط الحلة',
+        province: 'بابل',
+        icon: 'fa-landmark',
+        bounds: L.latLngBounds([32.5250, 44.4050], [32.5650, 44.4450]),
+        center: [32.5430, 44.4230]
+      },
+      'ur-ziggurat': {
+        name: 'ذي قار: زقورة أور والمدينة الأثرية التاريخية',
+        province: 'ذي قار',
+        icon: 'fa-monument',
+        bounds: L.latLngBounds([30.9500, 46.0900], [30.9800, 46.1300]),
+        center: [30.9628, 46.1030]
+      },
       'chibayish-marshes': {
         name: 'ذي قار: أهوار الجبايش وملتقى دجلة والفرات',
+        province: 'ذي قار',
+        icon: 'fa-leaf',
         bounds: L.latLngBounds([30.9000, 46.9100], [31.0400, 47.1100]),
         center: [30.9700, 47.0100]
       },
       'dukan-lake': {
         name: 'السليمانية: بحيرة وخزان دوكان الجبلي',
+        province: 'السليمانية',
+        icon: 'fa-water',
         bounds: L.latLngBounds([35.8600, 44.8500], [36.0400, 45.0700]),
         center: [35.9500, 44.9600]
+      },
+      'kirkuk-citadel': {
+        name: 'كركوك: قلعة كركوك ومرتفع بابا كركر',
+        province: 'كركوك',
+        icon: 'fa-monument',
+        bounds: L.latLngBounds([35.4550, 44.3750], [35.5000, 44.4250]),
+        center: [35.4700, 44.3950]
+      },
+      'duhok-center': {
+        name: 'دهوك: سد دهوك ومجرى الوادي ومركز المدينة',
+        province: 'دهوك',
+        icon: 'fa-mountain-sun',
+        bounds: L.latLngBounds([36.8400, 42.9600], [36.8900, 43.0300]),
+        center: [36.8650, 42.9900]
+      },
+      'kut-barrage': {
+        name: 'واسط: سدة الكوت ومجرى نهر دجلة',
+        province: 'واسط',
+        icon: 'fa-water',
+        bounds: L.latLngBounds([32.4900, 45.8050], [32.5300, 45.8550]),
+        center: [32.5050, 45.8280]
       }
     };
 
@@ -453,7 +535,242 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Parse ECW Binary Header (First 128KB) with AI Deep Scanner & Heuristics
+     * Extract Embedded Raster (JPEG / PNG Thumbnail or Preview) from Raw Binary Buffer
+     */
+    function extractEmbeddedRaster(buffer) {
+      if (!buffer || buffer.byteLength < 1000) return null;
+      const bytes = new Uint8Array(buffer);
+      const len = bytes.length;
+
+      // 1. Scan for JPEG Start of Image (0xFF, 0xD8, 0xFF)
+      for (let i = 0; i < len - 4; i++) {
+        if (bytes[i] === 0xFF && bytes[i + 1] === 0xD8 && bytes[i + 2] === 0xFF) {
+          // Look for JPEG End of Image (0xFF, 0xD9)
+          for (let j = i + 100; j < len - 1; j++) {
+            if (bytes[j] === 0xFF && bytes[j + 1] === 0xD9) {
+              const jpegSlice = bytes.subarray(i, j + 2);
+              if (jpegSlice.length >= 2048) { // Valid image preview >= 2KB
+                try {
+                  const blob = new Blob([jpegSlice], { type: 'image/jpeg' });
+                  return URL.createObjectURL(blob);
+                } catch (err) {
+                  console.warn('Failed to construct JPEG preview blob:', err);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // 2. Scan for PNG Signature (0x89 0x50 0x4E 0x47 0x0D 0x0A 0x1A 0x0A)
+      for (let i = 0; i < len - 8; i++) {
+        if (bytes[i] === 0x89 && bytes[i+1] === 0x50 && bytes[i+2] === 0x4E && bytes[i+3] === 0x47 &&
+            bytes[i+4] === 0x0D && bytes[i+5] === 0x0A && bytes[i+6] === 0x1A && bytes[i+7] === 0x0A) {
+          for (let j = i + 100; j < len - 7; j++) {
+            if (bytes[j] === 0x49 && bytes[j+1] === 0x45 && bytes[j+2] === 0x4E && bytes[j+3] === 0x44) {
+              const pngSlice = bytes.subarray(i, j + 8);
+              if (pngSlice.length >= 2048) {
+                try {
+                  const blob = new Blob([pngSlice], { type: 'image/png' });
+                  return URL.createObjectURL(blob);
+                } catch (err) {
+                  console.warn('Failed to construct PNG preview blob:', err);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      return null;
+    }
+
+    /**
+     * Generate Informative High-Tech Vector Grid Footprint (SVG Data URL)
+     * Replaces false satellite imagery with a clear raster footprint for ECW files
+     */
+    function generateEcwPlaceholderDataUrl(meta) {
+      const width = 1200;
+      const height = 900;
+      const fileName = (meta.fileName || 'خريطة فضائية ECW').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const proj = (meta.projection || 'UTM Zone 38N').replace(/</g, '&lt;');
+      const source = (meta.detectionSource || 'كشف ذكي').replace(/</g, '&lt;');
+      const dims = `${(meta.width || 0).toLocaleString('ar-IQ')} × ${(meta.height || 0).toLocaleString('ar-IQ')} px`;
+
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+        <defs>
+          <pattern id="ecwGrid" width="60" height="60" patternUnits="userSpaceOnUse">
+            <path d="M 60 0 L 0 0 0 60" fill="none" stroke="rgba(245, 158, 11, 0.18)" stroke-width="1.5"/>
+            <circle cx="0" cy="0" r="2" fill="rgba(245, 158, 11, 0.4)"/>
+          </pattern>
+          <linearGradient id="ecwBg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#020617" stop-opacity="0.88"/>
+            <stop offset="50%" stop-color="#0f172a" stop-opacity="0.84"/>
+            <stop offset="100%" stop-color="#1e1b4b" stop-opacity="0.88"/>
+          </linearGradient>
+        </defs>
+        
+        <rect width="${width}" height="${height}" fill="url(#ecwBg)" rx="16"/>
+        <rect width="${width}" height="${height}" fill="url(#ecwGrid)"/>
+        <rect width="${width}" height="${height}" fill="none" stroke="#f59e0b" stroke-width="6" rx="16"/>
+        
+        <circle cx="${width/2}" cy="${height/2}" r="240" fill="none" stroke="rgba(245, 158, 11, 0.25)" stroke-width="2" stroke-dasharray="8 6"/>
+        <circle cx="${width/2}" cy="${height/2}" r="120" fill="none" stroke="rgba(245, 158, 11, 0.4)" stroke-width="2"/>
+        <line x1="${width/2 - 280}" y1="${height/2}" x2="${width/2 + 280}" y2="${height/2}" stroke="#f59e0b" stroke-width="2"/>
+        <line x1="${width/2}" y1="${height/2 - 280}" x2="${width/2}" y2="${height/2 + 280}" stroke="#f59e0b" stroke-width="2"/>
+        
+        <g transform="translate(60, 50)">
+          <rect width="440" height="46" rx="8" fill="rgba(245, 158, 11, 0.25)" stroke="#f59e0b" stroke-width="2"/>
+          <text x="220" y="30" fill="#fde68a" font-family="system-ui, sans-serif" font-size="20" font-weight="bold" text-anchor="middle">نطاق خريطة فضائية مستوردة (ECW Footprint)</text>
+        </g>
+
+        <g transform="translate(${width/2 - 400}, ${height/2 - 140})">
+          <rect width="800" height="280" rx="16" fill="rgba(15, 23, 42, 0.94)" stroke="rgba(245, 158, 11, 0.7)" stroke-width="2.5"/>
+          
+          <text x="400" y="55" fill="#ffffff" font-family="system-ui, sans-serif" font-size="24" font-weight="bold" text-anchor="middle">📁 ${fileName}</text>
+          
+          <text x="400" y="105" fill="#38bdf8" font-family="system-ui, monospace" font-size="18" text-anchor="middle">📐 الأبعاد: ${dims} | الإسناد: ${proj}</text>
+          <text x="400" y="145" fill="#34d399" font-family="system-ui, sans-serif" font-size="17" text-anchor="middle">🎯 مصدر الإحداثيات: ${source}</text>
+          
+          <line x1="80" y1="175" x2="720" y2="175" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+          
+          <text x="400" y="215" fill="#fde047" font-family="system-ui, sans-serif" font-size="18" font-weight="bold" text-anchor="middle">✨ لعرض صورة الخارطة: اختر (إقران صورة PNG/JPG) أو طابق المعالم</text>
+          <text x="400" y="250" fill="#cbd5e1" font-family="system-ui, sans-serif" font-size="15" text-anchor="middle">يمكنك سحب وإفلات صورة الخارطة المصدرة هنا في أي وقت لإظهارها فوراً</text>
+        </g>
+
+        <text x="45" y="${height - 35}" fill="#94a3b8" font-family="monospace" font-size="15">SW CORNER</text>
+        <text x="${width - 160}" y="${height - 35}" fill="#94a3b8" font-family="monospace" font-size="15">SE CORNER</text>
+        <text x="45" y="40" fill="#94a3b8" font-family="monospace" font-size="15">NW CORNER</text>
+        <text x="${width - 160}" y="40" fill="#94a3b8" font-family="monospace" font-size="15">NE CORNER</text>
+      </svg>`;
+      
+      return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
+
+    /**
+     * Parse GeoTIFF Header (ModelTiepointTag & ModelPixelScaleTag)
+     */
+    function parseTIFFGeoHeader(buffer, fileName) {
+      if (!buffer || buffer.byteLength < 16) return null;
+      const view = new DataView(buffer);
+      
+      const byteOrder = view.getUint16(0);
+      let isLE = false;
+      if (byteOrder === 0x4949) {
+        isLE = true;
+      } else if (byteOrder === 0x4D4D) {
+        isLE = false;
+      } else {
+        return null;
+      }
+      
+      const magic = view.getUint16(2, isLE);
+      if (magic !== 42 && magic !== 0x2B) return null;
+      
+      const ifdOffset = view.getUint32(4, isLE);
+      if (ifdOffset <= 0 || ifdOffset >= buffer.byteLength) return null;
+      
+      const numEntries = view.getUint16(ifdOffset, isLE);
+      let entryOffset = ifdOffset + 2;
+      
+      let width = null, height = null;
+      let pixelScale = null;
+      let tiepoints = null;
+      let epsgCode = null;
+      
+      for (let e = 0; e < numEntries; e++) {
+        if (entryOffset + 12 > buffer.byteLength) break;
+        const tag = view.getUint16(entryOffset, isLE);
+        const type = view.getUint16(entryOffset + 2, isLE);
+        const count = view.getUint32(entryOffset + 4, isLE);
+        
+        if (tag === 256) {
+          width = (type === 3) ? view.getUint16(entryOffset + 8, isLE) : view.getUint32(entryOffset + 8, isLE);
+        } else if (tag === 257) {
+          height = (type === 3) ? view.getUint16(entryOffset + 8, isLE) : view.getUint32(entryOffset + 8, isLE);
+        } else if (tag === 33550 && count >= 2) {
+          const valOffset = view.getUint32(entryOffset + 8, isLE);
+          if (valOffset + 24 <= buffer.byteLength) {
+            pixelScale = [
+              view.getFloat64(valOffset, isLE),
+              view.getFloat64(valOffset + 8, isLE),
+              view.getFloat64(valOffset + 16, isLE)
+            ];
+          }
+        } else if (tag === 33922 && count >= 6) {
+          const valOffset = view.getUint32(entryOffset + 8, isLE);
+          if (valOffset + 48 <= buffer.byteLength) {
+            tiepoints = [
+              view.getFloat64(valOffset, isLE),
+              view.getFloat64(valOffset + 8, isLE),
+              view.getFloat64(valOffset + 16, isLE),
+              view.getFloat64(valOffset + 24, isLE),
+              view.getFloat64(valOffset + 32, isLE),
+              view.getFloat64(valOffset + 40, isLE)
+            ];
+          }
+        } else if (tag === 34735 && count >= 4) {
+          const valOffset = view.getUint32(entryOffset + 8, isLE);
+          if (valOffset + count * 2 <= buffer.byteLength) {
+            const numKeys = view.getUint16(valOffset + 6, isLE);
+            for (let k = 0; k < numKeys; k++) {
+              const keyOff = valOffset + 8 + k * 8;
+              if (keyOff + 8 <= buffer.byteLength) {
+                const keyId = view.getUint16(keyOff, isLE);
+                const val = view.getUint16(keyOff + 6, isLE);
+                if (keyId === 3072) {
+                  epsgCode = val;
+                } else if (keyId === 2048 && !epsgCode) {
+                  epsgCode = val;
+                }
+              }
+            }
+          }
+        }
+        entryOffset += 12;
+      }
+      
+      if (tiepoints && pixelScale && width && height) {
+        const originX = tiepoints[3];
+        const originY = tiepoints[4];
+        const scaleX = pixelScale[0];
+        const scaleY = pixelScale[1];
+        
+        let utmZone = 38;
+        let projection = 'UTM Zone 38N (EPSG:32638)';
+        if (epsgCode === 32637 || (originX > 100000 && originX < 500000 && fileName.includes('37'))) {
+          utmZone = 37;
+          projection = 'UTM Zone 37N (EPSG:32637)';
+        } else if (epsgCode === 32639) {
+          utmZone = 39;
+          projection = 'UTM Zone 39N (EPSG:32639)';
+        } else if (epsgCode === 4326) {
+          projection = 'WGS84 Geodetic (EPSG:4326)';
+        }
+        
+        return {
+          fileName,
+          isECW: false,
+          width,
+          height,
+          bands: 3,
+          compression: 1,
+          originX,
+          originY,
+          cellIncrementX: scaleX,
+          cellIncrementY: -scaleY,
+          projection,
+          utmZone,
+          datum: 'WGS84',
+          detectionSource: `بيانات GeoTIFF الأصلية (EPSG:${epsgCode || 32638})`
+        };
+      }
+      
+      return null;
+    }
+
+    /**
+     * Parse ECW Binary Header with AI Deep Scanner, IEEE 754 Search, and Iraq Heuristics
      */
     function parseECWHeader(buffer, fileName, fileSize = 0) {
       const view = new DataView(buffer);
@@ -462,22 +779,23 @@ document.addEventListener('DOMContentLoaded', () => {
         fileSizeMb: (fileSize / (1024 * 1024)).toFixed(1),
         isECW: false,
         version: 2,
-        width: 14000,
-        height: 11000,
+        width: 12000,
+        height: 10000,
         bands: 3,
         compression: 10,
         projection: 'UTM Zone 38N (EPSG:32638)',
         datum: 'WGS84',
         cellSizeUnits: 'METERS',
-        cellIncrementX: 0.30,
-        cellIncrementY: -0.30,
-        originX: 441200,
-        originY: 3689400,
+        cellIncrementX: 0.50,
+        cellIncrementY: -0.50,
+        originX: null,
+        originY: null,
         utmZone: 38,
         isNorthern: true,
-        detectionSource: 'افتراضي (بغداد - دجلة)'
+        detectionSource: 'غير محدد بعد'
       };
 
+      // 1. ECW Header Signature & Dimensions
       if (buffer.byteLength > 20) {
         const tag = view.getUint8(0);
         if (tag === 0x65 || tag === 0x45) { // 'e' or 'E'
@@ -500,11 +818,43 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      // ASCII string scanner for embedded metadata keywords
+      // 2. Direct ECW v2/v3 Fixed Offsets Double Float Check
+      let foundDirectCoords = false;
+      for (const off of [32, 36, 40, 28, 48]) {
+        for (const isLE of [false, true]) {
+          if (off + 16 <= buffer.byteLength) {
+            try {
+              const ox = view.getFloat64(off, isLE);
+              const oy = view.getFloat64(off + 8, isLE);
+              if (isFinite(ox) && isFinite(oy)) {
+                if (ox >= 150000 && ox <= 850000 && oy >= 3200000 && oy <= 4300000) {
+                  meta.originX = ox;
+                  meta.originY = oy;
+                  meta.detectionSource = `ترويسة ECW الثنائية المباشرة (Offset ${off})`;
+                  foundDirectCoords = true;
+                  break;
+                } else if (ox >= 38.0 && ox <= 49.5 && oy >= 28.5 && oy <= 38.5) {
+                  meta.originX = ox;
+                  meta.originY = oy;
+                  meta.projection = 'WGS84 Geodetic (EPSG:4326)';
+                  meta.cellSizeUnits = 'DEGREES';
+                  meta.detectionSource = `ترويسة ECW الثنائية الجغرافية (Offset ${off})`;
+                  foundDirectCoords = true;
+                  break;
+                }
+              }
+            } catch (err) {}
+          }
+        }
+        if (foundDirectCoords) break;
+      }
+
+      // 3. ASCII & XML Scanner for embedded metadata keywords
       let text = '';
       try {
         const bytes = new Uint8Array(buffer);
-        for (let i = 0; i < bytes.length; i++) {
+        const textLimit = Math.min(bytes.length, 131072);
+        for (let i = 0; i < textLimit; i++) {
           const c = bytes[i];
           if ((c >= 32 && c <= 126) || c === 10 || c === 13) {
             text += String.fromCharCode(c);
@@ -516,62 +866,62 @@ document.addEventListener('DOMContentLoaded', () => {
         console.warn('Text scan error:', err);
       }
 
-      // 1. Text Regex Detection (Sidecar / Embedded ERS)
       let foundTextCoords = false;
-      const oxMatch = text.match(/(?:OriginX|Eastings)\s*[:=]\s*([+\-0-9.eE]+)/i);
-      if (oxMatch) {
-        meta.originX = parseFloat(oxMatch[1]);
-        foundTextCoords = true;
-      }
-
-      const oyMatch = text.match(/(?:OriginY|Northings)\s*[:=]\s*([+\-0-9.eE]+)/i);
-      if (oyMatch) {
-        meta.originY = parseFloat(oyMatch[1]);
-        foundTextCoords = true;
-      }
-
-      const cixMatch = text.match(/(?:CellIncrementX|Xdimension)\s*[:=]\s*([+\-0-9.eE]+)/i);
-      if (cixMatch) meta.cellIncrementX = parseFloat(cixMatch[1]);
-
-      const ciyMatch = text.match(/(?:CellIncrementY|Ydimension)\s*[:=]\s*([+\-0-9.eE]+)/i);
-      if (ciyMatch) meta.cellIncrementY = parseFloat(ciyMatch[1]);
-
-      const nutmMatch = text.match(/NUTM(\d{1,2})/i);
-      if (nutmMatch) {
-        meta.utmZone = parseInt(nutmMatch[1], 10);
-        meta.projection = `UTM Zone ${meta.utmZone}N (EPSG:${32600 + meta.utmZone})`;
-      } else if (/EPSG:?(\d{4,5})/i.test(text)) {
-        const epsgMatch = text.match(/EPSG:?(\d{4,5})/i);
-        const code = epsgMatch[1];
-        if (code === '4326') {
-          meta.projection = 'WGS84 Geodetic (EPSG:4326)';
-          meta.cellSizeUnits = 'DEGREES';
-        } else if (code === '32638') {
-          meta.projection = 'UTM Zone 38N (EPSG:32638)';
-          meta.utmZone = 38;
-        } else if (code === '32637') {
-          meta.projection = 'UTM Zone 37N (EPSG:32637)';
-          meta.utmZone = 37;
-        } else {
-          meta.projection = `EPSG:${code}`;
+      if (!foundDirectCoords && text) {
+        const oxMatch = text.match(/(?:OriginX|Eastings|<OriginX>)\s*[:=><]?\s*([+\-0-9.eE]+)/i);
+        if (oxMatch) {
+          meta.originX = parseFloat(oxMatch[1]);
+          foundTextCoords = true;
         }
-      } else if (/GEODETIC|WGS84/i.test(text)) {
-        meta.projection = 'WGS84 Geographic Lat/Lng';
-        meta.datum = 'WGS84';
+
+        const oyMatch = text.match(/(?:OriginY|Northings|<OriginY>)\s*[:=><]?\s*([+\-0-9.eE]+)/i);
+        if (oyMatch) {
+          meta.originY = parseFloat(oyMatch[1]);
+          foundTextCoords = true;
+        }
+
+        const cixMatch = text.match(/(?:CellIncrementX|Xdimension|<CellIncrementX>)\s*[:=><]?\s*([+\-0-9.eE]+)/i);
+        if (cixMatch) meta.cellIncrementX = parseFloat(cixMatch[1]);
+
+        const ciyMatch = text.match(/(?:CellIncrementY|Ydimension|<CellIncrementY>)\s*[:=><]?\s*([+\-0-9.eE]+)/i);
+        if (ciyMatch) meta.cellIncrementY = parseFloat(ciyMatch[1]);
+
+        const nutmMatch = text.match(/NUTM(\d{1,2})/i);
+        if (nutmMatch) {
+          meta.utmZone = parseInt(nutmMatch[1], 10);
+          meta.projection = `UTM Zone ${meta.utmZone}N (EPSG:${32600 + meta.utmZone})`;
+        } else if (/EPSG:?(\d{4,5})/i.test(text)) {
+          const epsgMatch = text.match(/EPSG:?(\d{4,5})/i);
+          const code = epsgMatch[1];
+          if (code === '4326') {
+            meta.projection = 'WGS84 Geodetic (EPSG:4326)';
+            meta.cellSizeUnits = 'DEGREES';
+          } else if (code === '32638') {
+            meta.projection = 'UTM Zone 38N (EPSG:32638)';
+            meta.utmZone = 38;
+          } else if (code === '32637') {
+            meta.projection = 'UTM Zone 37N (EPSG:32637)';
+            meta.utmZone = 37;
+          } else {
+            meta.projection = `EPSG:${code}`;
+          }
+        } else if (/GEODETIC|WGS84/i.test(text)) {
+          meta.projection = 'WGS84 Geographic Lat/Lng';
+          meta.datum = 'WGS84';
+        }
+
+        const datumMatch = text.match(/DATUM\s*[:=]\s*["']?([A-Za-z0-9_\-]+)/i);
+        if (datumMatch) meta.datum = datumMatch[1].toUpperCase();
+
+        if (foundTextCoords) {
+          meta.detectionSource = 'ميتاداتا نصية مدمجة (ASCII / XML Header)';
+        }
       }
 
-      const datumMatch = text.match(/DATUM\s*[:=]\s*["']?([A-Za-z0-9_\-]+)/i);
-      if (datumMatch) meta.datum = datumMatch[1].toUpperCase();
-
-      if (foundTextCoords) {
-        meta.detectionSource = 'ميتاداتا نصية مدمجة (ASCII Header)';
-      }
-
-      // 2. AI Deep Binary IEEE 754 Float64 Scanner
-      // Raw ECW files store georeference coordinates as 64-bit IEEE double floats, NOT ASCII strings!
-      if (!foundTextCoords && buffer.byteLength > 64) {
+      // 4. AI Deep Binary IEEE 754 Float64 Scanner
+      if (!foundDirectCoords && !foundTextCoords && buffer.byteLength > 64) {
         let foundBinaryCoords = false;
-        const scanLimit = Math.min(buffer.byteLength - 8, 32768);
+        const scanLimit = Math.min(buffer.byteLength - 8, 65536);
 
         for (const isLE of [false, true]) {
           if (foundBinaryCoords) break;
@@ -580,7 +930,7 @@ document.addEventListener('DOMContentLoaded', () => {
               const val1 = view.getFloat64(offset, isLE);
               if (!isFinite(val1)) continue;
 
-              // Check if val1 is Easting (UTM 150,000 to 850,000 for Iraq)
+              // Easting (UTM 150k - 850k)
               if (val1 >= 150000 && val1 <= 850000) {
                 for (let step = 8; step <= 48; step += 8) {
                   if (offset + step + 8 <= buffer.byteLength) {
@@ -597,7 +947,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   }
                 }
               }
-              // Check if val1 is Northing (UTM 3.2M to 4.3M) and val2 is Easting
+              // Northing first
               else if (val1 >= 3200000 && val1 <= 4300000) {
                 for (let step = 8; step <= 48; step += 8) {
                   if (offset + step + 8 <= buffer.byteLength) {
@@ -614,14 +964,14 @@ document.addEventListener('DOMContentLoaded', () => {
                   }
                 }
               }
-              // Check if val1, val2 are WGS84 Geodetic coordinates (Lat: 28.5 to 38.5, Lng: 38.0 to 49.5)
+              // WGS84 Geodetic
               else if (val1 >= 38.0 && val1 <= 49.5) {
                 for (let step = 8; step <= 48; step += 8) {
                   if (offset + step + 8 <= buffer.byteLength) {
                     const val2 = view.getFloat64(offset + step, isLE);
                     if (isFinite(val2) && val2 >= 28.5 && val2 <= 38.5) {
-                      meta.originX = val1; // Longitude
-                      meta.originY = val2; // Latitude
+                      meta.originX = val1;
+                      meta.originY = val2;
                       meta.projection = 'WGS84 Geodetic (EPSG:4326)';
                       meta.cellSizeUnits = 'DEGREES';
                       meta.detectionSource = 'مسح ثنائي عميق بالذكاء الاصطناعي (IEEE 754 WGS84)';
@@ -632,51 +982,64 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
               }
               if (foundBinaryCoords) break;
-            } catch (err) {
-              // Ignore offset boundary errors
-            }
+            } catch (err) {}
           }
         }
       }
 
-      // 3. AI Heuristic Analysis from Filename
-      if (meta.detectionSource.includes('افتراضي') && fileName) {
+      // 5. AI Heuristic Analysis from Filename across all Iraqi Governorates & Landmarks
+      if ((meta.originX === null || meta.originY === null) && fileName) {
         const lowerName = fileName.toLowerCase();
         const coordNameMatch = lowerName.match(/(?:e|east)?([1-8]\d{5})[_\- ]+(?:n|north)?([34]\d{6})/i);
         if (coordNameMatch) {
           meta.originX = parseFloat(coordNameMatch[1]);
           meta.originY = parseFloat(coordNameMatch[2]);
           meta.detectionSource = 'كشف ذكي من إحداثيات اسم الملف (UTM)';
-        } else if (lowerName.includes('basra') || lowerName.includes('shatt') || lowerName.includes('fao') || lowerName.includes('zubair')) {
+        } else if (lowerName.includes('basra') || lowerName.includes('shatt') || lowerName.includes('fao') || lowerName.includes('zubair') || lowerName.includes('بصرة')) {
           meta.originX = 765400; meta.originY = 3375800; meta.utmZone = 38;
           meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (البصرة)';
-        } else if (lowerName.includes('erbil') || lowerName.includes('arbil') || lowerName.includes('hawler')) {
+        } else if (lowerName.includes('erbil') || lowerName.includes('arbil') || lowerName.includes('hawler') || lowerName.includes('أربيل')) {
           meta.originX = 408500; meta.originY = 4004200; meta.utmZone = 38;
           meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (أربيل)';
-        } else if (lowerName.includes('mosul') || lowerName.includes('nineveh') || lowerName.includes('ninawa')) {
+        } else if (lowerName.includes('mosul') || lowerName.includes('nineveh') || lowerName.includes('ninawa') || lowerName.includes('موصل') || lowerName.includes('نينوى')) {
           meta.originX = 333000; meta.originY = 4023000; meta.utmZone = 38;
           meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (الموصل)';
-        } else if (lowerName.includes('sulayman') || lowerName.includes('slemani') || lowerName.includes('dukan')) {
+        } else if (lowerName.includes('sulayman') || lowerName.includes('slemani') || lowerName.includes('dukan') || lowerName.includes('سليمانية')) {
           meta.originX = 496000; meta.originY = 3938000; meta.utmZone = 38;
           meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (السليمانية)';
-        } else if (lowerName.includes('karbala') || lowerName.includes('razzaza')) {
+        } else if (lowerName.includes('karbala') || lowerName.includes('razzaza') || lowerName.includes('كربلاء')) {
           meta.originX = 387000; meta.originY = 3612000; meta.utmZone = 38;
           meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (كربلاء)';
-        } else if (lowerName.includes('najaf') || lowerName.includes('kufa')) {
+        } else if (lowerName.includes('najaf') || lowerName.includes('kufa') || lowerName.includes('نجف') || lowerName.includes('كوفة')) {
           meta.originX = 437000; meta.originY = 3543000; meta.utmZone = 38;
           meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (النجف)';
-        } else if (lowerName.includes('anbar') || lowerName.includes('habbaniyah') || lowerName.includes('ramadi') || lowerName.includes('fallujah')) {
+        } else if (lowerName.includes('anbar') || lowerName.includes('habbaniyah') || lowerName.includes('ramadi') || lowerName.includes('fallujah') || lowerName.includes('أنبار')) {
           meta.originX = 366000; meta.originY = 3698000; meta.utmZone = 38;
           meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (الأنبار)';
-        } else if (lowerName.includes('samarra') || lowerName.includes('salah')) {
+        } else if (lowerName.includes('samarra') || lowerName.includes('salah') || lowerName.includes('سامراء') || lowerName.includes('صلاح الدين')) {
           meta.originX = 391000; meta.originY = 3786000; meta.utmZone = 38;
           meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (سامراء)';
-        } else if (lowerName.includes('chibayish') || lowerName.includes('nasiriyah') || lowerName.includes('marsh')) {
+        } else if (lowerName.includes('chibayish') || lowerName.includes('nasiriyah') || lowerName.includes('marsh') || lowerName.includes('جبايش') || lowerName.includes('ناصرية') || lowerName.includes('أهوار')) {
           meta.originX = 693000; meta.originY = 3428000; meta.utmZone = 38;
           meta.detectionSource = 'مطابقة ذكية لاسم المنطقة (الأهوار والناصرية)';
-        } else if (lowerName.includes('kirkuk')) {
+        } else if (lowerName.includes('kirkuk') || lowerName.includes('كركوك')) {
           meta.originX = 444000; meta.originY = 3924000; meta.utmZone = 38;
           meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (كركوك)';
+        } else if (lowerName.includes('duhok') || lowerName.includes('دهوك') || lowerName.includes('zakho')) {
+          meta.originX = 318000; meta.originY = 4078000; meta.utmZone = 38;
+          meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (دهوك)';
+        } else if (lowerName.includes('babil') || lowerName.includes('babylon') || lowerName.includes('hilla') || lowerName.includes('بابل') || lowerName.includes('حلة')) {
+          meta.originX = 447000; meta.originY = 3600000; meta.utmZone = 38;
+          meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (بابل)';
+        } else if (lowerName.includes('wasit') || lowerName.includes('kut') || lowerName.includes('واسط') || lowerName.includes('كوت')) {
+          meta.originX = 578000; meta.originY = 3601000; meta.utmZone = 38;
+          meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (واسط)';
+        } else if (lowerName.includes('diyala') || lowerName.includes('baqubah') || lowerName.includes('ديالى') || lowerName.includes('بعقوبة')) {
+          meta.originX = 472000; meta.originY = 3734000; meta.utmZone = 38;
+          meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (ديالى)';
+        } else if (lowerName.includes('baghdad') || lowerName.includes('بغداد')) {
+          meta.originX = 444500; meta.originY = 3687500; meta.utmZone = 38;
+          meta.detectionSource = 'مطابقة ذكية لاسم العاصمة (بغداد)';
         }
       }
 
@@ -725,15 +1088,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Compute Geographic LatLngBounds from Metadata
+     * If coordinates are unknown, falls back to current viewport (never forces Baghdad!)
      */
     function computeBoundsFromMeta(meta) {
       let north, south, east, west;
 
       // Case A: Coordinates are in UTM meters (easting: 100k - 900k, northing: 1M - 9M)
-      if (meta.originX > 10000 && meta.originY > 100000) {
+      if (meta.originX && meta.originY && meta.originX > 10000 && meta.originY > 100000) {
         const zone = meta.utmZone || 38;
-        const widthMeters = meta.width * Math.abs(meta.cellIncrementX || 0.3);
-        const heightMeters = meta.height * Math.abs(meta.cellIncrementY || 0.3);
+        const widthMeters = (meta.width || 8000) * Math.abs(meta.cellIncrementX || 0.5);
+        const heightMeters = (meta.height || 6000) * Math.abs(meta.cellIncrementY || 0.5);
 
         const tl = utmToLatLng(meta.originX, meta.originY, zone, true);
         const br = utmToLatLng(meta.originX + widthMeters, meta.originY - heightMeters, zone, true);
@@ -744,21 +1108,24 @@ document.addEventListener('DOMContentLoaded', () => {
         east = Math.max(tl.lng, br.lng);
       }
       // Case B: Coordinates are in Geographic Degrees (WGS84)
-      else if (meta.originX >= -180 && meta.originX <= 180 && meta.originY >= -90 && meta.originY <= 90) {
-        const spanX = meta.width * Math.abs(meta.cellIncrementX || 0.00005);
-        const spanY = meta.height * Math.abs(meta.cellIncrementY || 0.00005);
+      else if (meta.originX !== null && meta.originY !== null && meta.originX >= -180 && meta.originX <= 180 && meta.originY >= -90 && meta.originY <= 90) {
+        const spanX = (meta.width || 8000) * Math.abs(meta.cellIncrementX || 0.00005);
+        const spanY = (meta.height || 6000) * Math.abs(meta.cellIncrementY || 0.00005);
 
-        west = meta.originX;
-        east = meta.originX + spanX;
-        north = meta.originY;
-        south = meta.originY - spanY;
+        west = Math.min(meta.originX, meta.originX + spanX);
+        east = Math.max(meta.originX, meta.originX + spanX);
+        north = Math.max(meta.originY, meta.originY - spanY);
+        south = Math.min(meta.originY, meta.originY - spanY);
       }
-      // Case C: Fallback to Baghdad Iraq center
+      // Case C: Fallback to current map viewport (Never forces Baghdad!)
       else {
-        north = 33.3600;
-        south = 33.2800;
-        west = 44.3300;
-        east = 44.4300;
+        const currentMapBounds = map.getBounds();
+        const padBounds = currentMapBounds.pad(-0.15);
+        north = padBounds.getNorth();
+        south = padBounds.getSouth();
+        west = padBounds.getWest();
+        east = padBounds.getEast();
+        meta.detectionSource = 'نطاق العرض الحالي للشاشة (يرجى المطابقة عبر مساعد الذكاء الاصطناعي)';
       }
 
       return L.latLngBounds([south, west], [north, east]);
@@ -1232,9 +1599,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Process ECW Dataset (Binary Header, Sidecar, and Raster Pairing)
+     * Never silently fetches Baghdad satellite imagery; uses actual raster or vector footprint + AI modal
      */
     function processECWDataset(file, companionImageSrc = null, sidecarText = null) {
-      const slice = file.slice(0, 131072);
+      // Read 512KB slice for thorough binary header and embedded preview scan
+      const slice = file.slice(0, 524288);
       lastEcwRawFile = file;
       const reader = new FileReader();
 
@@ -1249,16 +1618,38 @@ document.addEventListener('DOMContentLoaded', () => {
         displayECWMetadata(meta, calculatedBounds);
 
         // Pre-fill AI Coords input with detected bounds info for transparency
-        if (aiCoordsTextInput) {
+        if (aiCoordsTextInput && meta.originX && meta.originY) {
           aiCoordsTextInput.value = `OriginX: ${meta.originX.toFixed(2)}, OriginY: ${meta.originY.toFixed(2)}\nProjection: ${meta.projection} | Datum: ${meta.datum}\nBounds: [${calculatedBounds.getSouth().toFixed(5)}, ${calculatedBounds.getWest().toFixed(5)}] -> [${calculatedBounds.getNorth().toFixed(5)}, ${calculatedBounds.getEast().toFixed(5)}]`;
         }
 
-        // If companion image exists, use it; otherwise fetch matching satellite imagery for the exact bounding box
-        const imageToDisplay = companionImageSrc || getSatelliteServiceUrlForBounds(calculatedBounds);
-        const labelText = `خريطة ECW: ${file.name}`;
+        // 1. Companion Image
+        let imageToDisplay = companionImageSrc;
 
+        // 2. Embedded Raster Preview inside ECW binary buffer
+        if (!imageToDisplay) {
+          const embeddedRaster = extractEmbeddedRaster(e.target.result);
+          if (embeddedRaster) {
+            imageToDisplay = embeddedRaster;
+            meta.detectionSource += ' + معاينة نقطية مدمجة بالملف';
+          }
+        }
+
+        // 3. Informative Vector Footprint (SVG Data URL)
+        // Eliminates any artificial satellite photo of Baghdad!
+        if (!imageToDisplay) {
+          imageToDisplay = generateEcwPlaceholderDataUrl(meta);
+        }
+
+        const labelText = `خريطة ECW: ${file.name}`;
         initCalibrationOverlay(imageToDisplay, labelText, calculatedBounds);
-        showToast(`تم استيراد ${file.name} - الإسناد: ${meta.detectionSource || 'UTM'}`, 'success');
+        showToast(`تم استيراد ${file.name} - الإسناد: ${meta.detectionSource}`, 'success');
+
+        // Automatically launch AI Reality Alignment Studio if no companion raster was supplied
+        if (!companionImageSrc) {
+          setTimeout(() => {
+            openAiAlignmentModal(meta, calculatedBounds);
+          }, 500);
+        }
       };
 
       reader.readAsArrayBuffer(slice);
@@ -1313,11 +1704,40 @@ document.addEventListener('DOMContentLoaded', () => {
           processECWDataset(ecwFile, null, null);
         }
       } else if (imageFile) {
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          initCalibrationOverlay(evt.target.result, imageFile.name);
-        };
-        reader.readAsDataURL(imageFile);
+        const isTiff = imageFile.name.toLowerCase().endsWith('.tif') || imageFile.name.toLowerCase().endsWith('.tiff');
+        if (isTiff) {
+          const arrayReader = new FileReader();
+          arrayReader.onload = (ae) => {
+            const geoMeta = parseTIFFGeoHeader(ae.target.result, imageFile.name);
+            let customBounds = null;
+            if (geoMeta) {
+              customBounds = computeBoundsFromMeta(geoMeta);
+              displayECWMetadata(geoMeta, customBounds);
+            } else {
+              const metaFallback = parseECWHeader(ae.target.result, imageFile.name, imageFile.size);
+              customBounds = computeBoundsFromMeta(metaFallback);
+            }
+            const dataReader = new FileReader();
+            dataReader.onload = (de) => {
+              initCalibrationOverlay(de.target.result, imageFile.name, customBounds);
+              if (geoMeta) showToast(`تم استيراد GeoTIFF: ${geoMeta.detectionSource}`, 'success');
+            };
+            dataReader.readAsDataURL(imageFile);
+          };
+          arrayReader.readAsArrayBuffer(imageFile);
+        } else {
+          // Standard Image (PNG/JPG): Analyze filename for coordinates or governorate
+          const dummyMeta = parseECWHeader(new ArrayBuffer(32), imageFile.name, imageFile.size);
+          const computed = computeBoundsFromMeta(dummyMeta);
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            initCalibrationOverlay(evt.target.result, imageFile.name, computed);
+            if (dummyMeta.originX) {
+              showToast(`تم التعرف على موقع الصورة: ${dummyMeta.detectionSource}`, 'success');
+            }
+          };
+          reader.readAsDataURL(imageFile);
+        }
       } else {
         showToast('يرجى اختيار ملف بصيغة .ecw أو صورة فضائية مدعومة', 'warning');
       }
@@ -1600,6 +2020,132 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('تم إلغاء وضع المعايرة بنقاط الضبط', 'info');
       });
     }
+
+    // ==========================================
+    // AI Reality Alignment & Calibration Modal Studio
+    // ==========================================
+    const aiAlignmentModal = document.getElementById('aiAlignmentModal');
+    const closeAiAlignmentModalBtn = document.getElementById('closeAiAlignmentModalBtn');
+    const aiModalCloseBottomBtn = document.getElementById('aiModalCloseBottomBtn');
+    const openAiAlignmentModalBtn = document.getElementById('openAiAlignmentModalBtn');
+    const floatAiAlignBtn = document.getElementById('floatAiAlignBtn');
+    const aiModalFileName = document.getElementById('aiModalFileName');
+    const aiModalDims = document.getElementById('aiModalDims');
+    const aiModalCrs = document.getElementById('aiModalCrs');
+    const aiModalCoords = document.getElementById('aiModalCoords');
+    const aiModalSourceBadge = document.getElementById('aiModalSourceBadge');
+    const aiModalPairRasterBtn = document.getElementById('aiModalPairRasterBtn');
+    const aiModalLaunchGcpBtn = document.getElementById('aiModalLaunchGcpBtn');
+    const aiModalLandmarksGrid = document.getElementById('aiModalLandmarksGrid');
+    const aiLandmarkFilters = document.getElementById('aiLandmarkFilters');
+
+    function openAiAlignmentModal(meta = null, currentBounds = null) {
+      if (!aiAlignmentModal) return;
+      const m = meta || currentEcwMeta || {
+        fileName: 'خارطة فضائية للمعايرة',
+        width: 0,
+        height: 0,
+        projection: 'UTM Zone 38N (EPSG:32638)',
+        detectionSource: 'كشف ذكي'
+      };
+      const b = currentBounds || bounds || map.getBounds();
+
+      if (aiModalFileName) aiModalFileName.textContent = m.fileName || 'خريطة فضائية مستوردة';
+      if (aiModalDims) aiModalDims.textContent = (m.width && m.height) ? `${m.width.toLocaleString('ar-IQ')} × ${m.height.toLocaleString('ar-IQ')} px` : 'غير محدد';
+      if (aiModalCrs) aiModalCrs.textContent = m.projection || 'UTM Zone 38N (EPSG:32638)';
+      if (aiModalSourceBadge) aiModalSourceBadge.textContent = m.detectionSource || 'كشف ذكي';
+      if (aiModalCoords && b) {
+        aiModalCoords.textContent = `[${b.getSouth().toFixed(4)}°, ${b.getWest().toFixed(4)}°] -> [${b.getNorth().toFixed(4)}°, ${b.getEast().toFixed(4)}°]`;
+      }
+
+      renderModalLandmarksGrid('all');
+      aiAlignmentModal.classList.remove('hidden');
+    }
+
+    function closeAiAlignmentModal() {
+      if (aiAlignmentModal) aiAlignmentModal.classList.add('hidden');
+    }
+
+    function renderModalLandmarksGrid(filter = 'all') {
+      if (!aiModalLandmarksGrid) return;
+      aiModalLandmarksGrid.innerHTML = '';
+
+      const entries = Object.entries(IRAQI_LANDMARKS);
+      const regex = (filter === 'all') ? null : new RegExp(filter, 'i');
+
+      entries.forEach(([key, lm]) => {
+        if (regex && !regex.test(lm.province || '') && !regex.test(lm.name)) {
+          return;
+        }
+
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'w-full text-right p-2.5 rounded-xl bg-slate-950/80 hover:bg-emerald-950/40 border border-slate-800 hover:border-emerald-500/60 transition-all flex items-center justify-between group shadow-sm';
+        
+        card.innerHTML = `
+          <div class="flex items-center gap-2">
+            <span class="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500/20 flex items-center justify-center text-xs">
+              <i class="fa-solid ${lm.icon || 'fa-location-dot'}"></i>
+            </span>
+            <div class="text-right">
+              <div class="font-bold text-slate-200 group-hover:text-white text-[11px] leading-tight">${lm.name}</div>
+              <div class="text-[10px] text-slate-400 font-mono mt-0.5">محافظة ${lm.province || 'العراق'}</div>
+            </div>
+          </div>
+          <span class="text-[10px] px-2 py-1 rounded bg-emerald-600/20 text-emerald-300 font-bold border border-emerald-500/30 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+            مطابقة
+          </span>
+        `;
+
+        card.addEventListener('click', () => {
+          snapToLandmark(key);
+          closeAiAlignmentModal();
+        });
+
+        aiModalLandmarksGrid.appendChild(card);
+      });
+    }
+
+    // Modal Triggers
+    if (openAiAlignmentModalBtn) {
+      openAiAlignmentModalBtn.addEventListener('click', () => openAiAlignmentModal());
+    }
+    if (floatAiAlignBtn) {
+      floatAiAlignBtn.addEventListener('click', () => openAiAlignmentModal());
+    }
+    if (closeAiAlignmentModalBtn) {
+      closeAiAlignmentModalBtn.addEventListener('click', () => closeAiAlignmentModal());
+    }
+    if (aiModalCloseBottomBtn) {
+      aiModalCloseBottomBtn.addEventListener('click', () => closeAiAlignmentModal());
+    }
+    if (aiModalPairRasterBtn && companionFileInput) {
+      aiModalPairRasterBtn.addEventListener('click', () => {
+        closeAiAlignmentModal();
+        companionFileInput.click();
+      });
+    }
+    if (aiModalLaunchGcpBtn) {
+      aiModalLaunchGcpBtn.addEventListener('click', () => {
+        closeAiAlignmentModal();
+        startGcpMatching();
+      });
+    }
+
+    if (aiLandmarkFilters) {
+      aiLandmarkFilters.addEventListener('click', (e) => {
+        const btn = e.target.closest('.landmark-filter-btn');
+        if (!btn) return;
+        aiLandmarkFilters.querySelectorAll('.landmark-filter-btn').forEach(b => {
+          b.className = 'landmark-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white transition-all';
+        });
+        btn.className = 'landmark-filter-btn px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-semibold transition-all';
+        renderModalLandmarksGrid(btn.dataset.filter || 'all');
+      });
+    }
+
+    window.openAiAlignmentModal = openAiAlignmentModal;
+    window.closeAiAlignmentModal = closeAiAlignmentModal;
 
     // Bind Global Handlers for Active Layers tab integration
     window.toggleCalibOverlayVisibility = toggleOverlayVisibility;
