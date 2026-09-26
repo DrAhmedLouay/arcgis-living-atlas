@@ -518,6 +518,9 @@ document.addEventListener('DOMContentLoaded', () => {
      * Formulated for Transverse Mercator (UTM Zone 38N / 37N Iraq)
      */
     function utmToLatLng(easting, northing, zone = 38, northernHemisphere = true) {
+      if (Math.abs(easting) > 900000) {
+        return mercatorToLatLng(easting, northing);
+      }
       const a = 6378137.0;
       const f = 1 / 298.257223563;
       const k0 = 0.9996;
@@ -540,7 +543,22 @@ document.addEventListener('DOMContentLoaded', () => {
       const D = x / (N1 * k0);
       const lat = fp - (N1 * Math.tan(fp) / R1) * ((D * D) / 2 - (5 + 3 * T1 + 10 * C1 - 4 * C1 * C1 - 9 * e1sq) * Math.pow(D, 4) / 24 + (61 + 90 * T1 + 298 * C1 + 45 * T1 * T1 - 252 * e1sq - 3 * C1 * C1) * Math.pow(D, 6) / 720);
       const lng = ((zone - 1) * 6 - 180 + 3) * Math.PI / 180 + (D - (1 + 2 * T1 + C1) * Math.pow(D, 3) / 6 + (5 - 2 * C1 + 28 * T1 - 3 * C1 * C1 + 8 * e1sq + 24 * T1 * T1) * Math.pow(D, 5) / 120) / Math.cos(fp);
-      return { lat: lat * 180 / Math.PI, lng: lng * 180 / Math.PI };
+      const latDeg = lat * 180 / Math.PI;
+      const lngDeg = lng * 180 / Math.PI;
+      if (!isFinite(latDeg) || !isFinite(lngDeg) || isNaN(latDeg) || isNaN(lngDeg)) {
+        return { lat: 33.3152, lng: 44.3661 };
+      }
+      return { lat: latDeg, lng: lngDeg };
+    }
+
+    function mercatorToLatLng(x, y) {
+      const lng = (x / 20037508.34) * 180;
+      let lat = (y / 20037508.34) * 180;
+      lat = (180 / Math.PI) * (2 * Math.atan(Math.exp((lat * Math.PI) / 180)) - Math.PI / 2);
+      if (!isFinite(lat) || !isFinite(lng) || isNaN(lat) || isNaN(lng)) {
+        return { lat: 33.3152, lng: 44.3661 };
+      }
+      return { lat: lat, lng: lng };
     }
 
     /**
@@ -940,51 +958,80 @@ document.addEventListener('DOMContentLoaded', () => {
           const rw = renderImage.getWidth();
           const rh = renderImage.getHeight();
 
-          // Strategy A: readRGB directly on renderImage (Proven fast and high quality)
-          try {
-            const rgb = await renderImage.readRGB();
-            if (rgb && rgb.length >= rw * rh * 3) {
-              const srcCanvas = document.createElement('canvas');
-              srcCanvas.width = rw;
-              srcCanvas.height = rh;
-              const ctx = srcCanvas.getContext('2d');
-              const imgData = ctx.createImageData(rw, rh);
-              for (let i = 0, j = 0; i < rgb.length && j < rw * rh * 4; i += 3, j += 4) {
-                imgData.data[j]     = rgb[i];
-                imgData.data[j + 1] = rgb[i + 1];
-                imgData.data[j + 2] = rgb[i + 2];
-                imgData.data[j + 3] = 255;
-              }
-              ctx.putImageData(imgData, 0, 0);
+          // Safe, multi-tiered target resolution: try 3840px (4K UHD), then 2560px, then 1600px
+          // Pass { width, height, resampleMethod } so GeoTIFF.js resamples streaming on-the-fly
+          // without ever allocating multi-gigabyte buffers in browser RAM for massive 30,000px rasters!
+          const targetDimensions = [3840, 2560, 1600];
 
-              const maxDim = 3840;
-              if (rw > maxDim || rh > maxDim) {
-                const sc = Math.min(maxDim / rw, maxDim / rh);
-                const tw = Math.round(rw * sc);
-                const th = Math.round(rh * sc);
-                const destCanvas = document.createElement('canvas');
-                destCanvas.width = tw;
-                destCanvas.height = th;
-                destCanvas.getContext('2d').drawImage(srcCanvas, 0, 0, tw, th);
-                pngDataUrl = destCanvas.toDataURL('image/jpeg', 0.94);
-              } else {
-                pngDataUrl = srcCanvas.toDataURL('image/jpeg', 0.94);
-              }
-            }
-          } catch (rgbE) {
-            console.warn('readRGB on renderImage failed, trying readRasters:', rgbE);
-          }
+          for (const targetMax of targetDimensions) {
+            if (pngDataUrl) break;
+            const sc = Math.min(1, targetMax / Math.max(rw, rh));
+            const tw = Math.max(32, Math.round(rw * sc));
+            const th = Math.max(32, Math.round(rh * sc));
 
-          // Strategy B: readRasters on renderImage (for multi-band / satellite rasters)
-          if (!pngDataUrl) {
+            // Strategy A: readRGB with downsampled dimensions
             try {
-              const rasters = await renderImage.readRasters();
-              if (rasters && rasters.length > 0 && rasters[0]) {
-                const srcCanvas = document.createElement('canvas');
-                srcCanvas.width = rw;
-                srcCanvas.height = rh;
-                const ctx = srcCanvas.getContext('2d');
-                const imgData = ctx.createImageData(rw, rh);
+              const rgb = await renderImage.readRGB({ width: tw, height: th, resampleMethod: 'bilinear' });
+              if (rgb && (rgb.length >= tw * th || (Array.isArray(rgb) && rgb.length > 0))) {
+                const canvas = document.createElement('canvas');
+                canvas.width = tw;
+                canvas.height = th;
+                const ctx = canvas.getContext('2d');
+                const imgData = ctx.createImageData(tw, th);
+
+                if (Array.isArray(rgb)) {
+                  const rB = rgb[0];
+                  const gB = rgb.length > 1 ? rgb[1] : rB;
+                  const bB = rgb.length > 2 ? rgb[2] : rB;
+                  const aB = rgb.length > 3 ? rgb[3] : null;
+                  for (let idx = 0, p = 0; idx < tw * th && idx < rB.length; idx++, p += 4) {
+                    imgData.data[p]     = rB[idx];
+                    imgData.data[p + 1] = gB[idx];
+                    imgData.data[p + 2] = bB[idx];
+                    imgData.data[p + 3] = aB ? aB[idx] : 255;
+                  }
+                } else {
+                  const total = rgb.length;
+                  const ch = Math.max(1, Math.round(total / (tw * th)));
+                  for (let idx = 0, p = 0; idx < tw * th; idx++, p += 4) {
+                    const i = idx * ch;
+                    if (ch >= 4) {
+                      imgData.data[p]     = rgb[i];
+                      imgData.data[p + 1] = rgb[i + 1];
+                      imgData.data[p + 2] = rgb[i + 2];
+                      imgData.data[p + 3] = rgb[i + 3];
+                    } else if (ch === 3) {
+                      imgData.data[p]     = rgb[i];
+                      imgData.data[p + 1] = rgb[i + 1];
+                      imgData.data[p + 2] = rgb[i + 2];
+                      imgData.data[p + 3] = 255;
+                    } else {
+                      imgData.data[p]     = rgb[i];
+                      imgData.data[p + 1] = rgb[i];
+                      imgData.data[p + 2] = rgb[i];
+                      imgData.data[p + 3] = ch > 1 ? rgb[i + 1] : 255;
+                    }
+                  }
+                }
+
+                ctx.putImageData(imgData, 0, 0);
+                pngDataUrl = canvas.toDataURL('image/jpeg', 0.94);
+                break;
+              }
+            } catch (rgbE) {
+              console.warn(`readRGB at ${tw}x${th} failed:`, rgbE);
+            }
+
+            // Strategy B: readRasters with downsampled dimensions
+            try {
+              const rasters = await renderImage.readRasters({ width: tw, height: th, resampleMethod: 'bilinear' });
+              if (rasters && rasters.length > 0 && rasters[0] && rasters[0].length === tw * th) {
+                const canvas = document.createElement('canvas');
+                canvas.width = tw;
+                canvas.height = th;
+                const ctx = canvas.getContext('2d');
+                const imgData = ctx.createImageData(tw, th);
+
                 const b0 = rasters[0];
                 const b1 = rasters.length > 1 ? rasters[1] : b0;
                 const b2 = rasters.length > 2 ? rasters[2] : b0;
@@ -994,11 +1041,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 const gStat = rasters.length > 1 ? getTiffBandStats(b1) : rStat;
                 const bStat = rasters.length > 2 ? getTiffBandStats(b2) : rStat;
 
-                for (let idx = 0, p = 0; idx < rw * rh && idx < b0.length; idx++, p += 4) {
+                for (let idx = 0, p = 0; idx < tw * th; idx++, p += 4) {
                   imgData.data[p]     = normalizeTiffVal(b0[idx], rStat);
                   imgData.data[p + 1] = normalizeTiffVal(b1[idx], gStat);
                   imgData.data[p + 2] = normalizeTiffVal(b2[idx], bStat);
                   imgData.data[p + 3] = bA ? Math.min(255, Math.max(0, Math.round(bA[idx]))) : 255;
+                }
+
+                ctx.putImageData(imgData, 0, 0);
+                pngDataUrl = canvas.toDataURL('image/jpeg', 0.94);
+                break;
+              }
+            } catch (rastE) {
+              console.warn(`readRasters at ${tw}x${th} failed:`, rastE);
+            }
+          }
+
+          // Strategy C: If image is <= 16MP and downsampling wasn't supported by codec, read native & scale
+          if (!pngDataUrl && rw * rh <= 16777216) {
+            try {
+              const rgb = await renderImage.readRGB();
+              if (rgb && rgb.length >= rw * rh) {
+                const srcCanvas = document.createElement('canvas');
+                srcCanvas.width = rw;
+                srcCanvas.height = rh;
+                const ctx = srcCanvas.getContext('2d');
+                const imgData = ctx.createImageData(rw, rh);
+                const total = rgb.length;
+                const ch = Math.max(1, Math.round(total / (rw * rh)));
+                for (let idx = 0, p = 0; idx < rw * rh; idx++, p += 4) {
+                  const i = idx * ch;
+                  imgData.data[p]     = rgb[i];
+                  imgData.data[p + 1] = ch >= 2 ? rgb[i + 1] : rgb[i];
+                  imgData.data[p + 2] = ch >= 3 ? rgb[i + 2] : rgb[i];
+                  imgData.data[p + 3] = ch >= 4 ? rgb[i + 3] : 255;
                 }
                 ctx.putImageData(imgData, 0, 0);
 
@@ -1016,44 +1092,8 @@ document.addEventListener('DOMContentLoaded', () => {
                   pngDataUrl = srcCanvas.toDataURL('image/jpeg', 0.94);
                 }
               }
-            } catch (rastE) {
-              console.warn('readRasters on renderImage failed:', rastE);
-            }
-          }
-
-          // Strategy C: If renderImage was an overview and failed, try mainImage directly
-          if (!pngDataUrl && renderImage !== mainImage && width * height <= 20000000) {
-            try {
-              const rgb = await mainImage.readRGB();
-              if (rgb && rgb.length >= width * height * 3) {
-                const srcCanvas = document.createElement('canvas');
-                srcCanvas.width = width;
-                srcCanvas.height = height;
-                const ctx = srcCanvas.getContext('2d');
-                const imgData = ctx.createImageData(width, height);
-                for (let i = 0, j = 0; i < rgb.length && j < width * height * 4; i += 3, j += 4) {
-                  imgData.data[j]     = rgb[i];
-                  imgData.data[j + 1] = rgb[i + 1];
-                  imgData.data[j + 2] = rgb[i + 2];
-                  imgData.data[j + 3] = 255;
-                }
-                ctx.putImageData(imgData, 0, 0);
-                const maxDim = 3840;
-                if (width > maxDim || height > maxDim) {
-                  const sc = Math.min(maxDim / width, maxDim / height);
-                  const tw = Math.round(width * sc);
-                  const th = Math.round(height * sc);
-                  const destCanvas = document.createElement('canvas');
-                  destCanvas.width = tw;
-                  destCanvas.height = th;
-                  destCanvas.getContext('2d').drawImage(srcCanvas, 0, 0, tw, th);
-                  pngDataUrl = destCanvas.toDataURL('image/jpeg', 0.94);
-                } else {
-                  pngDataUrl = srcCanvas.toDataURL('image/jpeg', 0.94);
-                }
-              }
-            } catch (mainE) {
-              console.warn('mainImage readRGB failed:', mainE);
+            } catch (nativeE) {
+              console.warn('Native readRGB failed:', nativeE);
             }
           }
         } catch (gtErr) {
@@ -1467,19 +1507,32 @@ document.addEventListener('DOMContentLoaded', () => {
     function computeBoundsFromMeta(meta) {
       let north, south, east, west;
 
-      // Case A: Coordinates are in UTM meters (easting: 100k - 900k, northing: 1M - 9M)
-      if (meta.originX && meta.originY && meta.originX > 10000 && meta.originY > 100000) {
-        const zone = meta.utmZone || 38;
-        const widthMeters = (meta.width || 8000) * Math.abs(meta.cellIncrementX || 0.5);
-        const heightMeters = (meta.height || 6000) * Math.abs(meta.cellIncrementY || 0.5);
+      // Case A: Coordinates are in UTM meters or Web Mercator
+      if (meta.originX && meta.originY && (Math.abs(meta.originX) > 10000 || Math.abs(meta.originY) > 100000)) {
+        if (Math.abs(meta.originX) > 900000 || (meta.projection && meta.projection.includes('3857'))) {
+          // Web Mercator (EPSG:3857)
+          const widthMeters = (meta.width || 8000) * Math.abs(meta.cellIncrementX || 1.0);
+          const heightMeters = (meta.height || 6000) * Math.abs(meta.cellIncrementY || 1.0);
+          const p1 = mercatorToLatLng(meta.originX, meta.originY);
+          const p2 = mercatorToLatLng(meta.originX + widthMeters, meta.originY - heightMeters);
+          north = Math.max(p1.lat, p2.lat);
+          south = Math.min(p1.lat, p2.lat);
+          west = Math.min(p1.lng, p2.lng);
+          east = Math.max(p1.lng, p2.lng);
+        } else {
+          // Standard UTM
+          const zone = meta.utmZone || 38;
+          const widthMeters = (meta.width || 8000) * Math.abs(meta.cellIncrementX || 0.5);
+          const heightMeters = (meta.height || 6000) * Math.abs(meta.cellIncrementY || 0.5);
 
-        const tl = utmToLatLng(meta.originX, meta.originY, zone, true);
-        const br = utmToLatLng(meta.originX + widthMeters, meta.originY - heightMeters, zone, true);
+          const tl = utmToLatLng(meta.originX, meta.originY, zone, true);
+          const br = utmToLatLng(meta.originX + widthMeters, meta.originY - heightMeters, zone, true);
 
-        north = Math.max(tl.lat, br.lat);
-        south = Math.min(tl.lat, br.lat);
-        west = Math.min(tl.lng, br.lng);
-        east = Math.max(tl.lng, br.lng);
+          north = Math.max(tl.lat, br.lat);
+          south = Math.min(tl.lat, br.lat);
+          west = Math.min(tl.lng, br.lng);
+          east = Math.max(tl.lng, br.lng);
+        }
       }
       // Case B: Coordinates are in Geographic Degrees (WGS84)
       else if (meta.originX !== null && meta.originY !== null && meta.originX >= -180 && meta.originX <= 180 && meta.originY >= -90 && meta.originY <= 90) {
@@ -1516,6 +1569,21 @@ document.addEventListener('DOMContentLoaded', () => {
         west = centerLng - halfLng;
         east = centerLng + halfLng;
         meta.detectionSource = '📍 تم وضع الصورة في منتصف العرض الحالي للمعايرة اليدوية / GCP';
+      }
+
+      if (!isFinite(north) || !isFinite(south) || !isFinite(east) || !isFinite(west) || isNaN(north) || isNaN(south) || Math.abs(north - south) < 0.000001) {
+        let centerLat = 33.3152, centerLng = 44.3661;
+        if (typeof map !== 'undefined' && map && typeof map.getCenter === 'function') {
+          const c = map.getCenter();
+          if (c && isFinite(c.lat) && isFinite(c.lng)) {
+            centerLat = c.lat;
+            centerLng = c.lng;
+          }
+        }
+        north = centerLat + 0.02;
+        south = centerLat - 0.02;
+        west = centerLng - 0.02;
+        east = centerLng + 0.02;
       }
 
       return L.latLngBounds([south, west], [north, east]);
@@ -2163,10 +2231,23 @@ document.addEventListener('DOMContentLoaded', () => {
         // Determine real image dimensions
         const dims = await new Promise((resolve) => {
           const img = new Image();
-          img.onload = () => resolve({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height });
-          img.onerror = () => resolve({ width: 2048, height: 2048 });
+          img.onload = () => resolve({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height, img: img });
+          img.onerror = () => resolve({ width: 2048, height: 2048, img: null });
           img.src = dataUrl;
         });
+
+        let displayDataUrl = dataUrl;
+        const maxDomDim = 3840;
+        if (dims.img && (dims.width > maxDomDim || dims.height > maxDomDim)) {
+          const sc = Math.min(maxDomDim / dims.width, maxDomDim / dims.height);
+          const dw = Math.round(dims.width * sc);
+          const dh = Math.round(dims.height * sc);
+          const c = document.createElement('canvas');
+          c.width = dw;
+          c.height = dh;
+          c.getContext('2d').drawImage(dims.img, 0, 0, dw, dh);
+          displayDataUrl = c.toDataURL('image/jpeg', 0.94);
+        }
 
         let geoMeta = parseECWHeader(new ArrayBuffer(32), imageFile.name, imageFile.size);
         geoMeta.width = dims.width;
@@ -2179,7 +2260,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const customBounds = computeBoundsFromMeta(geoMeta);
         displayECWMetadata(geoMeta, customBounds);
 
-        initCalibrationOverlay(dataUrl, imageFile.name, customBounds);
+        initCalibrationOverlay(displayDataUrl, imageFile.name, customBounds);
 
         // Prepare Gemini Vision / AI Reality Studio
         const parts = dataUrl.split(',');
@@ -2361,12 +2442,32 @@ document.addEventListener('DOMContentLoaded', () => {
             const imgReader = new FileReader();
             imgReader.onload = (evt) => {
               const dataUrl = evt.target.result;
-              overlay.setUrl(dataUrl);
-              const parts = dataUrl.split(',');
-              geminiSelectedImageBase64 = parts[1];
-              geminiSelectedImageMime = file.type || 'image/jpeg';
-              if (geminiPickImageBtnText) geminiPickImageBtnText.textContent = `✅ ${file.name} (صورة مقترنة)`;
-              showToast(`تم إقران الصورة المحولة (${file.name}) بنطاق الخارطة بنجاح!`, 'success');
+              const img = new Image();
+              img.onload = () => {
+                let displayUrl = dataUrl;
+                const maxDim = 3840;
+                if (img.naturalWidth > maxDim || img.naturalHeight > maxDim) {
+                  const sc = Math.min(maxDim / img.naturalWidth, maxDim / img.naturalHeight);
+                  const dw = Math.round(img.naturalWidth * sc);
+                  const dh = Math.round(img.naturalHeight * sc);
+                  const c = document.createElement('canvas');
+                  c.width = dw;
+                  c.height = dh;
+                  c.getContext('2d').drawImage(img, 0, 0, dw, dh);
+                  displayUrl = c.toDataURL('image/jpeg', 0.94);
+                }
+                overlay.setUrl(displayUrl);
+                const parts = displayUrl.split(',');
+                geminiSelectedImageBase64 = parts[1];
+                geminiSelectedImageMime = displayUrl.startsWith('data:image/jpeg') ? 'image/jpeg' : 'image/png';
+                if (geminiPickImageBtnText) geminiPickImageBtnText.textContent = `✅ ${file.name} (صورة مقترنة)`;
+                showToast(`تم إقران الصورة المحولة (${file.name}) بنطاق الخارطة بنجاح!`, 'success');
+              };
+              img.onerror = () => {
+                overlay.setUrl(dataUrl);
+                showToast(`تم إقران الصورة (${file.name}) بنطاق الخارطة`, 'success');
+              };
+              img.src = dataUrl;
             };
             imgReader.readAsDataURL(file);
           }
