@@ -866,104 +866,100 @@ document.addEventListener('DOMContentLoaded', () => {
             };
           }
 
-          // Select best resolution image to render (highest available up to 6144px for ultra clarity)
-          const MAX_UHD_DIM = 6144;
+          // Select best resolution image to render: if overviews exist, pick overview closest to 4K UHD
+          const targetUHD = 3840; // 4K UHD - crystal clear and memory safe (~40MB RAM)
           let renderImage = mainImage;
-          if (imageCount > 1 && (width > MAX_UHD_DIM || height > MAX_UHD_DIM)) {
+          if (imageCount > 1 && (width > targetUHD || height > targetUHD)) {
             let bestOverview = null;
-            let bestDim = 0;
+            let bestDiff = Infinity;
             for (let idx = 1; idx < imageCount; idx++) {
               try {
                 const ov = await tiff.getImage(idx);
                 const ow = ov.getWidth();
                 const oh = ov.getHeight();
                 const maxO = Math.max(ow, oh);
-                if (maxO <= MAX_UHD_DIM && maxO > bestDim) {
+                const diff = Math.abs(maxO - targetUHD);
+                if (diff < bestDiff) {
+                  bestDiff = diff;
                   bestOverview = ov;
-                  bestDim = maxO;
                 }
               } catch (ove) {}
             }
-            if (bestOverview && bestDim >= 1024) {
+            if (bestOverview) {
               renderImage = bestOverview;
             }
           }
 
-          const curW = renderImage.getWidth();
-          const curH = renderImage.getHeight();
+          const rw = renderImage.getWidth();
+          const rh = renderImage.getHeight();
 
-          // Read image data: try readRGB then readRasters
-          let rawRgb = null;
-          try {
-            rawRgb = await renderImage.readRGB();
-          } catch (rgbE) {
-            console.warn('readRGB failed, trying readRasters:', rgbE);
-          }
+          // Safe, multi-tiered target resolution: try 3840px (4K UHD), then 2560px (2.5K), then 1600px (HD)
+          // Crucial: always pass { width, height } to readRGB/readRasters so GeoTIFF.js resamples on-the-fly
+          // without ever allocating multi-gigabyte buffers in browser RAM for massive 30,000px rasters!
+          const targetDimensions = [3840, 2560, 1600];
 
-          if (!rawRgb) {
+          for (const targetMax of targetDimensions) {
+            const sc = Math.min(1, targetMax / Math.max(rw, rh));
+            const tw = Math.max(32, Math.round(rw * sc));
+            const th = Math.max(32, Math.round(rh * sc));
+
+            // Strategy A: readRGB with target dimensions
             try {
-              const rasters = await renderImage.readRasters();
-              if (rasters && rasters.length > 0) {
-                const totalPx = curW * curH;
-                rawRgb = new Uint8Array(totalPx * 3);
+              const rgb = await renderImage.readRGB({ width: tw, height: th });
+              if (rgb && rgb.length >= tw * th * 3) {
+                const canvas = document.createElement('canvas');
+                canvas.width = tw;
+                canvas.height = th;
+                const ctx = canvas.getContext('2d');
+                const imgData = ctx.createImageData(tw, th);
+                for (let i = 0, j = 0; i < rgb.length && j < tw * th * 4; i += 3, j += 4) {
+                  imgData.data[j]     = rgb[i];
+                  imgData.data[j + 1] = rgb[i + 1];
+                  imgData.data[j + 2] = rgb[i + 2];
+                  imgData.data[j + 3] = 255;
+                }
+                ctx.putImageData(imgData, 0, 0);
+                pngDataUrl = canvas.toDataURL('image/jpeg', 0.94);
+                break;
+              }
+            } catch (rgbE) {
+              console.warn(`readRGB at ${tw}x${th} failed, trying readRasters:`, rgbE);
+            }
+
+            // Strategy B: readRasters with target dimensions
+            try {
+              const rasters = await renderImage.readRasters({ width: tw, height: th });
+              if (rasters && rasters.length > 0 && rasters[0].length === tw * th) {
+                const canvas = document.createElement('canvas');
+                canvas.width = tw;
+                canvas.height = th;
+                const ctx = canvas.getContext('2d');
+                const imgData = ctx.createImageData(tw, th);
                 const b0 = rasters[0];
                 const b1 = rasters.length > 1 ? rasters[1] : b0;
                 const b2 = rasters.length > 2 ? rasters[2] : b0;
+                const bA = rasters.length > 3 ? rasters[3] : null;
 
-                // Handle 16-bit or float normalization with uniform sampling across entire image
+                // Robust dynamic range normalization for 16-bit / 12-bit satellite rasters
                 let maxVal = 255;
-                const sampleStep = Math.max(1, Math.floor(b0.length / 3000));
+                const sampleStep = Math.max(1, Math.floor(b0.length / 2000));
                 for (let k = 0; k < b0.length; k += sampleStep) {
                   if (b0[k] > maxVal) maxVal = b0[k];
                 }
                 const norm = 255 / (maxVal || 1);
 
-                for (let i = 0, p = 0; i < totalPx; i++, p += 3) {
-                  rawRgb[p]     = Math.min(255, Math.max(0, b0[i] * norm));
-                  rawRgb[p + 1] = Math.min(255, Math.max(0, b1[i] * norm));
-                  rawRgb[p + 2] = Math.min(255, Math.max(0, b2[i] * norm));
+                for (let idx = 0, p = 0; idx < tw * th; idx++, p += 4) {
+                  imgData.data[p]     = Math.min(255, Math.max(0, b0[idx] * norm));
+                  imgData.data[p + 1] = Math.min(255, Math.max(0, b1[idx] * norm));
+                  imgData.data[p + 2] = Math.min(255, Math.max(0, b2[idx] * norm));
+                  imgData.data[p + 3] = bA ? Math.min(255, Math.max(0, bA[idx])) : 255;
                 }
+                ctx.putImageData(imgData, 0, 0);
+                pngDataUrl = canvas.toDataURL('image/jpeg', 0.94);
+                break;
               }
             } catch (rastE) {
-              console.warn('readRasters error:', rastE);
-            }
-          }
-
-          // Build High-Definition Canvas (Ultra-Crisp 6K / 4K UHD support up to 6144px)
-          if (rawRgb && rawRgb.length >= curW * curH * 3) {
-            const maxDim = 6144; // Crystal clear 6K/4K UHD
-            let targetW = curW;
-            let targetH = curH;
-            if (targetW > maxDim || targetH > maxDim) {
-              const scale = Math.min(maxDim / targetW, maxDim / targetH);
-              targetW = Math.max(32, Math.round(targetW * scale));
-              targetH = Math.max(32, Math.round(targetH * scale));
-            }
-
-            const srcCanvas = document.createElement('canvas');
-            srcCanvas.width = curW;
-            srcCanvas.height = curH;
-            const srcCtx = srcCanvas.getContext('2d');
-            const imgData = srcCtx.createImageData(curW, curH);
-            for (let i = 0, j = 0; i < rawRgb.length; i += 3, j += 4) {
-              imgData.data[j]     = rawRgb[i];
-              imgData.data[j + 1] = rawRgb[i + 1];
-              imgData.data[j + 2] = rawRgb[i + 2];
-              imgData.data[j + 3] = 255;
-            }
-            srcCtx.putImageData(imgData, 0, 0);
-
-            if (targetW === curW && targetH === curH) {
-              pngDataUrl = srcCanvas.toDataURL('image/jpeg', 0.96);
-            } else {
-              const destCanvas = document.createElement('canvas');
-              destCanvas.width = targetW;
-              destCanvas.height = targetH;
-              const destCtx = destCanvas.getContext('2d');
-              destCtx.imageSmoothingEnabled = true;
-              destCtx.imageSmoothingQuality = 'high';
-              destCtx.drawImage(srcCanvas, 0, 0, targetW, targetH);
-              pngDataUrl = destCanvas.toDataURL('image/jpeg', 0.96);
+              console.warn(`readRasters at ${tw}x${th} failed:`, rastE);
             }
           }
         } catch (gtErr) {
