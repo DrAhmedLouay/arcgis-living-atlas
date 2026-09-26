@@ -518,6 +518,128 @@
 
           <!-- Step 2: Geometric Calibration (Nudge, Scale, Rotate) -->
           <div id="calibrationControlsContainer" class="hidden space-y-3">
+
+            <!-- =========================================================================
+                 AI Spatial Alignment & Landmark Matching Studio
+                 ========================================================================= -->
+            <div class="bg-gradient-to-br from-indigo-950/70 via-slate-900 to-slate-900 border border-indigo-500/50 rounded-xl p-3.5 space-y-3 shadow-lg">
+              <div class="flex items-center justify-between border-b border-indigo-900/60 pb-2">
+                <div class="flex items-center gap-2">
+                  <span class="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 flex items-center justify-center text-xs shadow-sm">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                  </span>
+                  <div>
+                    <h5 class="text-xs font-bold text-indigo-200">مساعد الذكاء الاصطناعي للمعايرة والمطابقة</h5>
+                    <div class="text-[10px] text-slate-400 font-mono">AI Spatial & Landmark Alignment</div>
+                  </div>
+                </div>
+                <span class="text-[9px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-bold px-2 py-0.5 rounded-full font-mono">AI Smart Mode</span>
+              </div>
+
+              <!-- Mode 1: AI Metadata & Coords Paste Parser -->
+              <div class="space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-semibold text-slate-300 flex items-center gap-1">
+                    <i class="fa-solid fa-brain text-indigo-400 text-[10px]"></i>
+                    <span>1. كشف وتحليل الإحداثيات الذكي (AI Coordinate Detector):</span>
+                  </span>
+                  <button type="button" id="aiAutoScanHeaderBtn" class="text-[10px] text-indigo-300 hover:text-white bg-indigo-900/40 hover:bg-indigo-900/70 border border-indigo-700/60 px-2 py-0.5 rounded-lg flex items-center gap-1 transition-all" title="إعادة المسح العميق لترويسة الملف">
+                    <i class="fa-solid fa-bolt text-[9px] text-amber-400"></i>
+                    <span>مسح عميق للملف</span>
+                  </button>
+                </div>
+
+                <div class="relative">
+                  <textarea 
+                    id="aiCoordsTextInput" 
+                    rows="2" 
+                    placeholder="الصق نص ميتاداتا من ArcGIS أو QGIS أو ترويسة GDAL أو أرقام إحداثيات (UTM / WGS84) هنا..."
+                    class="w-full bg-slate-950/80 border border-slate-700/80 rounded-lg p-2 text-[11px] font-mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 resize-none transition-colors"
+                  ></textarea>
+                </div>
+                
+                <div class="flex items-center justify-between gap-2">
+                  <button type="button" id="aiParseCoordsBtn" class="flex-1 py-1.5 px-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow">
+                    <i class="fa-solid fa-microchip text-[10px]"></i>
+                    <span>تحليل وإسقاط فوري بالإحداثيات المكتشفة</span>
+                  </button>
+                  <button type="button" id="aiClearCoordsBtn" class="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 rounded-lg text-xs transition-colors" title="مسح النص">
+                    <i class="fa-solid fa-eraser text-[10px]"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Mode 2: Real-World Landscape & Landmark Snapping -->
+              <div class="space-y-1.5 pt-2 border-t border-slate-800">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-semibold text-slate-300 flex items-center gap-1">
+                    <i class="fa-solid fa-mountain-sun text-emerald-400 text-[10px]"></i>
+                    <span>2. مطابقة المعالم البصرية في الواقع (Landmark Snapping):</span>
+                  </span>
+                  <span class="text-[10px] text-slate-500">13 بصمة جغرافية</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <select id="aiLandmarkSelect" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                    <option value="">-- اختر المعلم الجغرافي المقابل في العراق --</option>
+                    <optgroup label="📍 محافظة بغداد (دجلة والجسور والمطار)">
+                      <option value="baghdad-kadhimya">بغداد: انحناء دجلة والكاظمية / الأعظمية</option>
+                      <option value="baghdad-center">بغداد: قلب العاصمة (التحرير، دجلة، الجسر المعلق)</option>
+                      <option value="baghdad-airport">بغداد: مطار بغداد الدولي (المدرجات والصالات)</option>
+                    </optgroup>
+                    <optgroup label="📍 محافظة البصرة (شط العرب والموانئ)">
+                      <option value="basra-port">البصرة: شط العرب وميناء المعقل والتنومة</option>
+                      <option value="basra-stadium">البصرة: شط البصرة وقناة المصب والمدينة الرياضية</option>
+                    </optgroup>
+                    <optgroup label="📍 محافظة أربيل (القلعة والمحاور)">
+                      <option value="erbil-citadel">أربيل: قلعة أربيل ومحاور الشوارع الحلقية (30م - 60م)</option>
+                    </optgroup>
+                    <optgroup label="📍 محافظة نينوى (الموصل ودجلة)">
+                      <option value="mosul-center">الموصل: الجسور الخمسة ودجلة والمدينة القديمة</option>
+                      <option value="mosul-dam">نينوى: بحيرة وجسم سد الموصل</option>
+                    </optgroup>
+                    <optgroup label="📍 محافظات الفرات الأوسط والأنبار">
+                      <option value="habbaniyah-lake">الأنبار: بحيرة الحبانية وسد ومجرى الفرات</option>
+                      <option value="razzaza-lake">كربلاء: بحيرة الرزازة وبادية الأخيضر</option>
+                      <option value="samarra-dam">صلاح الدين: سد سامراء وناظم الثرثار والملوية</option>
+                    </optgroup>
+                    <optgroup label="📍 الجنوب وكردستان">
+                      <option value="chibayish-marshes">ذي قار: أهوار الجبايش وملتقى دجلة والفرات</option>
+                      <option value="dukan-lake">السليمانية: بحيرة وخزان دوكان الجبلي</option>
+                    </optgroup>
+                  </select>
+                  <button type="button" id="aiSnapLandmarkBtn" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition-all shadow flex items-center gap-1">
+                    <i class="fa-solid fa-bullseye text-[10px]"></i>
+                    <span>مطابقة</span>
+                  </button>
+                </div>
+                <p class="text-[10px] text-slate-400 leading-tight">ينقل الخارطة المستوردة ويضبط مقياسها فوراً فوق المعلم الجغرافي المقابل في الواقع بدقة عالية مع تفعيل وميض المقارنة.</p>
+              </div>
+
+              <!-- Mode 3: 2-Point Ground Control Points (GCP) Affine Calibration -->
+              <div class="space-y-1.5 pt-2 border-t border-slate-800">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-semibold text-slate-300 flex items-center gap-1">
+                    <i class="fa-solid fa-crosshairs text-amber-400 text-[10px]"></i>
+                    <span>3. المعايرة بنقاط الضبط الأرضية (2-Point GCP Matching):</span>
+                  </span>
+                  <span id="gcpStatusBadge" class="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-mono">غير نشط</span>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                  <button type="button" id="startGcpMatchBtn" class="flex-1 py-1.5 px-2.5 rounded-lg bg-amber-600/30 hover:bg-amber-600/50 text-amber-200 border border-amber-500/40 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all">
+                    <i class="fa-solid fa-location-dot text-[10px] text-amber-400"></i>
+                    <span id="gcpBtnLabel">بدء تحديد نقطتي الضبط (GCP)</span>
+                  </button>
+                  <button type="button" id="cancelGcpMatchBtn" class="hidden py-1.5 px-2 bg-slate-800 hover:bg-rose-900/50 text-rose-300 border border-slate-700 rounded-lg text-xs transition-colors" title="إلغاء">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                  </button>
+                </div>
+                <div id="gcpInstructionsText" class="text-[10px] text-slate-300 leading-relaxed hidden bg-slate-950/80 p-2.5 rounded-lg border border-amber-500/40 space-y-1">
+                  <!-- Dynamic instructions for user -->
+                </div>
+              </div>
+            </div>
+
             <!-- Visibility & Comparison Toolbar -->
             <div class="bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border border-slate-700/90 rounded-xl p-3 space-y-2.5 shadow-md">
               <div class="flex items-center justify-between">

@@ -301,6 +301,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const originalMapStatusBadge = document.getElementById('originalMapStatusBadge');
     const blinkCompareBtn = document.getElementById('blinkCompareBtn');
 
+    // AI Spatial Alignment & Landmark Matching Studio Elements
+    const aiAutoScanHeaderBtn = document.getElementById('aiAutoScanHeaderBtn');
+    const aiCoordsTextInput = document.getElementById('aiCoordsTextInput');
+    const aiParseCoordsBtn = document.getElementById('aiParseCoordsBtn');
+    const aiClearCoordsBtn = document.getElementById('aiClearCoordsBtn');
+    const aiLandmarkSelect = document.getElementById('aiLandmarkSelect');
+    const aiSnapLandmarkBtn = document.getElementById('aiSnapLandmarkBtn');
+    const startGcpMatchBtn = document.getElementById('startGcpMatchBtn');
+    const cancelGcpMatchBtn = document.getElementById('cancelGcpMatchBtn');
+    const gcpStatusBadge = document.getElementById('gcpStatusBadge');
+    const gcpBtnLabel = document.getElementById('gcpBtnLabel');
+    const gcpInstructionsText = document.getElementById('gcpInstructionsText');
+
     // Calibration Internal State
     let overlay = null;
     let bounds = null; // L.latLngBounds
@@ -313,6 +326,90 @@ document.addEventListener('DOMContentLoaded', () => {
     let handleMarkers = [];
     let boundaryBox = null;
     let currentEcwMeta = null;
+
+    let lastEcwRawBuffer = null;
+    let lastEcwRawFile = null;
+
+    // 2-Point GCP Affine Calibration State
+    let isGcpMatchingActive = false;
+    let gcpStep = 0; // 0: inactive, 1: imgPt1, 2: basePt1, 3: imgPt2, 4: basePt2
+    let gcpPoints = {
+      imgPt1: null,
+      basePt1: null,
+      imgPt2: null,
+      basePt2: null
+    };
+    let gcpMarkers = [];
+    let gcpLines = [];
+
+    // Real-World Iraqi Visual Landmark Bounding Extents
+    const IRAQI_LANDMARKS = {
+      'baghdad-kadhimya': {
+        name: 'انحناء دجلة والكاظمية / الأعظمية',
+        bounds: L.latLngBounds([33.3450, 44.2950], [33.4250, 44.3850]),
+        center: [33.3850, 44.3400]
+      },
+      'baghdad-center': {
+        name: 'قلب العاصمة بغداد (التحرير والكرادة ودجلة)',
+        bounds: L.latLngBounds([33.2850, 44.3550], [33.3650, 44.4550]),
+        center: [33.3250, 44.4050]
+      },
+      'baghdad-airport': {
+        name: 'مطار بغداد الدولي والمدرجات',
+        bounds: L.latLngBounds([33.2200, 44.1800], [33.2940, 44.2880]),
+        center: [33.2570, 44.2340]
+      },
+      'basra-port': {
+        name: 'البصرة: شط العرب وميناء المعقل والتنومة',
+        bounds: L.latLngBounds([30.4900, 47.7500], [30.5900, 47.8700]),
+        center: [30.5400, 47.8100]
+      },
+      'basra-stadium': {
+        name: 'البصرة: شط البصرة وقناة المصب والمدينة الرياضية',
+        bounds: L.latLngBounds([30.3950, 47.7300], [30.4750, 47.8260]),
+        center: [30.4350, 47.7780]
+      },
+      'erbil-citadel': {
+        name: 'أربيل: قلعة أربيل ومحاور الشوارع الحلقية',
+        bounds: L.latLngBounds([36.1600, 43.9700], [36.2224, 44.0484]),
+        center: [36.1912, 44.0092]
+      },
+      'mosul-center': {
+        name: 'الموصل: الجسور الخمسة ودجلة والمدينة القديمة',
+        bounds: L.latLngBounds([36.3000, 43.0900], [36.3800, 43.1900]),
+        center: [36.3400, 43.1400]
+      },
+      'mosul-dam': {
+        name: 'نينوى: بحيرة وجسم سد الموصل',
+        bounds: L.latLngBounds([36.5700, 42.7500], [36.6900, 42.9000]),
+        center: [36.6300, 42.8250]
+      },
+      'habbaniyah-lake': {
+        name: 'الأنبار: بحيرة الحبانية وسد ومجرى الفرات',
+        bounds: L.latLngBounds([33.2200, 43.4700], [33.3600, 43.6700]),
+        center: [33.2900, 43.5700]
+      },
+      'razzaza-lake': {
+        name: 'كربلاء: بحيرة الرزازة وبادية الأخيضر',
+        bounds: L.latLngBounds([32.5500, 43.6500], [32.8100, 43.9300]),
+        center: [32.6800, 43.7900]
+      },
+      'samarra-dam': {
+        name: 'صلاح الدين: سد سامراء وناظم الثرثار والملوية',
+        bounds: L.latLngBounds([34.1600, 43.7500], [34.2700, 43.8800]),
+        center: [34.2150, 43.8150]
+      },
+      'chibayish-marshes': {
+        name: 'ذي قار: أهوار الجبايش وملتقى دجلة والفرات',
+        bounds: L.latLngBounds([30.9000, 46.9100], [31.0400, 47.1100]),
+        center: [30.9700, 47.0100]
+      },
+      'dukan-lake': {
+        name: 'السليمانية: بحيرة وخزان دوكان الجبلي',
+        bounds: L.latLngBounds([35.8600, 44.8500], [36.0400, 45.0700]),
+        center: [35.9500, 44.9600]
+      }
+    };
 
     let isOverlayVisible = true;
     let isBlinking = false;
@@ -356,7 +453,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Parse ECW Binary Header (First 128KB)
+     * Parse ECW Binary Header (First 128KB) with AI Deep Scanner & Heuristics
      */
     function parseECWHeader(buffer, fileName, fileSize = 0) {
       const view = new DataView(buffer);
@@ -377,7 +474,8 @@ document.addEventListener('DOMContentLoaded', () => {
         originX: 441200,
         originY: 3689400,
         utmZone: 38,
-        isNorthern: true
+        isNorthern: true,
+        detectionSource: 'افتراضي (بغداد - دجلة)'
       };
 
       if (buffer.byteLength > 20) {
@@ -418,6 +516,26 @@ document.addEventListener('DOMContentLoaded', () => {
         console.warn('Text scan error:', err);
       }
 
+      // 1. Text Regex Detection (Sidecar / Embedded ERS)
+      let foundTextCoords = false;
+      const oxMatch = text.match(/(?:OriginX|Eastings)\s*[:=]\s*([+\-0-9.eE]+)/i);
+      if (oxMatch) {
+        meta.originX = parseFloat(oxMatch[1]);
+        foundTextCoords = true;
+      }
+
+      const oyMatch = text.match(/(?:OriginY|Northings)\s*[:=]\s*([+\-0-9.eE]+)/i);
+      if (oyMatch) {
+        meta.originY = parseFloat(oyMatch[1]);
+        foundTextCoords = true;
+      }
+
+      const cixMatch = text.match(/(?:CellIncrementX|Xdimension)\s*[:=]\s*([+\-0-9.eE]+)/i);
+      if (cixMatch) meta.cellIncrementX = parseFloat(cixMatch[1]);
+
+      const ciyMatch = text.match(/(?:CellIncrementY|Ydimension)\s*[:=]\s*([+\-0-9.eE]+)/i);
+      if (ciyMatch) meta.cellIncrementY = parseFloat(ciyMatch[1]);
+
       const nutmMatch = text.match(/NUTM(\d{1,2})/i);
       if (nutmMatch) {
         meta.utmZone = parseInt(nutmMatch[1], 10);
@@ -445,17 +563,122 @@ document.addEventListener('DOMContentLoaded', () => {
       const datumMatch = text.match(/DATUM\s*[:=]\s*["']?([A-Za-z0-9_\-]+)/i);
       if (datumMatch) meta.datum = datumMatch[1].toUpperCase();
 
-      const oxMatch = text.match(/(?:OriginX|Eastings)\s*[:=]\s*([+\-0-9.eE]+)/i);
-      if (oxMatch) meta.originX = parseFloat(oxMatch[1]);
+      if (foundTextCoords) {
+        meta.detectionSource = 'ميتاداتا نصية مدمجة (ASCII Header)';
+      }
 
-      const oyMatch = text.match(/(?:OriginY|Northings)\s*[:=]\s*([+\-0-9.eE]+)/i);
-      if (oyMatch) meta.originY = parseFloat(oyMatch[1]);
+      // 2. AI Deep Binary IEEE 754 Float64 Scanner
+      // Raw ECW files store georeference coordinates as 64-bit IEEE double floats, NOT ASCII strings!
+      if (!foundTextCoords && buffer.byteLength > 64) {
+        let foundBinaryCoords = false;
+        const scanLimit = Math.min(buffer.byteLength - 8, 32768);
 
-      const cixMatch = text.match(/(?:CellIncrementX|Xdimension)\s*[:=]\s*([+\-0-9.eE]+)/i);
-      if (cixMatch) meta.cellIncrementX = parseFloat(cixMatch[1]);
+        for (const isLE of [false, true]) {
+          if (foundBinaryCoords) break;
+          for (let offset = 16; offset < scanLimit; offset += 4) {
+            try {
+              const val1 = view.getFloat64(offset, isLE);
+              if (!isFinite(val1)) continue;
 
-      const ciyMatch = text.match(/(?:CellIncrementY|Ydimension)\s*[:=]\s*([+\-0-9.eE]+)/i);
-      if (ciyMatch) meta.cellIncrementY = parseFloat(ciyMatch[1]);
+              // Check if val1 is Easting (UTM 150,000 to 850,000 for Iraq)
+              if (val1 >= 150000 && val1 <= 850000) {
+                for (let step = 8; step <= 48; step += 8) {
+                  if (offset + step + 8 <= buffer.byteLength) {
+                    const val2 = view.getFloat64(offset + step, isLE);
+                    if (isFinite(val2) && val2 >= 3200000 && val2 <= 4300000) {
+                      meta.originX = val1;
+                      meta.originY = val2;
+                      meta.utmZone = (val1 > 500000 && fileName && fileName.toLowerCase().includes('37')) ? 37 : 38;
+                      meta.projection = `UTM Zone ${meta.utmZone}N (EPSG:${32600 + meta.utmZone})`;
+                      meta.detectionSource = 'مسح ثنائي عميق بالذكاء الاصطناعي (IEEE 754 UTM)';
+                      foundBinaryCoords = true;
+                      break;
+                    }
+                  }
+                }
+              }
+              // Check if val1 is Northing (UTM 3.2M to 4.3M) and val2 is Easting
+              else if (val1 >= 3200000 && val1 <= 4300000) {
+                for (let step = 8; step <= 48; step += 8) {
+                  if (offset + step + 8 <= buffer.byteLength) {
+                    const val2 = view.getFloat64(offset + step, isLE);
+                    if (isFinite(val2) && val2 >= 150000 && val2 <= 850000) {
+                      meta.originY = val1;
+                      meta.originX = val2;
+                      meta.utmZone = 38;
+                      meta.projection = `UTM Zone 38N (EPSG:32638)`;
+                      meta.detectionSource = 'مسح ثنائي عميق بالذكاء الاصطناعي (IEEE 754 UTM)';
+                      foundBinaryCoords = true;
+                      break;
+                    }
+                  }
+                }
+              }
+              // Check if val1, val2 are WGS84 Geodetic coordinates (Lat: 28.5 to 38.5, Lng: 38.0 to 49.5)
+              else if (val1 >= 38.0 && val1 <= 49.5) {
+                for (let step = 8; step <= 48; step += 8) {
+                  if (offset + step + 8 <= buffer.byteLength) {
+                    const val2 = view.getFloat64(offset + step, isLE);
+                    if (isFinite(val2) && val2 >= 28.5 && val2 <= 38.5) {
+                      meta.originX = val1; // Longitude
+                      meta.originY = val2; // Latitude
+                      meta.projection = 'WGS84 Geodetic (EPSG:4326)';
+                      meta.cellSizeUnits = 'DEGREES';
+                      meta.detectionSource = 'مسح ثنائي عميق بالذكاء الاصطناعي (IEEE 754 WGS84)';
+                      foundBinaryCoords = true;
+                      break;
+                    }
+                  }
+                }
+              }
+              if (foundBinaryCoords) break;
+            } catch (err) {
+              // Ignore offset boundary errors
+            }
+          }
+        }
+      }
+
+      // 3. AI Heuristic Analysis from Filename
+      if (meta.detectionSource.includes('افتراضي') && fileName) {
+        const lowerName = fileName.toLowerCase();
+        const coordNameMatch = lowerName.match(/(?:e|east)?([1-8]\d{5})[_\- ]+(?:n|north)?([34]\d{6})/i);
+        if (coordNameMatch) {
+          meta.originX = parseFloat(coordNameMatch[1]);
+          meta.originY = parseFloat(coordNameMatch[2]);
+          meta.detectionSource = 'كشف ذكي من إحداثيات اسم الملف (UTM)';
+        } else if (lowerName.includes('basra') || lowerName.includes('shatt') || lowerName.includes('fao') || lowerName.includes('zubair')) {
+          meta.originX = 765400; meta.originY = 3375800; meta.utmZone = 38;
+          meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (البصرة)';
+        } else if (lowerName.includes('erbil') || lowerName.includes('arbil') || lowerName.includes('hawler')) {
+          meta.originX = 408500; meta.originY = 4004200; meta.utmZone = 38;
+          meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (أربيل)';
+        } else if (lowerName.includes('mosul') || lowerName.includes('nineveh') || lowerName.includes('ninawa')) {
+          meta.originX = 333000; meta.originY = 4023000; meta.utmZone = 38;
+          meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (الموصل)';
+        } else if (lowerName.includes('sulayman') || lowerName.includes('slemani') || lowerName.includes('dukan')) {
+          meta.originX = 496000; meta.originY = 3938000; meta.utmZone = 38;
+          meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (السليمانية)';
+        } else if (lowerName.includes('karbala') || lowerName.includes('razzaza')) {
+          meta.originX = 387000; meta.originY = 3612000; meta.utmZone = 38;
+          meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (كربلاء)';
+        } else if (lowerName.includes('najaf') || lowerName.includes('kufa')) {
+          meta.originX = 437000; meta.originY = 3543000; meta.utmZone = 38;
+          meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (النجف)';
+        } else if (lowerName.includes('anbar') || lowerName.includes('habbaniyah') || lowerName.includes('ramadi') || lowerName.includes('fallujah')) {
+          meta.originX = 366000; meta.originY = 3698000; meta.utmZone = 38;
+          meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (الأنبار)';
+        } else if (lowerName.includes('samarra') || lowerName.includes('salah')) {
+          meta.originX = 391000; meta.originY = 3786000; meta.utmZone = 38;
+          meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (سامراء)';
+        } else if (lowerName.includes('chibayish') || lowerName.includes('nasiriyah') || lowerName.includes('marsh')) {
+          meta.originX = 693000; meta.originY = 3428000; meta.utmZone = 38;
+          meta.detectionSource = 'مطابقة ذكية لاسم المنطقة (الأهوار والناصرية)';
+        } else if (lowerName.includes('kirkuk')) {
+          meta.originX = 444000; meta.originY = 3924000; meta.utmZone = 38;
+          meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (كركوك)';
+        }
+      }
 
       return meta;
     }
@@ -496,6 +719,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const datumMatch = text.match(/Datum\s*=\s*["']?([A-Za-z0-9_\-]+)["']?/i);
       if (datumMatch) meta.datum = datumMatch[1].toUpperCase();
 
+      meta.detectionSource = 'ملف إسناد جانبي (.ERS / .EWW Sidecar)';
       return meta;
     }
 
@@ -550,7 +774,7 @@ document.addEventListener('DOMContentLoaded', () => {
       ecwMetadataBox.classList.remove('hidden');
       if (ecwFileNameLabel) ecwFileNameLabel.textContent = meta.fileName || 'ملف ECW';
       if (ecwMetaBadge) {
-        ecwMetaBadge.textContent = meta.isECW ? `ECW v${meta.version}` : 'Raster GIS';
+        ecwMetaBadge.textContent = meta.detectionSource ? `${meta.isECW ? 'ECW' : 'Raster'}: ${meta.detectionSource}` : (meta.isECW ? `ECW v${meta.version}` : 'Raster GIS');
       }
       if (ecwMetaDimensions) {
         ecwMetaDimensions.textContent = `${meta.width.toLocaleString('ar-IQ')} × ${meta.height.toLocaleString('ar-IQ')} px`;
@@ -578,6 +802,424 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * AI Text & Metadata Parser
+     * Extracts coordinates from pasted text (GDAL info, ArcGIS extents, UTM numbers, BBOX, Lat/Lng)
+     */
+    function parseAITextGeoreference(text) {
+      if (!text || typeof text !== 'string') return null;
+
+      const cleanText = text.trim();
+      let newBounds = null;
+      let detectedMethod = '';
+
+      // Pattern 1: GDAL info Upper Left & Lower Right
+      const gdalUlMatch = cleanText.match(/Upper\s+Left\s*\(\s*([+\-0-9.]+)\s*,\s*([+\-0-9.]+)\s*\)/i);
+      const gdalLrMatch = cleanText.match(/Lower\s+Right\s*\(\s*([+\-0-9.]+)\s*,\s*([+\-0-9.]+)\s*\)/i);
+      if (gdalUlMatch && gdalLrMatch) {
+        const x1 = parseFloat(gdalUlMatch[1]);
+        const y1 = parseFloat(gdalUlMatch[2]);
+        const x2 = parseFloat(gdalLrMatch[1]);
+        const y2 = parseFloat(gdalLrMatch[2]);
+        if (x1 > 10000 && y1 > 100000) {
+          const pt1 = utmToLatLng(x1, y1, 38, true);
+          const pt2 = utmToLatLng(x2, y2, 38, true);
+          newBounds = L.latLngBounds(
+            [Math.min(pt1.lat, pt2.lat), Math.min(pt1.lng, pt2.lng)],
+            [Math.max(pt1.lat, pt2.lat), Math.max(pt1.lng, pt2.lng)]
+          );
+          detectedMethod = 'GDAL info (Upper Left / Lower Right UTM)';
+        } else {
+          newBounds = L.latLngBounds(
+            [Math.min(y1, y2), Math.min(x1, x2)],
+            [Math.max(y1, y2), Math.max(x1, x2)]
+          );
+          detectedMethod = 'GDAL info (WGS84 Degrees)';
+        }
+      }
+
+      // Pattern 2: BBOX / North-South-East-West
+      if (!newBounds) {
+        const nMatch = cleanText.match(/North(?:ing)?\s*[:=]\s*([+\-0-9.]+)/i);
+        const sMatch = cleanText.match(/South(?:ing)?\s*[:=]\s*([+\-0-9.]+)/i);
+        const eMatch = cleanText.match(/East(?:ing)?\s*[:=]\s*([+\-0-9.]+)/i);
+        const wMatch = cleanText.match(/West(?:ing)?\s*[:=]\s*([+\-0-9.]+)/i);
+        if (nMatch && sMatch && eMatch && wMatch) {
+          const n = parseFloat(nMatch[1]);
+          const s = parseFloat(sMatch[1]);
+          const e = parseFloat(eMatch[1]);
+          const w = parseFloat(wMatch[1]);
+          if (n > 100000 && e > 10000) {
+            const tl = utmToLatLng(w, n, 38, true);
+            const br = utmToLatLng(e, s, 38, true);
+            newBounds = L.latLngBounds(
+              [Math.min(tl.lat, br.lat), Math.min(tl.lng, br.lng)],
+              [Math.max(tl.lat, br.lat), Math.max(tl.lng, br.lng)]
+            );
+            detectedMethod = 'Bounding Box (UTM Extents)';
+          } else {
+            newBounds = L.latLngBounds([Math.min(s, n), Math.min(w, e)], [Math.max(s, n), Math.max(w, e)]);
+            detectedMethod = 'Bounding Box (Geographic Lat/Lng)';
+          }
+        }
+      }
+
+      // Pattern 3: Standard BBOX string: minX,minY,maxX,maxY or [minX, minY, maxX, maxY]
+      if (!newBounds) {
+        const bboxMatch = cleanText.match(/(?:bbox\s*[:=]?\s*\[?\s*|\b)([+\-0-9.]+)\s*,\s*([+\-0-9.]+)\s*,\s*([+\-0-9.]+)\s*,\s*([+\-0-9.]+)/i);
+        if (bboxMatch) {
+          const v1 = parseFloat(bboxMatch[1]);
+          const v2 = parseFloat(bboxMatch[2]);
+          const v3 = parseFloat(bboxMatch[3]);
+          const v4 = parseFloat(bboxMatch[4]);
+          if (v1 > 10000 || v2 > 100000) {
+            const tl = utmToLatLng(Math.min(v1, v3), Math.max(v2, v4), 38, true);
+            const br = utmToLatLng(Math.max(v1, v3), Math.min(v2, v4), 38, true);
+            newBounds = L.latLngBounds(
+              [Math.min(tl.lat, br.lat), Math.min(tl.lng, br.lng)],
+              [Math.max(tl.lat, br.lat), Math.max(tl.lng, br.lng)]
+            );
+            detectedMethod = 'BBOX Array (UTM Metric)';
+          } else {
+            let latMin = Math.min(v2, v4);
+            let latMax = Math.max(v2, v4);
+            let lngMin = Math.min(v1, v3);
+            let lngMax = Math.max(v1, v3);
+            if (v1 >= 28 && v1 <= 38.5 && v2 >= 38 && v2 <= 49.5) {
+              latMin = Math.min(v1, v3);
+              latMax = Math.max(v1, v3);
+              lngMin = Math.min(v2, v4);
+              lngMax = Math.max(v2, v4);
+            }
+            newBounds = L.latLngBounds([latMin, lngMin], [latMax, lngMax]);
+            detectedMethod = 'BBOX Coordinate Tuple';
+          }
+        }
+      }
+
+      // Pattern 4: Single Pair of Coordinates (Center or Origin)
+      if (!newBounds) {
+        const utmPairMatch = cleanText.match(/([1-8]\d{5}(?:\.\d+)?)\s*[,;\s\t]+\s*([34]\d{6}(?:\.\d+)?)/);
+        if (utmPairMatch) {
+          const easting = parseFloat(utmPairMatch[1]);
+          const northing = parseFloat(utmPairMatch[2]);
+          const centerPt = utmToLatLng(easting, northing, 38, true);
+          const delta = 0.04;
+          newBounds = L.latLngBounds([centerPt.lat - delta, centerPt.lng - delta], [centerPt.lat + delta, centerPt.lng + delta]);
+          detectedMethod = `UTM Coordinate Pair (${easting}, ${northing})`;
+        } else {
+          const latLngMatch = cleanText.match(/([23]\d\.\d{3,})\s*(?:°|[Nn])?\s*[,;\s\t]+\s*([34]\d\.\d{3,})\s*(?:°|[Ee])?/);
+          if (latLngMatch) {
+            const lat = parseFloat(latLngMatch[1]);
+            const lng = parseFloat(latLngMatch[2]);
+            const delta = 0.04;
+            newBounds = L.latLngBounds([lat - delta, lng - delta], [lat + delta, lng + delta]);
+            detectedMethod = `WGS84 Lat/Lng Pair (${lat.toFixed(4)}°, ${lng.toFixed(4)}°)`;
+          }
+        }
+      }
+
+      if (newBounds) {
+        return { bounds: newBounds, method: detectedMethod };
+      }
+      return null;
+    }
+
+    /**
+     * Apply new LatLngBounds to the current calibrated overlay
+     */
+    function applyNewOverlayBounds(newBounds) {
+      if (!overlay || !newBounds) return;
+      bounds = newBounds;
+      baseCenter = bounds.getCenter();
+      baseSpanLat = bounds.getNorth() - bounds.getSouth();
+      baseSpanLng = bounds.getEast() - bounds.getWest();
+
+      updateOverlayGeometry();
+      createHandles();
+      updateReadout();
+      map.flyToBounds(bounds, { padding: [50, 50], duration: 1.2 });
+    }
+
+    /**
+     * Snap overlay to real-world visual landmark in Iraq
+     */
+    function snapToLandmark(landmarkKey) {
+      if (!overlay) {
+        showToast('يرجى تحميل أو استيراد خريطة فضائية أولاً قبل المطابقة', 'warning');
+        return;
+      }
+      const landmark = IRAQI_LANDMARKS[landmarkKey];
+      if (!landmark) {
+        showToast('يرجى اختيار معلم جغرافي صحيح من القائمة', 'warning');
+        return;
+      }
+
+      applyNewOverlayBounds(landmark.bounds);
+      showToast(`تمت مطابقة وإسقاط الخارطة بنجاح فوق معلم: ${landmark.name}`, 'success');
+
+      // Trigger automatic blink comparison to show visual match with real basemap
+      setTimeout(() => {
+        blinkCompare();
+      }, 900);
+    }
+
+    /**
+     * 2-Point Ground Control Points (GCP) Interactive Calibration
+     */
+    function startGcpMatching() {
+      if (!overlay) {
+        showToast('يرجى استيراد خريطة فضائية أولاً لتفعيل معايرة نقاط الضبط', 'warning');
+        return;
+      }
+
+      isGcpMatchingActive = true;
+      gcpStep = 1;
+      gcpPoints = { imgPt1: null, basePt1: null, imgPt2: null, basePt2: null };
+      clearGcpMarkers();
+
+      if (cancelGcpMatchBtn) cancelGcpMatchBtn.classList.remove('hidden');
+      if (gcpStatusBadge) {
+        gcpStatusBadge.textContent = 'نشط - النقطة 1A';
+        gcpStatusBadge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold';
+      }
+      if (gcpBtnLabel) gcpBtnLabel.textContent = 'المعايرة جارية (انقر على الخارطة)...';
+
+      updateGcpInstructions(1);
+      map.on('click', handleMapGcpClick);
+      showToast('وضع نقاط الضبط (GCP) مفعل: انقر على معلم بالخارطة المستوردة', 'info');
+    }
+
+    function cancelGcpMatching() {
+      isGcpMatchingActive = false;
+      gcpStep = 0;
+      map.off('click', handleMapGcpClick);
+      clearGcpMarkers();
+
+      if (cancelGcpMatchBtn) cancelGcpMatchBtn.classList.add('hidden');
+      if (gcpInstructionsText) gcpInstructionsText.classList.add('hidden');
+      if (gcpStatusBadge) {
+        gcpStatusBadge.textContent = 'غير نشط';
+        gcpStatusBadge.className = 'text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-mono';
+      }
+      if (gcpBtnLabel) gcpBtnLabel.textContent = 'بدء تحديد نقطتي الضبط (GCP)';
+    }
+
+    function clearGcpMarkers() {
+      gcpMarkers.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); });
+      gcpMarkers = [];
+      gcpLines.forEach(l => { if (map.hasLayer(l)) map.removeLayer(l); });
+      gcpLines = [];
+    }
+
+    function updateGcpInstructions(step) {
+      if (!gcpInstructionsText) return;
+      gcpInstructionsText.classList.remove('hidden');
+
+      if (step === 1) {
+        gcpInstructionsText.innerHTML = `
+          <div class="flex items-center gap-1.5 text-blue-400 font-bold">
+            <span class="w-4 h-4 rounded-full bg-blue-500/30 text-blue-300 flex items-center justify-center text-[9px]">1</span>
+            <span>الخطوة 1 من 4: حدد النقطة الأولى (صورة)</span>
+          </div>
+          <p class="text-slate-300 text-[10px]">انقر على معلم مميز وواضح داخل <strong>الخارطة المستوردة</strong> (مثل: رأس جسر، تقاطع طرق، زاوية مدرج).</p>
+        `;
+      } else if (step === 2) {
+        gcpInstructionsText.innerHTML = `
+          <div class="flex items-center gap-1.5 text-emerald-400 font-bold">
+            <span class="w-4 h-4 rounded-full bg-emerald-500/30 text-emerald-300 flex items-center justify-center text-[9px]">2</span>
+            <span>الخطوة 2 من 4: حدد النقطة المقابلة في الواقع (خارطة الأساس)</span>
+          </div>
+          <p class="text-slate-300 text-[10px]">انقر الآن على <strong>نفس المعلم تماماً</strong> في خارطة الأساس الفضائية الواقعية بالأسفل.</p>
+        `;
+      } else if (step === 3) {
+        gcpInstructionsText.innerHTML = `
+          <div class="flex items-center gap-1.5 text-amber-400 font-bold">
+            <span class="w-4 h-4 rounded-full bg-amber-500/30 text-amber-300 flex items-center justify-center text-[9px]">3</span>
+            <span>الخطوة 3 من 4: حدد النقطة الثانية (صورة)</span>
+          </div>
+          <p class="text-slate-300 text-[10px]">انقر على معلم ثانٍ مميز ومتباعد داخل <strong>الخارطة المستوردة</strong> لحساب الدوران والمقياس.</p>
+        `;
+      } else if (step === 4) {
+        gcpInstructionsText.innerHTML = `
+          <div class="flex items-center gap-1.5 text-teal-400 font-bold">
+            <span class="w-4 h-4 rounded-full bg-teal-500/30 text-teal-300 flex items-center justify-center text-[9px]">4</span>
+            <span>الخطوة 4 من 4: حدد النقطة المقابلة الثانية في الواقع</span>
+          </div>
+          <p class="text-slate-300 text-[10px]">انقر الآن على <strong>نفس المعلم الثاني</strong> في خارطة الأساس الواقعية لإنهاء حل مصفوفة التحويل.</p>
+        `;
+      }
+    }
+
+    function createGcpMarker(latlng, label, bgColor) {
+      const icon = L.divIcon({
+        className: 'gcp-marker-wrapper',
+        html: `<div style="background-color: ${bgColor};" class="text-white font-bold text-[10px] w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow-lg">${label}</div>`,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+      });
+      const marker = L.marker(latlng, { icon: icon, interactive: false }).addTo(map);
+      gcpMarkers.push(marker);
+      return marker;
+    }
+
+    function handleMapGcpClick(e) {
+      if (!isGcpMatchingActive) return;
+      const pt = e.latlng;
+
+      if (gcpStep === 1) {
+        gcpPoints.imgPt1 = pt;
+        createGcpMarker(pt, '1A', '#2563eb');
+        gcpStep = 2;
+        if (gcpStatusBadge) gcpStatusBadge.textContent = 'نشط - النقطة 1B (الواقع)';
+        updateGcpInstructions(2);
+        // Quick blink to help user see beneath
+        blinkCompare();
+      } else if (gcpStep === 2) {
+        gcpPoints.basePt1 = pt;
+        createGcpMarker(pt, '1B', '#059669');
+        const line = L.polyline([gcpPoints.imgPt1, pt], { color: '#10b981', weight: 2, dashArray: '4, 4' }).addTo(map);
+        gcpLines.push(line);
+        gcpStep = 3;
+        if (gcpStatusBadge) gcpStatusBadge.textContent = 'نشط - النقطة 2A (الصورة)';
+        updateGcpInstructions(3);
+      } else if (gcpStep === 3) {
+        gcpPoints.imgPt2 = pt;
+        createGcpMarker(pt, '2A', '#d97706');
+        gcpStep = 4;
+        if (gcpStatusBadge) gcpStatusBadge.textContent = 'نشط - النقطة 2B (الواقع)';
+        updateGcpInstructions(4);
+        blinkCompare();
+      } else if (gcpStep === 4) {
+        gcpPoints.basePt2 = pt;
+        createGcpMarker(pt, '2B', '#0d9488');
+        const line = L.polyline([gcpPoints.imgPt2, pt], { color: '#0d9488', weight: 2, dashArray: '4, 4' }).addTo(map);
+        gcpLines.push(line);
+
+        // All 4 points captured -> Solve Affine Transformation!
+        solve2PointGcpAffine(gcpPoints.imgPt1, gcpPoints.basePt1, gcpPoints.imgPt2, gcpPoints.basePt2);
+
+        // Finish mode
+        isGcpMatchingActive = false;
+        gcpStep = 0;
+        map.off('click', handleMapGcpClick);
+        if (cancelGcpMatchBtn) cancelGcpMatchBtn.classList.add('hidden');
+        if (gcpStatusBadge) {
+          gcpStatusBadge.textContent = 'تمت المعايرة بنجاح';
+          gcpStatusBadge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold';
+        }
+        if (gcpBtnLabel) gcpBtnLabel.textContent = 'إعادة المعايرة بنقاط الضبط (GCP)';
+        if (gcpInstructionsText) {
+          gcpInstructionsText.innerHTML = `
+            <div class="text-emerald-400 font-bold flex items-center gap-1.5">
+              <i class="fa-solid fa-circle-check"></i>
+              <span>اكتملت المعايرة بنجاح!</span>
+            </div>
+            <p class="text-slate-300 text-[10px]">تم حل التحويل التآلفي وتطبيق الإزاحة، المقياس، وزاوية الدوران بدقة على الخريطة المستوردة.</p>
+          `;
+        }
+
+        // Clean up visual GCP markers after 5 seconds
+        setTimeout(() => {
+          clearGcpMarkers();
+          if (gcpInstructionsText) gcpInstructionsText.classList.add('hidden');
+          if (gcpStatusBadge) {
+            gcpStatusBadge.textContent = 'غير نشط';
+            gcpStatusBadge.className = 'text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-mono';
+          }
+        }, 5000);
+      }
+    }
+
+    /**
+     * Solve Affine Transformation Matrix for 2-Point Ground Control Points (GCP)
+     * Handles translation, scale matching, and rotation matching
+     */
+    function solve2PointGcpAffine(p1A, p1B, p2A, p2B) {
+      if (!overlay || !bounds) return;
+
+      // Image points (x = lng, y = lat)
+      const x1 = p1A.lng, y1 = p1A.lat;
+      const x2 = p2A.lng, y2 = p2A.lat;
+
+      // Ground points (X = lng, Y = lat)
+      const X1 = p1B.lng, Y1 = p1B.lat;
+      const X2 = p2B.lng, Y2 = p2B.lat;
+
+      const dImgX = x2 - x1;
+      const dImgY = y2 - y1;
+      const dImgDist = Math.sqrt(dImgX * dImgX + dImgY * dImgY);
+
+      const dGrdX = X2 - X1;
+      const dGrdY = Y2 - Y1;
+      const dGrdDist = Math.sqrt(dGrdX * dGrdX + dGrdY * dGrdY);
+
+      if (dImgDist < 0.000001 || dGrdDist < 0.000001) {
+        showToast('نقاط الضبط قريبة جداً من بعضها، يرجى اختيار نقاط متباعدة', 'warning');
+        return;
+      }
+
+      // 1. Scale Ratio
+      const scaleRatio = dGrdDist / dImgDist;
+
+      // 2. Rotation Angle (Degrees)
+      const angleImg = Math.atan2(dImgY, dImgX);
+      const angleGrd = Math.atan2(dGrdY, dGrdX);
+      let deltaAngleRad = angleGrd - angleImg;
+      let deltaAngleDeg = deltaAngleRad * (180 / Math.PI);
+
+      // Accumulate rotation
+      rotationDeg = Math.round((rotationDeg + deltaAngleDeg) % 360);
+      if (rotationDeg < 0) rotationDeg += 360;
+      if (rotationSlider) rotationSlider.value = rotationDeg;
+      if (rotationLabel) rotationLabel.textContent = `${rotationDeg}°`;
+      if (boundRot) boundRot.textContent = `${rotationDeg}°`;
+
+      // 3. Image & Ground Midpoints
+      const mImgLng = (x1 + x2) / 2;
+      const mImgLat = (y1 + y2) / 2;
+      const mGrdLng = (X1 + X2) / 2;
+      const mGrdLat = (Y1 + Y2) / 2;
+
+      // 4. Center Translation
+      const curCenter = bounds.getCenter();
+      const relLng = curCenter.lng - mImgLng;
+      const relLat = curCenter.lat - mImgLat;
+
+      // Rotate and scale the relative center vector
+      const cosA = Math.cos(deltaAngleRad);
+      const sinA = Math.sin(deltaAngleRad);
+      const newRelLng = scaleRatio * (relLng * cosA - relLat * sinA);
+      const newRelLat = scaleRatio * (relLng * sinA + relLat * cosA);
+
+      const newCenterLng = mGrdLng + newRelLng;
+      const newCenterLat = mGrdLat + newRelLat;
+
+      // 5. Update Span & Bounds
+      const newSpanLat = (bounds.getNorth() - bounds.getSouth()) * scaleRatio;
+      const newSpanLng = (bounds.getEast() - bounds.getWest()) * scaleRatio;
+
+      bounds = L.latLngBounds(
+        [newCenterLat - newSpanLat / 2, newCenterLng - newSpanLng / 2],
+        [newCenterLat + newSpanLat / 2, newCenterLng + newSpanLng / 2]
+      );
+
+      baseCenter = bounds.getCenter();
+      baseSpanLat = newSpanLat;
+      baseSpanLng = newSpanLng;
+
+      scalePercent = Math.round(scalePercent * scaleRatio);
+      if (scaleSlider) scaleSlider.value = Math.min(Math.max(scalePercent, 20), 400);
+      if (scaleLabel) scaleLabel.textContent = `${scalePercent}%`;
+
+      updateOverlayGeometry();
+      createHandles();
+      updateReadout();
+      map.flyToBounds(bounds, { padding: [40, 40], duration: 1.2 });
+
+      showToast(`تمت المعايرة بنجاح عبر نقطتي الضبط (GCP)! دوران: ${Math.round(deltaAngleDeg)}°، مقياس: ${(scaleRatio * 100).toFixed(0)}%`, 'success');
+    }
+
+    /**
      * Generate Matching High-Res Satellite Imagery URL for Bounding Box
      */
     function getSatelliteServiceUrlForBounds(b) {
@@ -593,9 +1235,11 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function processECWDataset(file, companionImageSrc = null, sidecarText = null) {
       const slice = file.slice(0, 131072);
+      lastEcwRawFile = file;
       const reader = new FileReader();
 
       reader.onload = (e) => {
+        lastEcwRawBuffer = e.target.result;
         let meta = parseECWHeader(e.target.result, file.name, file.size);
         if (sidecarText) {
           meta = parseSidecarMetadata(sidecarText, meta);
@@ -604,12 +1248,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const calculatedBounds = computeBoundsFromMeta(meta);
         displayECWMetadata(meta, calculatedBounds);
 
+        // Pre-fill AI Coords input with detected bounds info for transparency
+        if (aiCoordsTextInput) {
+          aiCoordsTextInput.value = `OriginX: ${meta.originX.toFixed(2)}, OriginY: ${meta.originY.toFixed(2)}\nProjection: ${meta.projection} | Datum: ${meta.datum}\nBounds: [${calculatedBounds.getSouth().toFixed(5)}, ${calculatedBounds.getWest().toFixed(5)}] -> [${calculatedBounds.getNorth().toFixed(5)}, ${calculatedBounds.getEast().toFixed(5)}]`;
+        }
+
         // If companion image exists, use it; otherwise fetch matching satellite imagery for the exact bounding box
         const imageToDisplay = companionImageSrc || getSatelliteServiceUrlForBounds(calculatedBounds);
         const labelText = `خريطة ECW: ${file.name}`;
 
         initCalibrationOverlay(imageToDisplay, labelText, calculatedBounds);
-        showToast(`تم استيراد ${file.name} وقراءة نظام الإسقاط الجغرافي بنجاح!`, 'success');
+        showToast(`تم استيراد ${file.name} - الإسناد: ${meta.detectionSource || 'UTM'}`, 'success');
       };
 
       reader.readAsArrayBuffer(slice);
@@ -877,6 +1526,79 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (floatBlinkBtn) {
       floatBlinkBtn.addEventListener('click', () => blinkCompare());
+    }
+
+    // ==========================================
+    // AI Spatial Alignment & Landmark Studio Event Listeners
+    // ==========================================
+    if (aiAutoScanHeaderBtn) {
+      aiAutoScanHeaderBtn.addEventListener('click', () => {
+        if (lastEcwRawBuffer && lastEcwRawFile) {
+          const meta = parseECWHeader(lastEcwRawBuffer, lastEcwRawFile.name, lastEcwRawFile.size);
+          const scannedBounds = computeBoundsFromMeta(meta);
+          applyNewOverlayBounds(scannedBounds);
+          displayECWMetadata(meta, scannedBounds);
+          if (aiCoordsTextInput) {
+            aiCoordsTextInput.value = `OriginX: ${meta.originX.toFixed(2)}, OriginY: ${meta.originY.toFixed(2)}\nProjection: ${meta.projection} | Datum: ${meta.datum}\nBounds: [${scannedBounds.getSouth().toFixed(5)}, ${scannedBounds.getWest().toFixed(5)}] -> [${scannedBounds.getNorth().toFixed(5)}, ${scannedBounds.getEast().toFixed(5)}]`;
+          }
+          showToast(`تمت إعادة المسح العميق لترويسة الملف: ${meta.detectionSource}`, 'success');
+        } else {
+          showToast('يرجى استيراد ملف ECW أولاً لإجراء المسح العميق للترويسة الثنائية', 'warning');
+        }
+      });
+    }
+
+    if (aiParseCoordsBtn && aiCoordsTextInput) {
+      aiParseCoordsBtn.addEventListener('click', () => {
+        const val = aiCoordsTextInput.value;
+        if (!val || !val.trim()) {
+          showToast('يرجى لصق نص ميتاداتا أو أرقام إحداثيات في المربع أولاً', 'warning');
+          return;
+        }
+
+        const parsed = parseAITextGeoreference(val);
+        if (parsed) {
+          applyNewOverlayBounds(parsed.bounds);
+          showToast(`تم التعرف الذكي على الإحداثيات عبر: ${parsed.method}`, 'success');
+        } else {
+          showToast('لم يتم التعرف على نسق إحداثيات صالح. جرب لصق BBOX أو UTM أو Lat/Lng', 'warning');
+        }
+      });
+    }
+
+    if (aiClearCoordsBtn && aiCoordsTextInput) {
+      aiClearCoordsBtn.addEventListener('click', () => {
+        aiCoordsTextInput.value = '';
+        showToast('تم مسح مربع نص الإحداثيات', 'info');
+      });
+    }
+
+    if (aiSnapLandmarkBtn && aiLandmarkSelect) {
+      aiSnapLandmarkBtn.addEventListener('click', () => {
+        const key = aiLandmarkSelect.value;
+        if (!key) {
+          showToast('يرجى اختيار معلم جغرافي عراقي من القائمة أولاً', 'warning');
+          return;
+        }
+        snapToLandmark(key);
+      });
+    }
+
+    if (startGcpMatchBtn) {
+      startGcpMatchBtn.addEventListener('click', () => {
+        if (isGcpMatchingActive) {
+          cancelGcpMatching();
+        } else {
+          startGcpMatching();
+        }
+      });
+    }
+
+    if (cancelGcpMatchBtn) {
+      cancelGcpMatchBtn.addEventListener('click', () => {
+        cancelGcpMatching();
+        showToast('تم إلغاء وضع المعايرة بنقاط الضبط', 'info');
+      });
     }
 
     // Bind Global Handlers for Active Layers tab integration
