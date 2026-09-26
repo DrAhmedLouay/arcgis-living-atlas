@@ -586,6 +586,38 @@
                 <span>فتح استوديو المطابقة والمعايرة الذكي (AI Reality Studio)</span>
               </button>
 
+              <!-- Mode 0: Gemini AI Vision API - Auto Geolocation -->
+              <div class="space-y-1.5 pb-2.5 border-b border-indigo-900/60">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-semibold text-slate-200 flex items-center gap-1.5">
+                    <i class="fa-solid fa-eye text-purple-400 text-[10px]"></i>
+                    <span>0. تحديد الموقع تلقائياً بالذكاء الاصطناعي (Gemini Vision):</span>
+                  </span>
+                  <span class="text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded font-mono">Gemini 2.0 Flash</span>
+                </div>
+                <p class="text-[10px] text-slate-400 leading-snug">يحلل الذكاء الاصطناعي معاينة الخريطة المستوردة ويستخرج الإحداثيات الجغرافية الحقيقية تلقائياً.</p>
+                <!-- Gemini API Key Input -->
+                <div class="flex items-center gap-2">
+                  <input 
+                    type="password" 
+                    id="geminiApiKeyInput" 
+                    placeholder="أدخل مفتاح Gemini API..." 
+                    class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-[11px] font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500 transition-colors"
+                  >
+                  <button type="button" id="saveGeminiKeyBtn" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg text-[11px] transition-colors flex items-center gap-1" title="حفظ المفتاح محلياً">
+                    <i class="fa-solid fa-floppy-disk text-[10px] text-purple-400"></i>
+                    <span>حفظ</span>
+                  </button>
+                </div>
+                <!-- Analyze Button -->
+                <button type="button" id="geminiAnalyzeBtn" class="w-full py-2 px-3 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-xs transition-all shadow-lg border border-purple-500/40 disabled:opacity-50 disabled:cursor-not-allowed">
+                  <i class="fa-solid fa-sparkles text-yellow-300"></i>
+                  <span id="geminiAnalyzeBtnText">تحليل الصورة وتحديد الموقع تلقائياً</span>
+                </button>
+                <!-- Status / Result -->
+                <div id="geminiAnalysisStatus" class="hidden text-[10px] leading-relaxed bg-slate-950/80 border border-purple-500/30 rounded-lg p-2 text-slate-300 font-mono"></div>
+              </div>
+
               <!-- Mode 1: AI Metadata & Coords Paste Parser -->
               <div class="space-y-1.5">
                 <div class="flex items-center justify-between">

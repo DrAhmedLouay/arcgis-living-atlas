@@ -1124,15 +1124,18 @@ document.addEventListener('DOMContentLoaded', () => {
         north = Math.max(meta.originY, meta.originY - spanY);
         south = Math.min(meta.originY, meta.originY - spanY);
       }
-      // Case C: Fallback to current map viewport (Never forces Baghdad!)
+      // Case C: Fallback to center of Iraq (NOT current viewport to avoid confusion)
+      // User must use Gemini AI or manual GCP calibration to geolocate
       else {
-        const currentMapBounds = map.getBounds();
-        const padBounds = currentMapBounds.pad(-0.15);
-        north = padBounds.getNorth();
-        south = padBounds.getSouth();
-        west = padBounds.getWest();
-        east = padBounds.getEast();
-        meta.detectionSource = 'نطاق العرض الحالي للشاشة (يرجى المطابقة عبر مساعد الذكاء الاصطناعي)';
+        // Place a small ~5km footprint over central Iraq (Karbala / Babylon area - near center of Iraq)
+        const iraqCenterLat = 33.0;
+        const iraqCenterLng = 44.0;
+        const footprintDeg = 0.05; // ~5km radius placeholder
+        north = iraqCenterLat + footprintDeg;
+        south = iraqCenterLat - footprintDeg;
+        west = iraqCenterLng - footprintDeg;
+        east = iraqCenterLng + footprintDeg;
+        meta.detectionSource = '⚠️ إحداثيات غير محددة - يرجى استخدام Gemini AI أو نقاط الضبط الأرضية (GCP) لتحديد الموقع الحقيقي';
       }
 
       return L.latLngBounds([south, west], [north, east]);
@@ -2153,6 +2156,225 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.openAiAlignmentModal = openAiAlignmentModal;
     window.closeAiAlignmentModal = closeAiAlignmentModal;
+
+    // ==========================================
+    // Gemini Vision API - Auto Geolocation from Image Preview
+    // ==========================================
+    const geminiApiKeyInput = document.getElementById('geminiApiKeyInput');
+    const saveGeminiKeyBtn = document.getElementById('saveGeminiKeyBtn');
+    const geminiAnalyzeBtn = document.getElementById('geminiAnalyzeBtn');
+    const geminiAnalyzeBtnText = document.getElementById('geminiAnalyzeBtnText');
+    const geminiAnalysisStatus = document.getElementById('geminiAnalysisStatus');
+
+    // Load saved API key
+    const savedGeminiKey = localStorage.getItem('atlas_gemini_api_key');
+    if (savedGeminiKey && geminiApiKeyInput) {
+      geminiApiKeyInput.value = savedGeminiKey;
+    }
+
+    if (saveGeminiKeyBtn && geminiApiKeyInput) {
+      saveGeminiKeyBtn.addEventListener('click', () => {
+        const key = geminiApiKeyInput.value.trim();
+        if (key) {
+          localStorage.setItem('atlas_gemini_api_key', key);
+          showToast('تم حفظ مفتاح Gemini API محلياً في المتصفح', 'success');
+        } else {
+          localStorage.removeItem('atlas_gemini_api_key');
+          showToast('تم حذف مفتاح Gemini API المحفوظ', 'info');
+        }
+      });
+    }
+
+    /**
+     * Draw the current overlay image onto a canvas and extract base64 preview
+     */
+    function extractOverlayPreviewBase64() {
+      return new Promise((resolve, reject) => {
+        if (!overlay) { reject(new Error('لا توجد خارطة مستوردة')); return; }
+        const el = overlay.getElement();
+        if (!el) { reject(new Error('عنصر الصورة غير متاح')); return; }
+
+        // Try canvas approach for data URL sources
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          ctx.drawImage(img, 0, 0, 512, 512);
+          try {
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+            const base64 = dataUrl.replace(/^data:image\/jpeg;base64,/, '');
+            resolve(base64);
+          } catch (e) {
+            reject(new Error('تعذّر تحويل الصورة (CORS أو SVG placeholder)'));
+          }
+        };
+        img.onerror = () => reject(new Error('تعذّر تحميل الصورة للتحليل'));
+
+        const src = el.src || (el.querySelector ? el.querySelector('img')?.src : null) || overlay._url;
+        if (!src) { reject(new Error('مصدر الصورة غير محدد')); return; }
+        img.src = src;
+      });
+    }
+
+    /**
+     * Call Gemini Vision API to identify geographic location from image
+     */
+    async function analyzeImageWithGemini(apiKey, base64Jpeg) {
+      const prompt = `You are a professional GIS expert and geographer specializing in Iraq and the Middle East.
+Analyze this satellite or aerial image carefully and identify:
+1. The specific geographic location shown (country, city, region)
+2. Any visible landmarks (rivers like Tigris/Euphrates, cities, roads, archaeological sites, dams, lakes, airports, citadels, shrines)
+3. The approximate geographic bounding box as precise decimal degrees: north, south, east, west latitude/longitude
+
+The image is likely from Iraq (latitude 29-38°N, longitude 38-49°E) but could be elsewhere in the Middle East.
+
+Respond ONLY in this exact JSON format (no extra text):
+{
+  "location": "description of location",
+  "landmarks": ["landmark1", "landmark2"],
+  "confidence": "high/medium/low",
+  "bbox": {
+    "north": 33.42,
+    "south": 33.28,
+    "east": 44.52,
+    "west": 44.30
+  },
+  "notes": "any important observations about the image"
+}
+
+If you cannot determine the location with confidence, still provide your best estimate with confidence="low".`;
+
+      const requestBody = {
+        contents: [{
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                mimeType: 'image/jpeg',
+                data: base64Jpeg
+              }
+            }
+          ]
+        }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 1024
+        }
+      };
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        }
+      );
+
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`Gemini API خطأ ${response.status}: ${err.substring(0, 200)}`);
+      }
+
+      const data = await response.json();
+      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+      // Extract JSON from response
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('لم يتمكن الذكاء الاصطناعي من إرجاع إحداثيات صالحة');
+
+      return JSON.parse(jsonMatch[0]);
+    }
+
+    if (geminiAnalyzeBtn) {
+      geminiAnalyzeBtn.addEventListener('click', async () => {
+        const apiKey = (geminiApiKeyInput?.value || '').trim() || localStorage.getItem('atlas_gemini_api_key') || '';
+        if (!apiKey) {
+          showToast('يرجى إدخال مفتاح Gemini API أولاً', 'warning');
+          return;
+        }
+        if (!overlay) {
+          showToast('يرجى استيراد خريطة فضائية أولاً', 'warning');
+          return;
+        }
+
+        // Disable button and show loading
+        geminiAnalyzeBtn.disabled = true;
+        if (geminiAnalyzeBtnText) geminiAnalyzeBtnText.textContent = 'جاري التحليل بالذكاء الاصطناعي...';
+        if (geminiAnalysisStatus) {
+          geminiAnalysisStatus.classList.remove('hidden');
+          geminiAnalysisStatus.innerHTML = `<span class="text-purple-400">⏳ جاري استخراج معاينة الصورة وتحليلها بواسطة Gemini Vision...</span>`;
+        }
+
+        try {
+          // Step 1: Extract preview
+          let base64Img;
+          try {
+            base64Img = await extractOverlayPreviewBase64();
+          } catch (e) {
+            // If it's a placeholder SVG or CORS issue, inform user
+            if (geminiAnalysisStatus) {
+              geminiAnalysisStatus.innerHTML = `
+                <div class="text-amber-400 font-bold mb-1">⚠️ تنبيه مهم</div>
+                <div class="text-slate-300">لا يمكن تحليل placeholder (الخريطة التخطيطية) بالذكاء الاصطناعي.</div>
+                <div class="text-slate-400 mt-1">الرجاء أولاً إرفاق صورة PNG/JPG للخريطة الفعلية عبر زر "إرفاق صورة PNG/JPG" ثم إعادة التحليل.</div>
+              `;
+            }
+            showToast(`تعذّر استخراج الصورة: ${e.message}`, 'warning');
+            return;
+          }
+
+          // Step 2: Send to Gemini
+          if (geminiAnalysisStatus) {
+            geminiAnalysisStatus.innerHTML = `<span class="text-purple-400">🤖 جاري إرسال الصورة إلى Gemini Vision API للتحليل الجغرافي...</span>`;
+          }
+
+          const result = await analyzeImageWithGemini(apiKey, base64Img);
+
+          // Step 3: Apply bounds
+          const b = result.bbox;
+          if (b && typeof b.north === 'number' && typeof b.south === 'number' &&
+              typeof b.east === 'number' && typeof b.west === 'number') {
+
+            // Sanity check: reasonable coordinate range
+            if (b.north > b.south && b.east > b.west &&
+                b.north <= 90 && b.south >= -90 &&
+                b.east <= 180 && b.west >= -180) {
+              const newBounds = L.latLngBounds([b.south, b.west], [b.north, b.east]);
+              applyNewOverlayBounds(newBounds);
+
+              if (geminiAnalysisStatus) {
+                geminiAnalysisStatus.innerHTML = `
+                  <div class="text-emerald-400 font-bold mb-1">✅ تم تحديد الموقع بنجاح (ثقة: ${result.confidence || 'متوسطة'})</div>
+                  <div class="text-slate-200 mb-1">📍 ${result.location || 'موقع غير محدد'}</div>
+                  <div class="text-slate-400">المعالم: ${(result.landmarks || []).join('، ') || 'غير محددة'}</div>
+                  <div class="text-sky-300 font-mono mt-1">N:${b.north.toFixed(4)}° S:${b.south.toFixed(4)}° E:${b.east.toFixed(4)}° W:${b.west.toFixed(4)}°</div>
+                  ${result.notes ? `<div class="text-slate-500 mt-1">${result.notes}</div>` : ''}
+                `;
+              }
+
+              showToast(`✅ تم تحديد الموقع بالذكاء الاصطناعي: ${result.location || 'موقع محدد'}`, 'success');
+            } else {
+              throw new Error('الإحداثيات المُرجعة خارج النطاق الجغرافي المعقول');
+            }
+          } else {
+            throw new Error('لم يتمكن الذكاء الاصطناعي من استخراج إحداثيات واضحة من الصورة');
+          }
+        } catch (err) {
+          if (geminiAnalysisStatus) {
+            geminiAnalysisStatus.innerHTML = `<div class="text-rose-400 font-bold">❌ خطأ في التحليل</div><div class="text-slate-400">${err.message}</div>`;
+          }
+          showToast(`خطأ Gemini: ${err.message.substring(0, 80)}`, 'error');
+        } finally {
+          geminiAnalyzeBtn.disabled = false;
+          if (geminiAnalyzeBtnText) geminiAnalyzeBtnText.textContent = 'تحليل الصورة وتحديد الموقع تلقائياً';
+        }
+      });
+    }
 
     // Bind Global Handlers for Active Layers tab integration
     window.toggleCalibOverlayVisibility = toggleOverlayVisibility;
