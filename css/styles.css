@@ -253,18 +253,45 @@ html, body {
    Interactive Measurement Tools & Cursor Styles
    ========================================================================== */
 .measuring-mode-active,
-.measuring-mode-active .leaflet-container {
+.measuring-mode-active .leaflet-container,
+.measuring-mode-active .leaflet-grab,
+.measuring-mode-active .leaflet-pane {
   cursor: crosshair !important;
 }
 
-/* Prevent interactive feature layers from absorbing clicks during measurement */
-.measuring-mode-active .leaflet-interactive:not(.measure-element) {
+/* Ensure map container can receive clicks while disabling all interfering vector/feature layers */
+.measuring-mode-active .leaflet-overlay-pane,
+.measuring-mode-active .leaflet-overlay-pane svg,
+.measuring-mode-active .leaflet-overlay-pane path,
+.measuring-mode-active .leaflet-interactive:not(.measure-vertex-icon),
+.measuring-mode-active .leaflet-tooltip-pane,
+.measuring-mode-active .leaflet-tooltip,
+.measuring-mode-active .gov-label {
   pointer-events: none !important;
 }
 
+/* Suppress popups during active measurement */
+.measuring-mode-active .leaflet-popup-pane {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+/* Disable pointer events on any non-measurement markers during measuring */
+.measuring-mode-active .leaflet-marker-pane .leaflet-marker-icon:not(.measure-vertex-icon) {
+  pointer-events: none !important;
+}
+
+/* Rubber band and active measurement shapes must NEVER intercept mouse clicks */
+.measure-element,
+.measure-segment-tooltip {
+  pointer-events: none !important;
+}
+
+/* Numbered vertex icons: allow pointer events so the closing vertex can be clicked in area mode */
 .measure-vertex-icon {
   background: transparent !important;
   border: none !important;
+  pointer-events: auto !important;
 }
 
 .measure-segment-tooltip {

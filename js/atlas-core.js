@@ -2753,6 +2753,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const floatingMeasureResult = document.getElementById('floatingMeasureResult');
     const floatFinishMeasureBtn = document.getElementById('floatFinishMeasureBtn');
     const floatClearMeasureBtn = document.getElementById('floatClearMeasureBtn');
+    const quickDistBtn = document.getElementById('quickMeasureDistBtn');
+    const quickAreaBtn = document.getElementById('quickMeasureAreaBtn');
 
     let measureMode = null; // 'distance' | 'area' | null
     let points = [];
@@ -2833,14 +2835,45 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * Switch to Tools tab in sidebar
+     */
+    function activateToolsTab() {
+      const tabButtons = document.querySelectorAll('.sidebar-tab-btn');
+      const tabPanels = document.querySelectorAll('.tab-panel');
+      tabButtons.forEach(b => {
+        const isTarget = b.getAttribute('data-tab') === 'tools';
+        b.classList.toggle('active', isTarget);
+        b.classList.toggle('border-blue-500', isTarget);
+        b.classList.toggle('text-blue-400', isTarget);
+        b.classList.toggle('border-transparent', !isTarget);
+        b.classList.toggle('text-slate-400', !isTarget);
+      });
+      tabPanels.forEach(panel => {
+        panel.classList.toggle('hidden', panel.getAttribute('data-panel') !== 'tools');
+      });
+      const sidebar = document.getElementById('appSidebar');
+      if (sidebar && sidebar.classList.contains('translate-x-full')) {
+        sidebar.classList.remove('translate-x-full');
+      }
+    }
+
+    /**
      * Set active measurement mode
      */
     function setMeasureMode(newMode) {
-      resetMeasurement();
+      if (measureMode === newMode) {
+        // Toggle off if clicking the already active tool
+        resetMeasurement(false);
+        showToast('تم إيقاف أداة القياس', 'info');
+        return;
+      }
+
+      resetMeasurement(true);
       measureMode = newMode;
       isFinished = false;
 
       if (measureMode) {
+        map.closePopup();
         currentUnit = (measureMode === 'area') ? 'dunam' : 'km';
         if (unitSelect) unitSelect.value = currentUnit;
 
@@ -2864,9 +2897,12 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
      * Reset and clear all measurements
      */
-    function resetMeasurement() {
+    function resetMeasurement(keepMode = false) {
       points = [];
       isFinished = false;
+      if (!keepMode) {
+        measureMode = null;
+      }
 
       if (shapeLayer && map.hasLayer(shapeLayer)) {
         map.removeLayer(shapeLayer);
@@ -2915,6 +2951,17 @@ document.addEventListener('DOMContentLoaded', () => {
         areaBtnBadge.classList.toggle('hidden', !isArea);
       }
 
+      if (quickDistBtn) {
+        quickDistBtn.className = isDist
+          ? 'px-2.5 py-1.5 rounded-md text-xs font-bold text-white bg-sky-600 shadow-sm flex items-center gap-1.5 transition-all ring-1 ring-sky-400'
+          : 'px-2.5 py-1.5 rounded-md text-xs font-semibold text-slate-300 hover:text-sky-300 hover:bg-slate-700 flex items-center gap-1.5 transition-all';
+      }
+      if (quickAreaBtn) {
+        quickAreaBtn.className = isArea
+          ? 'px-2.5 py-1.5 rounded-md text-xs font-bold text-white bg-emerald-600 shadow-sm flex items-center gap-1.5 transition-all ring-1 ring-emerald-400'
+          : 'px-2.5 py-1.5 rounded-md text-xs font-semibold text-slate-300 hover:text-emerald-300 hover:bg-slate-700 flex items-center gap-1.5 transition-all';
+      }
+
       if (measureActiveStatusBadge) {
         if (measureMode) {
           measureActiveStatusBadge.textContent = isDist ? 'قياس مسافة نشط' : 'قياس مساحة نشط';
@@ -2938,15 +2985,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const icon = L.divIcon({
         className: 'measure-vertex-icon',
-        html: `<div style="background-color: ${bg}; border-color: ${border};" class="w-5 h-5 rounded-full text-white font-mono font-bold text-[9px] flex items-center justify-center border-2 shadow-lg cursor-pointer transform hover:scale-125 transition-transform">${index + 1}</div>`,
+        html: `<div style="background-color: ${bg}; border-color: ${border};" class="w-5 h-5 rounded-full text-white font-mono font-bold text-[9px] flex items-center justify-center border-2 shadow-lg cursor-pointer transform hover:scale-125 transition-transform" title="${index === 0 && isArea ? 'انقر لإغلاق المضلع وحساب المساحة' : 'نقطة ' + (index + 1)}">${index + 1}</div>`,
         iconSize: [20, 20],
         iconAnchor: [10, 10]
       });
 
-      const marker = L.marker(latlng, { icon: icon, interactive: true }).addTo(map);
+      // Only vertex 0 in area mode is interactive to close the polygon
+      const isClosingMarker = (isArea && index === 0);
+      const marker = L.marker(latlng, {
+        icon: icon,
+        interactive: isClosingMarker
+      }).addTo(map);
 
-      // Clicking first marker in area mode finishes the polygon
-      if (index === 0) {
+      if (isClosingMarker) {
         marker.on('click', (e) => {
           if (measureMode === 'area' && points.length >= 3 && !isFinished) {
             L.DomEvent.stopPropagation(e);
@@ -3003,7 +3054,8 @@ document.addEventListener('DOMContentLoaded', () => {
             color: '#38bdf8',
             weight: 3.5,
             opacity: 0.95,
-            className: 'measure-element'
+            className: 'measure-element',
+            interactive: false
           }).addTo(map);
         }
       } else if (measureMode === 'area') {
@@ -3013,14 +3065,16 @@ document.addEventListener('DOMContentLoaded', () => {
             weight: 2.5,
             fillColor: '#10b981',
             fillOpacity: 0.28,
-            className: 'measure-element'
+            className: 'measure-element',
+            interactive: false
           }).addTo(map);
         } else if (points.length === 2) {
           shapeLayer = L.polyline(points, {
             color: '#10b981',
             weight: 2,
             dashArray: '5, 6',
-            className: 'measure-element'
+            className: 'measure-element',
+            interactive: false
           }).addTo(map);
         }
       }
@@ -3183,7 +3237,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const pts = livePoint ? [...points, livePoint] : points;
       if (floatingMeasurePointsBadge) {
-        floatingMeasurePointsBadge.textContent = `${pts.length} نقاط`;
+        floatingMeasurePointsBadge.textContent = isFinished ? `${points.length} نقاط (مكتمل)` : `${pts.length} نقاط`;
+      }
+
+      if (floatFinishMeasureBtn) {
+        if (isFinished) {
+          floatFinishMeasureBtn.innerHTML = '<i class="fa-solid fa-redo text-[10px]"></i><span>قياس جديد</span>';
+          floatFinishMeasureBtn.className = 'px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg shadow transition-colors flex items-center gap-1';
+        } else {
+          floatFinishMeasureBtn.innerHTML = '<i class="fa-solid fa-check text-[10px]"></i><span>إنهاء</span>';
+          floatFinishMeasureBtn.className = 'px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg shadow transition-colors flex items-center gap-1';
+        }
       }
 
       if (floatingMeasureResult) {
@@ -3287,22 +3351,45 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
+    // Quick Measurement Buttons in Header
+    if (quickDistBtn) {
+      quickDistBtn.addEventListener('click', () => {
+        activateToolsTab();
+        setMeasureMode(measureMode === 'distance' ? null : 'distance');
+      });
+    }
+
+    if (quickAreaBtn) {
+      quickAreaBtn.addEventListener('click', () => {
+        activateToolsTab();
+        setMeasureMode(measureMode === 'area' ? null : 'area');
+      });
+    }
+
     if (finishBtn) {
       finishBtn.addEventListener('click', finishMeasurement);
     }
     if (floatFinishMeasureBtn) {
-      floatFinishMeasureBtn.addEventListener('click', finishMeasurement);
+      floatFinishMeasureBtn.addEventListener('click', () => {
+        if (isFinished) {
+          const currentM = measureMode || 'distance';
+          resetMeasurement(true);
+          setMeasureMode(currentM);
+        } else {
+          finishMeasurement();
+        }
+      });
     }
 
     if (clearBtn) {
       clearBtn.addEventListener('click', () => {
-        resetMeasurement();
+        resetMeasurement(false);
         showToast('تم تفريغ أداة القياس', 'info');
       });
     }
     if (floatClearMeasureBtn) {
       floatClearMeasureBtn.addEventListener('click', () => {
-        resetMeasurement();
+        resetMeasurement(false);
         showToast('تم تفريغ أداة القياس', 'info');
       });
     }
@@ -3317,6 +3404,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Map Click & Mouse Interaction
     map.on('click', (e) => {
       if (!measureMode || isFinished) return;
+      map.closePopup();
       const pt = e.latlng;
       points.push(pt);
       addVertexMarker(pt, points.length - 1);
@@ -3338,7 +3426,8 @@ document.addEventListener('DOMContentLoaded', () => {
           weight: 2,
           dashArray: '4, 6',
           opacity: 0.75,
-          className: 'measure-element'
+          className: 'measure-element',
+          interactive: false
         }).addTo(map);
       } else if (measureMode === 'area') {
         if (points.length >= 2) {
@@ -3348,14 +3437,16 @@ document.addEventListener('DOMContentLoaded', () => {
             dashArray: '4, 5',
             fillColor: '#10b981',
             fillOpacity: 0.14,
-            className: 'measure-element'
+            className: 'measure-element',
+            interactive: false
           }).addTo(map);
         } else {
           rubberBandLayer = L.polyline([lastPt, curr], {
             color: '#10b981',
             weight: 1.5,
             dashArray: '4, 5',
-            className: 'measure-element'
+            className: 'measure-element',
+            interactive: false
           }).addTo(map);
         }
       }
