@@ -31,7 +31,7 @@ const ATLAS_LAYERS = [
     badge: 'آثار العراق • Official',
     badgeColor: 'amber',
     defaultOpacity: 1.0,
-    defaultVisible: true,
+    defaultVisible: false,
     popupTemplate: {
       title: '{nameAr} ({nameEn})',
       content: [

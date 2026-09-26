@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Global State
   const state = {
     map: null,
-    currentBasemapId: 'dark-gray',
+    currentBasemapId: 'satellite',
     isBasemapVisible: true,
     basemapLayers: {},
     layersMap: new Map(), // layerId -> L.esri.featureLayer instance
@@ -65,8 +65,8 @@ document.addEventListener('DOMContentLoaded', () => {
     'oceans': L.esri.basemapLayer('Oceans')
   };
 
-  // Add default Dark Gray basemap
-  state.basemapLayers['dark-gray'].addTo(map);
+  // Add default Satellite basemap
+  state.basemapLayers['satellite'].addTo(map);
 
   // 3. Setup Coordinate & Zoom Tracker
   const latSpan = document.getElementById('coordLat');
@@ -207,6 +207,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Quick Basemap floating bar buttons
     document.querySelectorAll('.quick-basemap-btn').forEach(btn => {
+      const bmid = btn.getAttribute('data-bm');
+      const isCur = bmid === state.currentBasemapId;
+      btn.classList.toggle('active-quick-bm', isCur);
+      btn.classList.toggle('text-white', isCur);
+      btn.classList.toggle('bg-blue-600', isCur);
+      btn.classList.toggle('text-slate-300', !isCur);
+
       btn.addEventListener('click', () => {
         switchBasemap(btn.getAttribute('data-bm'));
       });

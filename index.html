@@ -161,11 +161,11 @@
 
       <!-- Floating Quick Basemap Selector Bar on Map -->
       <div class="absolute top-3 right-3 z-20 hidden md:flex items-center gap-1 p-1 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl shadow-2xl">
-        <button class="quick-basemap-btn px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-blue-600 shadow transition-all flex items-center gap-1.5" data-bm="dark-gray">
+        <button class="quick-basemap-btn px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-1.5" data-bm="dark-gray">
           <i class="fa-solid fa-moon text-blue-300"></i>
           <span>داكنة</span>
         </button>
-        <button class="quick-basemap-btn px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-1.5" data-bm="satellite">
+        <button class="quick-basemap-btn px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-blue-600 shadow transition-all flex items-center gap-1.5 active-quick-bm" data-bm="satellite">
           <i class="fa-solid fa-satellite text-amber-400"></i>
           <span>فضائية</span>
         </button>
@@ -289,9 +289,9 @@
 
             <!-- Quick Map Toggle -->
             <div class="pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
-              <button type="button" id="toggleArchLayerQuickBtn" class="flex-1 py-1.5 px-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all">
-                <i id="archLayerToggleEyeIcon" class="fa-solid fa-eye text-amber-400"></i>
-                <span id="archLayerToggleText">الطبقة معروضة</span>
+              <button type="button" id="toggleArchLayerQuickBtn" class="flex-1 py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all">
+                <i id="archLayerToggleEyeIcon" class="fa-solid fa-eye-slash text-slate-500"></i>
+                <span id="archLayerToggleText">الطبقة مخفية</span>
               </button>
               <button type="button" id="zoomAllArchBtn" class="py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs flex items-center gap-1 transition-all" title="استعراض كافة المواقع في نطاق العراق">
                 <i class="fa-solid fa-expand text-[10px] text-sky-400"></i>
