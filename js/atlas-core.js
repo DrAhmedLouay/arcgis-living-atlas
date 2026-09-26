@@ -792,19 +792,20 @@ document.addEventListener('DOMContentLoaded', () => {
       if (typeof GeoTIFF !== 'undefined') {
         try {
           const tiff = await GeoTIFF.fromArrayBuffer(buffer);
-          const image = await tiff.getImage(0);
-          width = image.getWidth();
-          height = image.getHeight();
+          const imageCount = typeof tiff.getImageCount === 'function' ? await tiff.getImageCount() : 1;
+          const mainImage = await tiff.getImage(0);
+          width = mainImage.getWidth();
+          height = mainImage.getHeight();
 
           // Geographic bounding box: [minX, minY, maxX, maxY]
           let bbox = null;
           try {
-            bbox = image.getBoundingBox();
+            bbox = mainImage.getBoundingBox();
           } catch (be) {}
 
           let originX = null, originY = null, resX = 0.5, resY = 0.5;
           try {
-            const origin = image.getOrigin();
+            const origin = mainImage.getOrigin();
             if (origin && origin.length >= 2) {
               originX = origin[0];
               originY = origin[1];
@@ -812,7 +813,7 @@ document.addEventListener('DOMContentLoaded', () => {
           } catch (oe) {}
 
           try {
-            const res = image.getResolution();
+            const res = mainImage.getResolution();
             if (res && res.length >= 2) {
               resX = Math.abs(res[0]);
               resY = Math.abs(res[1]);
@@ -821,7 +822,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
           let epsgCode = 32638;
           try {
-            const geoKeys = image.getGeoKeys();
+            const geoKeys = mainImage.getGeoKeys();
             if (geoKeys) {
               epsgCode = geoKeys.ProjectedCSTypeGeoKey || geoKeys.GeographicTypeGeoKey || 32638;
             }
@@ -850,7 +851,7 @@ document.addEventListener('DOMContentLoaded', () => {
               isECW: false,
               width: width,
               height: height,
-              bands: image.getSamplesPerPixel() || 3,
+              bands: mainImage.getSamplesPerPixel() || 3,
               compression: 1,
               originX: minX,
               originY: maxY,
@@ -863,59 +864,96 @@ document.addEventListener('DOMContentLoaded', () => {
             };
           }
 
-          // Raster decoding: downscaled to max 1280px for instant rendering of large ortho mosaics
-          const maxDim = 1280;
-          const scale = Math.min(1, maxDim / Math.max(width, height));
-          const targetW = Math.max(16, Math.round(width * scale));
-          const targetH = Math.max(16, Math.round(height * scale));
-
-          try {
-            const rgb = await image.readRGB({ width: targetW, height: targetH });
-            if (rgb && rgb.length >= targetW * targetH * 3) {
-              const canvas = document.createElement('canvas');
-              canvas.width = targetW;
-              canvas.height = targetH;
-              const ctx = canvas.getContext('2d');
-              const imgData = ctx.createImageData(targetW, targetH);
-              for (let i = 0, j = 0; i < rgb.length; i += 3, j += 4) {
-                imgData.data[j] = rgb[i];
-                imgData.data[j + 1] = rgb[i + 1];
-                imgData.data[j + 2] = rgb[i + 2];
-                imgData.data[j + 3] = 255;
-              }
-              ctx.putImageData(imgData, 0, 0);
-              pngDataUrl = canvas.toDataURL('image/png');
+          // Select best image to render (main image or optimal high-res overview <= 4096px)
+          let renderImage = mainImage;
+          if (imageCount > 1 && (width > 4096 || height > 4096)) {
+            for (let idx = 1; idx < imageCount; idx++) {
+              try {
+                const ov = await tiff.getImage(idx);
+                const ow = ov.getWidth();
+                const oh = ov.getHeight();
+                if (ow >= 1024 && ow <= 4096 && oh >= 1024 && oh <= 4096) {
+                  renderImage = ov;
+                  break;
+                }
+              } catch (ove) {}
             }
-          } catch (rgbErr) {
-            console.warn('GeoTIFF readRGB fallback to readRasters:', rgbErr);
+          }
+
+          const curW = renderImage.getWidth();
+          const curH = renderImage.getHeight();
+
+          // Read image data: try readRGB then readRasters
+          let rawRgb = null;
+          try {
+            rawRgb = await renderImage.readRGB();
+          } catch (rgbE) {
+            console.warn('readRGB failed, trying readRasters:', rgbE);
+          }
+
+          if (!rawRgb) {
             try {
-              const rasters = await image.readRasters({ width: targetW, height: targetH });
+              const rasters = await renderImage.readRasters();
               if (rasters && rasters.length > 0) {
-                const canvas = document.createElement('canvas');
-                canvas.width = targetW;
-                canvas.height = targetH;
-                const ctx = canvas.getContext('2d');
-                const imgData = ctx.createImageData(targetW, targetH);
+                const totalPx = curW * curH;
+                rawRgb = new Uint8Array(totalPx * 3);
                 const b0 = rasters[0];
                 const b1 = rasters.length > 1 ? rasters[1] : b0;
                 const b2 = rasters.length > 2 ? rasters[2] : b0;
-                const bA = rasters.length > 3 ? rasters[3] : null;
 
+                // Handle 16-bit or float normalization
                 let maxVal = 255;
-                for (let k = 0; k < Math.min(500, b0.length); k++) if (b0[k] > maxVal) maxVal = b0[k];
+                for (let k = 0; k < Math.min(1000, b0.length); k++) {
+                  if (b0[k] > maxVal) maxVal = b0[k];
+                }
                 const norm = 255 / (maxVal || 1);
 
-                for (let idx = 0, p = 0; idx < targetW * targetH; idx++, p += 4) {
-                  imgData.data[p] = Math.min(255, Math.max(0, b0[idx] * norm));
-                  imgData.data[p + 1] = Math.min(255, Math.max(0, b1[idx] * norm));
-                  imgData.data[p + 2] = Math.min(255, Math.max(0, b2[idx] * norm));
-                  imgData.data[p + 3] = bA ? Math.min(255, Math.max(0, bA[idx])) : 255;
+                for (let i = 0, p = 0; i < totalPx; i++, p += 3) {
+                  rawRgb[p]     = Math.min(255, Math.max(0, b0[i] * norm));
+                  rawRgb[p + 1] = Math.min(255, Math.max(0, b1[i] * norm));
+                  rawRgb[p + 2] = Math.min(255, Math.max(0, b2[i] * norm));
                 }
-                ctx.putImageData(imgData, 0, 0);
-                pngDataUrl = canvas.toDataURL('image/png');
               }
-            } catch (rastErr) {
-              console.warn('GeoTIFF readRasters error:', rastErr);
+            } catch (rastE) {
+              console.warn('readRasters error:', rastE);
+            }
+          }
+
+          // Build High-Definition Canvas (4K UHD support up to 4096px)
+          if (rawRgb && rawRgb.length >= curW * curH * 3) {
+            const maxDim = 4096; // Crystal clear 4K UHD!
+            let targetW = curW;
+            let targetH = curH;
+            if (targetW > maxDim || targetH > maxDim) {
+              const scale = Math.min(maxDim / targetW, maxDim / targetH);
+              targetW = Math.max(32, Math.round(targetW * scale));
+              targetH = Math.max(32, Math.round(targetH * scale));
+            }
+
+            const srcCanvas = document.createElement('canvas');
+            srcCanvas.width = curW;
+            srcCanvas.height = curH;
+            const srcCtx = srcCanvas.getContext('2d');
+            const imgData = srcCtx.createImageData(curW, curH);
+            for (let i = 0, j = 0; i < rawRgb.length; i += 3, j += 4) {
+              imgData.data[j]     = rawRgb[i];
+              imgData.data[j + 1] = rawRgb[i + 1];
+              imgData.data[j + 2] = rawRgb[i + 2];
+              imgData.data[j + 3] = 255;
+            }
+            srcCtx.putImageData(imgData, 0, 0);
+
+            if (targetW === curW && targetH === curH) {
+              pngDataUrl = srcCanvas.toDataURL('image/jpeg', 0.94);
+            } else {
+              const destCanvas = document.createElement('canvas');
+              destCanvas.width = targetW;
+              destCanvas.height = targetH;
+              const destCtx = destCanvas.getContext('2d');
+              destCtx.imageSmoothingEnabled = true;
+              destCtx.imageSmoothingQuality = 'high';
+              destCtx.drawImage(srcCanvas, 0, 0, targetW, targetH);
+              pngDataUrl = destCanvas.toDataURL('image/jpeg', 0.94);
             }
           }
         } catch (gtErr) {
@@ -948,7 +986,7 @@ document.addEventListener('DOMContentLoaded', () => {
               imgData.data.set(rgba);
               srcCtx.putImageData(imgData, 0, 0);
 
-              const maxDim = 1280;
+              const maxDim = 3840;
               if (w > maxDim || h > maxDim) {
                 const sc = Math.min(maxDim / w, maxDim / h);
                 const tw = Math.round(w * sc);
@@ -957,9 +995,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 destCanvas.width = tw;
                 destCanvas.height = th;
                 destCanvas.getContext('2d').drawImage(srcCanvas, 0, 0, tw, th);
-                pngDataUrl = destCanvas.toDataURL('image/png');
+                pngDataUrl = destCanvas.toDataURL('image/jpeg', 0.94);
               } else {
-                pngDataUrl = srcCanvas.toDataURL('image/png');
+                pngDataUrl = srcCanvas.toDataURL('image/jpeg', 0.94);
               }
             }
           }
@@ -2440,34 +2478,40 @@ document.addEventListener('DOMContentLoaded', () => {
             const buffer = ev.target.result;
             showToast(`جاري معالجة وفك ضغط خريطة TIFF: ${file.name}...`, 'info');
 
-            const decoded = await decodeTiffDataset(buffer, file.name);
-            const geoMeta = decoded.geoMeta || parseECWHeader(buffer, file.name, file.size);
-            const tiffBounds = computeBoundsFromMeta(geoMeta);
-            displayECWMetadata(geoMeta, tiffBounds);
+            try {
+              const decoded = await decodeTiffDataset(buffer, file.name);
+              const geoMeta = decoded.geoMeta || parseECWHeader(buffer, file.name, file.size);
+              const tiffBounds = computeBoundsFromMeta(geoMeta);
+              displayECWMetadata(geoMeta, tiffBounds);
 
-            const displaySrc = decoded.pngDataUrl || generateEcwPlaceholderDataUrl(geoMeta);
-            if (displaySrc) {
-              if (decoded.pngDataUrl && decoded.pngDataUrl.startsWith('data:image/')) {
-                const parts = decoded.pngDataUrl.split(',');
-                geminiSelectedImageBase64 = parts[1];
-                geminiSelectedImageMime = 'image/png';
-              }
+              const displaySrc = decoded.pngDataUrl || generateEcwPlaceholderDataUrl(geoMeta);
+              if (displaySrc) {
+                if (decoded.pngDataUrl && decoded.pngDataUrl.startsWith('data:image/')) {
+                  const parts = decoded.pngDataUrl.split(',');
+                  geminiSelectedImageBase64 = parts[1];
+                  geminiSelectedImageMime = decoded.pngDataUrl.startsWith('data:image/jpeg') ? 'image/jpeg' : 'image/png';
+                }
 
-              if (geminiPickImageBtnText) {
-                geminiPickImageBtnText.textContent = `✅ ${file.name} (TIFF جاهز للتحليل)`;
-              }
+                if (geminiPickImageBtnText) {
+                  geminiPickImageBtnText.textContent = `✅ ${file.name} (جاهز بدقة فائقة)`;
+                }
 
-              // Auto-place on map with detected coordinates
-              initCalibrationOverlay(displaySrc, file.name, tiffBounds);
+                // Auto-place on map with detected coordinates
+                initCalibrationOverlay(displaySrc, file.name, tiffBounds);
 
-              if (geoMeta && geoMeta.originX) {
-                showToast(`تم استيراد GeoTIFF وإسقاطه تلقائياً بالإحداثيات!`, 'success');
+                if (geoMeta && geoMeta.originX) {
+                  showToast(`تم استيراد GeoTIFF وإسقاطه بدقة فائقة بالإحداثيات!`, 'success');
+                } else {
+                  showToast(`تم استيراد وعرض صورة TIFF بنجاح!`, 'success');
+                }
               } else {
-                showToast(`تم استيراد وعرض صورة TIFF بنجاح!`, 'success');
+                if (geminiPickImageBtnText) geminiPickImageBtnText.textContent = `❌ تعذّر فك ضغط TIFF: ${file.name}`;
+                showToast('تعذّر فك ضغط ملف TIFF، تأكد من صحة الملف', 'error');
               }
-            } else {
+            } catch (err) {
+              console.error('Error processing TIFF:', err);
               if (geminiPickImageBtnText) geminiPickImageBtnText.textContent = `❌ تعذّر فك ضغط TIFF: ${file.name}`;
-              showToast('تعذّر فك ضغط ملف TIFF، تأكد من صحة الملف', 'error');
+              showToast(`خطأ في معالجة TIFF: ${err.message || err}`, 'error');
             }
           };
           arrReader.readAsArrayBuffer(file);
