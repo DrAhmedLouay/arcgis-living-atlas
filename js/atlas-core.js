@@ -678,7 +678,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Parse GeoTIFF Header (ModelTiepointTag & ModelPixelScaleTag)
+     * Parse GeoTIFF Header (ModelTiepointTag, ModelPixelScaleTag, ModelTransformationTag)
+     * Supports both Classic TIFF (32-bit, magic 42) and BigTIFF (64-bit, magic 43 / 0x2B)
      */
     function parseTIFFGeoHeader(buffer, fileName) {
       if (!buffer || buffer.byteLength < 16) return null;
@@ -696,39 +697,60 @@ document.addEventListener('DOMContentLoaded', () => {
       
       const magic = view.getUint16(2, isLE);
       if (magic !== 42 && magic !== 0x2B) return null;
-      
-      const ifdOffset = view.getUint32(4, isLE);
-      if (ifdOffset <= 0 || ifdOffset >= buffer.byteLength) return null;
-      
-      const numEntries = view.getUint16(ifdOffset, isLE);
-      let entryOffset = ifdOffset + 2;
+      const isBigTIFF = (magic === 0x2B);
+
+      let ifdOffset = 0;
+      let numEntries = 0;
+      let entryOffset = 0;
+      const entrySize = isBigTIFF ? 20 : 12;
+
+      if (!isBigTIFF) {
+        ifdOffset = view.getUint32(4, isLE);
+        if (ifdOffset <= 0 || ifdOffset + 2 > buffer.byteLength) return null;
+        numEntries = view.getUint16(ifdOffset, isLE);
+        entryOffset = ifdOffset + 2;
+      } else {
+        // BigTIFF: 8-byte IFD offset at byte 8
+        if (buffer.byteLength < 16) return null;
+        const low = view.getUint32(isLE ? 8 : 12, isLE);
+        const high = view.getUint32(isLE ? 12 : 8, isLE);
+        ifdOffset = isLE ? low : (high * 0x100000000 + low);
+        if (ifdOffset <= 0 || ifdOffset + 8 > buffer.byteLength) return null;
+        const numLow = view.getUint32(isLE ? ifdOffset : ifdOffset + 4, isLE);
+        numEntries = Math.min(1000, numLow);
+        entryOffset = ifdOffset + 8;
+      }
       
       let width = null, height = null;
       let pixelScale = null;
       let tiepoints = null;
+      let modelTransform = null;
       let epsgCode = null;
       
       for (let e = 0; e < numEntries; e++) {
-        if (entryOffset + 12 > buffer.byteLength) break;
+        if (entryOffset + entrySize > buffer.byteLength) break;
         const tag = view.getUint16(entryOffset, isLE);
         const type = view.getUint16(entryOffset + 2, isLE);
-        const count = view.getUint32(entryOffset + 4, isLE);
+        const count = isBigTIFF
+          ? view.getUint32(isLE ? entryOffset + 4 : entryOffset + 8, isLE)
+          : view.getUint32(entryOffset + 4, isLE);
+        const valFieldOffset = isBigTIFF ? entryOffset + 12 : entryOffset + 8;
         
         if (tag === 256) {
-          width = (type === 3) ? view.getUint16(entryOffset + 8, isLE) : view.getUint32(entryOffset + 8, isLE);
+          width = (type === 3) ? view.getUint16(valFieldOffset, isLE) : view.getUint32(valFieldOffset, isLE);
         } else if (tag === 257) {
-          height = (type === 3) ? view.getUint16(entryOffset + 8, isLE) : view.getUint32(entryOffset + 8, isLE);
+          height = (type === 3) ? view.getUint16(valFieldOffset, isLE) : view.getUint32(valFieldOffset, isLE);
         } else if (tag === 33550 && count >= 2) {
-          const valOffset = view.getUint32(entryOffset + 8, isLE);
-          if (valOffset + 24 <= buffer.byteLength) {
+          const valOffset = view.getUint32(valFieldOffset, isLE);
+          if (valOffset + 16 <= buffer.byteLength) {
             pixelScale = [
               view.getFloat64(valOffset, isLE),
               view.getFloat64(valOffset + 8, isLE),
-              view.getFloat64(valOffset + 16, isLE)
+              (valOffset + 24 <= buffer.byteLength) ? view.getFloat64(valOffset + 16, isLE) : 0
             ];
           }
         } else if (tag === 33922 && count >= 6) {
-          const valOffset = view.getUint32(entryOffset + 8, isLE);
+          const valOffset = view.getUint32(valFieldOffset, isLE);
           if (valOffset + 48 <= buffer.byteLength) {
             tiepoints = [
               view.getFloat64(valOffset, isLE),
@@ -739,8 +761,16 @@ document.addEventListener('DOMContentLoaded', () => {
               view.getFloat64(valOffset + 40, isLE)
             ];
           }
+        } else if (tag === 34264 && count >= 16) {
+          const valOffset = view.getUint32(valFieldOffset, isLE);
+          if (valOffset + 128 <= buffer.byteLength) {
+            modelTransform = [];
+            for (let m = 0; m < 16; m++) {
+              modelTransform.push(view.getFloat64(valOffset + m * 8, isLE));
+            }
+          }
         } else if (tag === 34735 && count >= 4) {
-          const valOffset = view.getUint32(entryOffset + 8, isLE);
+          const valOffset = view.getUint32(valFieldOffset, isLE);
           if (valOffset + count * 2 <= buffer.byteLength) {
             const numKeys = view.getUint16(valOffset + 6, isLE);
             for (let k = 0; k < numKeys; k++) {
@@ -757,24 +787,39 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           }
         }
-        entryOffset += 12;
+        entryOffset += entrySize;
       }
       
-      if (tiepoints && pixelScale && width && height) {
-        const originX = tiepoints[3];
-        const originY = tiepoints[4];
-        const scaleX = pixelScale[0];
-        const scaleY = pixelScale[1];
-        
+      let originX = null, originY = null, scaleX = null, scaleY = null;
+      if (tiepoints && tiepoints.length >= 6) {
+        originX = tiepoints[3];
+        originY = tiepoints[4];
+      }
+      if (pixelScale && pixelScale.length >= 2) {
+        scaleX = Math.abs(pixelScale[0]);
+        scaleY = Math.abs(pixelScale[1]);
+      }
+      if (modelTransform && modelTransform.length >= 16) {
+        if (originX === null) originX = modelTransform[3];
+        if (originY === null) originY = modelTransform[7];
+        if (!scaleX) scaleX = Math.abs(modelTransform[0]);
+        if (!scaleY) scaleY = Math.abs(modelTransform[5]);
+      }
+
+      if (originX !== null && originY !== null && width && height && (originX !== 0 || originY !== 0)) {
+        scaleX = scaleX || 0.5;
+        scaleY = scaleY || 0.5;
         let utmZone = 38;
-        let projection = 'UTM Zone 38N (EPSG:32638)';
-        if (epsgCode === 32637 || (originX > 100000 && originX < 500000 && fileName.includes('37'))) {
+        let projection = `UTM Zone 38N (EPSG:${epsgCode || 32638})`;
+        if (epsgCode === 3857 || epsgCode === 900913 || epsgCode === 102100 || Math.abs(originX) > 900000) {
+          projection = 'WGS 84 / Pseudo-Mercator (EPSG:3857)';
+        } else if (epsgCode === 32637 || (originX > 100000 && originX < 500000 && fileName.includes('37'))) {
           utmZone = 37;
           projection = 'UTM Zone 37N (EPSG:32637)';
         } else if (epsgCode === 32639) {
           utmZone = 39;
           projection = 'UTM Zone 39N (EPSG:32639)';
-        } else if (epsgCode === 4326) {
+        } else if (epsgCode === 4326 || (originX >= -180 && originX <= 180 && originY >= -90 && originY <= 90)) {
           projection = 'WGS84 Geodetic (EPSG:4326)';
         }
         
@@ -789,6 +834,7 @@ document.addEventListener('DOMContentLoaded', () => {
           originY,
           cellIncrementX: scaleX,
           cellIncrementY: -scaleY,
+          bbox: [originX, originY - height * scaleY, originX + width * scaleX, originY],
           projection,
           utmZone,
           datum: 'WGS84',
@@ -1021,10 +1067,10 @@ document.addEventListener('DOMContentLoaded', () => {
               bbox = mainImage.getBoundingBox();
             } catch (be) {}
 
-            let originX = null, originY = null, resX = 0.5, resY = 0.5;
+            let originX = null, originY = null, resX = null, resY = null;
             try {
               const origin = mainImage.getOrigin();
-              if (origin && origin.length >= 2) {
+              if (origin && origin.length >= 2 && (origin[0] !== 0 || origin[1] !== 0)) {
                 originX = origin[0];
                 originY = origin[1];
               }
@@ -1038,59 +1084,66 @@ document.addEventListener('DOMContentLoaded', () => {
               }
             } catch (re) {}
 
+            // Inspect fileDirectory directly for ModelTiepoint, ModelPixelScale, ModelTransformation
+            const fd = mainImage.fileDirectory || {};
+            if ((originX === null || originX === 0) && fd.ModelTiepoint && fd.ModelTiepoint.length >= 6) {
+              originX = fd.ModelTiepoint[3];
+              originY = fd.ModelTiepoint[4];
+            }
+            if ((!resX || resX === 0.5) && fd.ModelPixelScale && fd.ModelPixelScale.length >= 2) {
+              resX = Math.abs(fd.ModelPixelScale[0]);
+              resY = Math.abs(fd.ModelPixelScale[1]);
+            }
+            if ((originX === null || originX === 0) && fd.ModelTransformation && fd.ModelTransformation.length >= 16) {
+              originX = fd.ModelTransformation[3];
+              originY = fd.ModelTransformation[7];
+              resX = Math.abs(fd.ModelTransformation[0]);
+              resY = Math.abs(fd.ModelTransformation[5]);
+            }
+
+            if (bbox && bbox.length >= 4) {
+              const bMinX = Math.min(bbox[0], bbox[2]);
+              const bMaxX = Math.max(bbox[0], bbox[2]);
+              const bMinY = Math.min(bbox[1], bbox[3]);
+              const bMaxY = Math.max(bbox[1], bbox[3]);
+
+              if (Math.abs(bMinX) > 1000 || Math.abs(bMaxY) > 1000 || (bMinX >= -180 && bMaxX <= 180 && (bMinX !== 0 || bMaxX !== 0))) {
+                if (originX === null || originX === 0) originX = bMinX;
+                if (originY === null || originY === 0) originY = bMaxY;
+                if ((!resX || resX <= 0) && width > 0) resX = (bMaxX - bMinX) / width;
+                if ((!resY || resY <= 0) && height > 0) resY = (bMaxY - bMinY) / height;
+                bbox = [bMinX, bMinY, bMaxX, bMaxY];
+              } else {
+                bbox = null;
+              }
+            }
+
+            resX = resX || 0.5;
+            resY = resY || 0.5;
+
             let epsgCode = 32638;
             try {
               const geoKeys = mainImage.getGeoKeys();
               if (geoKeys) {
-                epsgCode = geoKeys.ProjectedCSTypeGeoKey || geoKeys.GeographicTypeGeoKey || 32638;
+                epsgCode = geoKeys.ProjectedCSTypeGeoKey || geoKeys.GeographicTypeGeoKey || geoKeys.ProjectedCRSGeoKey || 32638;
               }
             } catch (ge) {}
 
-            if (bbox && bbox.length >= 4) {
-              const minX = bbox[0];
-              const minY = bbox[1];
-              const maxX = bbox[2];
-              const maxY = bbox[3];
-
+            if (originX !== null && originY !== null && (originX !== 0 || originY !== 0)) {
               let utmZone = 38;
               let proj = `UTM Zone 38N (EPSG:${epsgCode})`;
-              if (epsgCode === 3857 || epsgCode === 900913 || epsgCode === 102100 || minX > 900000 || Math.abs(minX) > 900000) {
+              if (epsgCode === 3857 || epsgCode === 900913 || epsgCode === 102100 || Math.abs(originX) > 900000) {
                 proj = 'WGS 84 / Pseudo-Mercator (EPSG:3857)';
-              } else if (epsgCode === 32637 || (minX > 100000 && minX < 500000 && fileName.includes('37'))) {
+              } else if (epsgCode === 32637 || (originX > 100000 && originX < 500000 && fileName.includes('37'))) {
                 utmZone = 37;
                 proj = 'UTM Zone 37N (EPSG:32637)';
               } else if (epsgCode === 32639) {
                 utmZone = 39;
                 proj = 'UTM Zone 39N (EPSG:32639)';
-              } else if (epsgCode === 4326 || (minX >= -180 && maxX <= 180 && minY >= -90 && maxY <= 90)) {
-                proj = 'WGS84 Geodetic (EPSG:4326)';
-              }
-
-              geoMeta = {
-                fileName: fileName,
-                isECW: false,
-                width: width,
-                height: height,
-                bands: mainImage.getSamplesPerPixel() || 3,
-                compression: 1,
-                originX: minX,
-                originY: maxY,
-                cellIncrementX: resX,
-                cellIncrementY: -resY,
-                bbox: bbox,
-                projection: proj,
-                utmZone: utmZone,
-                datum: 'WGS84',
-                detectionSource: `بيانات GeoTIFF الأصلية (EPSG:${epsgCode})`
-              };
-            } else if (originX !== null && originY !== null) {
-              let utmZone = 38;
-              let proj = `UTM Zone 38N (EPSG:${epsgCode})`;
-              if (epsgCode === 3857 || epsgCode === 900913 || epsgCode === 102100 || Math.abs(originX) > 900000) {
-                proj = 'WGS 84 / Pseudo-Mercator (EPSG:3857)';
               } else if (epsgCode === 4326 || (originX >= -180 && originX <= 180 && originY >= -90 && originY <= 90)) {
                 proj = 'WGS84 Geodetic (EPSG:4326)';
               }
+
               geoMeta = {
                 fileName: fileName,
                 isECW: false,
@@ -1102,7 +1155,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 originY: originY,
                 cellIncrementX: resX,
                 cellIncrementY: -resY,
-                bbox: bbox,
+                bbox: bbox || [originX, originY - height * resY, originX + width * resX, originY],
                 projection: proj,
                 utmZone: utmZone,
                 datum: 'WGS84',
@@ -1649,84 +1702,74 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Compute Geographic LatLngBounds from Metadata
-     * If coordinates are unknown, falls back to current viewport (never forces Baghdad/desert!)
+     * Converts exact projected coordinates (UTM 38N/37N/39N, Web Mercator, or Geodetic) into Leaflet LatLngBounds
      */
     function computeBoundsFromMeta(meta) {
       if (!meta) meta = {};
       let north, south, east, west;
 
-      // Case 0: High-Precision Direct Bounding Box matching (from GeoTIFF ModelTiepoint/ModelPixelScale)
-      if (meta.bbox && Array.isArray(meta.bbox) && meta.bbox.length >= 4) {
-        const minX = meta.bbox[0];
-        const minY = meta.bbox[1];
-        const maxX = meta.bbox[2];
-        const maxY = meta.bbox[3];
+      // 1. Determine projected or geographic bounding box
+      let xLeft = null, xRight = null, yTop = null, yBottom = null;
 
-        if (Math.abs(minX) > 900000 || (meta.projection && meta.projection.includes('3857'))) {
-          // Web Mercator
-          const p1 = mercatorToLatLng(minX, maxY);
-          const p2 = mercatorToLatLng(maxX, minY);
-          north = Math.max(p1.lat, p2.lat);
-          south = Math.min(p1.lat, p2.lat);
-          west = Math.min(p1.lng, p2.lng);
-          east = Math.max(p1.lng, p2.lng);
-        } else if (Math.abs(minX) > 10000 || Math.abs(maxY) > 100000) {
-          // Standard UTM (Zone 38N / 37N / 39N)
-          const zone = meta.utmZone || 38;
-          const tl = utmToLatLng(minX, maxY, zone, true);
-          const br = utmToLatLng(maxX, minY, zone, true);
-          north = Math.max(tl.lat, br.lat);
-          south = Math.min(tl.lat, br.lat);
-          west = Math.min(tl.lng, br.lng);
-          east = Math.max(tl.lng, br.lng);
-        } else if (minX >= -180 && maxX <= 180 && minY >= -90 && maxY <= 90) {
-          // WGS84 Geodetic
-          north = maxY;
-          south = minY;
-          west = minX;
-          east = maxX;
+      // Priority 1: Top-Left Origin + Exact Width/Height in meters (Proven accurate for UTM and flight surveys)
+      if (meta.originX !== null && meta.originX !== undefined && meta.originY !== null && meta.originY !== undefined && (meta.originX !== 0 || meta.originY !== 0)) {
+        const wMeters = (meta.width || 8000) * Math.abs(meta.cellIncrementX || 0.5);
+        const hMeters = (meta.height || 6000) * Math.abs(meta.cellIncrementY || 0.5);
+        xLeft = meta.originX;
+        yTop = meta.originY;
+        xRight = meta.originX + wMeters;
+        yBottom = meta.originY - hMeters;
+      }
+      
+      // Priority 2: Direct Bounding Box (ModelTiepoint / ModelPixelScale / GDAL extent)
+      if ((xLeft === null || yTop === null) && meta.bbox && Array.isArray(meta.bbox) && meta.bbox.length >= 4) {
+        const b0 = meta.bbox[0], b1 = meta.bbox[1], b2 = meta.bbox[2], b3 = meta.bbox[3];
+        const minX = Math.min(b0, b2);
+        const maxX = Math.max(b0, b2);
+        const minY = Math.min(b1, b3);
+        const maxY = Math.max(b1, b3);
+        if (Math.abs(minX) > 1000 || Math.abs(maxY) > 1000 || (minX >= -180 && maxX <= 180 && (minX !== 0 || maxX !== 0))) {
+          xLeft = minX;
+          xRight = maxX;
+          yBottom = minY;
+          yTop = maxY;
         }
       }
 
-      // Case A: Coordinates are in UTM meters or Web Mercator (from Origin + Resolution)
-      if ((north === undefined || south === undefined) && meta.originX && meta.originY && (Math.abs(meta.originX) > 10000 || Math.abs(meta.originY) > 100000)) {
-        if (Math.abs(meta.originX) > 900000 || (meta.projection && meta.projection.includes('3857'))) {
-          // Web Mercator (EPSG:3857)
-          const widthMeters = (meta.width || 8000) * Math.abs(meta.cellIncrementX || 1.0);
-          const heightMeters = (meta.height || 6000) * Math.abs(meta.cellIncrementY || 1.0);
-          const p1 = mercatorToLatLng(meta.originX, meta.originY);
-          const p2 = mercatorToLatLng(meta.originX + widthMeters, meta.originY - heightMeters);
-          north = Math.max(p1.lat, p2.lat);
-          south = Math.min(p1.lat, p2.lat);
-          west = Math.min(p1.lng, p2.lng);
-          east = Math.max(p1.lng, p2.lng);
-        } else {
-          // Standard UTM
+      // 2. Convert projected rectangle to WGS84 Lat/Lng
+      if (xLeft !== null && yTop !== null && xRight !== null && yBottom !== null) {
+        // Case A: Web Mercator (EPSG:3857)
+        if (Math.abs(xLeft) > 900000 || (meta.projection && meta.projection.includes('3857'))) {
+          const pTL = mercatorToLatLng(xLeft, yTop);
+          const pBR = mercatorToLatLng(xRight, yBottom);
+          north = Math.max(pTL.lat, pBR.lat);
+          south = Math.min(pTL.lat, pBR.lat);
+          west = Math.min(pTL.lng, pBR.lng);
+          east = Math.max(pTL.lng, pBR.lng);
+        }
+        // Case B: Standard UTM (Zone 38N / 37N / 39N)
+        else if (Math.abs(xLeft) > 10000 || Math.abs(yTop) > 100000) {
           const zone = meta.utmZone || 38;
-          const widthMeters = (meta.width || 8000) * Math.abs(meta.cellIncrementX || 0.5);
-          const heightMeters = (meta.height || 6000) * Math.abs(meta.cellIncrementY || 0.5);
-
-          const tl = utmToLatLng(meta.originX, meta.originY, zone, true);
-          const br = utmToLatLng(meta.originX + widthMeters, meta.originY - heightMeters, zone, true);
-
-          north = Math.max(tl.lat, br.lat);
-          south = Math.min(tl.lat, br.lat);
-          west = Math.min(tl.lng, br.lng);
-          east = Math.max(tl.lng, br.lng);
+          const pTL = utmToLatLng(xLeft, yTop, zone, true);
+          const pBR = utmToLatLng(xRight, yBottom, zone, true);
+          const pTR = utmToLatLng(xRight, yTop, zone, true);
+          const pBL = utmToLatLng(xLeft, yBottom, zone, true);
+          north = Math.max(pTL.lat, pTR.lat);
+          south = Math.min(pBL.lat, pBR.lat);
+          west = Math.min(pTL.lng, pBL.lng);
+          east = Math.max(pTR.lng, pBR.lng);
+        }
+        // Case C: WGS84 Geodetic in degrees
+        else if (xLeft >= -180 && xRight <= 180 && yBottom >= -90 && yTop <= 90) {
+          north = Math.max(yTop, yBottom);
+          south = Math.min(yTop, yBottom);
+          west = Math.min(xLeft, xRight);
+          east = Math.max(xLeft, xRight);
         }
       }
-      // Case B: Coordinates are in Geographic Degrees (WGS84)
-      else if (meta.originX !== null && meta.originY !== null && meta.originX >= -180 && meta.originX <= 180 && meta.originY >= -90 && meta.originY <= 90) {
-        const spanX = (meta.width || 8000) * Math.abs(meta.cellIncrementX || 0.00005);
-        const spanY = (meta.height || 6000) * Math.abs(meta.cellIncrementY || 0.00005);
 
-        west = Math.min(meta.originX, meta.originX + spanX);
-        east = Math.max(meta.originX, meta.originX + spanX);
-        north = Math.max(meta.originY, meta.originY - spanY);
-        south = Math.min(meta.originY, meta.originY - spanY);
-      }
-      // Case C: Unreferenced image - Adaptive placement at current viewport or center
-      else {
+      // Case D: Fallback to current viewport or center
+      if (north === undefined || south === undefined || !isFinite(north) || !isFinite(south)) {
         let centerLat = 33.3152;
         let centerLng = 44.3661;
         let spanDeg = 0.04;
