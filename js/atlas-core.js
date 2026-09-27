@@ -337,6 +337,241 @@ document.addEventListener('DOMContentLoaded', () => {
     const blinkCompareBtn = document.getElementById('blinkCompareBtn');
     const zoomToOverlayBtn = document.getElementById('zoomToOverlayBtn');
 
+    // =========================================================================
+    // Undo / Redo Calibration History Engine
+    // =========================================================================
+    const floatUndoBtn = document.getElementById('floatUndoBtn');
+    const floatRedoBtn = document.getElementById('floatRedoBtn');
+    const sidebarUndoCalibBtn = document.getElementById('sidebarUndoCalibBtn');
+    const sidebarRedoCalibBtn = document.getElementById('sidebarRedoCalibBtn');
+    const floatRedoGcpBtn = document.getElementById('floatRedoGcpBtn');
+    const sidebarRedoGcpBtn = document.getElementById('sidebarRedoGcpBtn');
+
+    const calibUndoStack = [];
+    const calibRedoStack = [];
+    let gcpUndonePairs = [];
+
+    function pushCalibHistory(actionName) {
+      if (!overlay || !bounds) return;
+      const snapshot = {
+        actionName: actionName || 'تعديل المعايرة',
+        bounds: L.latLngBounds(bounds.getSouthWest(), bounds.getNorthEast()),
+        baseCenter: baseCenter ? L.latLng(baseCenter.lat, baseCenter.lng) : bounds.getCenter(),
+        baseSpanLat: baseSpanLat,
+        baseSpanLng: baseSpanLng,
+        rotationDeg: rotationDeg,
+        scalePercent: scalePercent,
+        visualState: { ...visualState }
+      };
+      calibUndoStack.push(snapshot);
+      if (calibUndoStack.length > 50) calibUndoStack.shift();
+      calibRedoStack.length = 0; // Clear redo on new manual action
+      updateUndoRedoUI();
+    }
+
+    function applyCalibState(state) {
+      if (!overlay || !state) return;
+      bounds = L.latLngBounds(state.bounds.getSouthWest(), state.bounds.getNorthEast());
+      baseCenter = state.baseCenter ? L.latLng(state.baseCenter.lat, state.baseCenter.lng) : bounds.getCenter();
+      baseSpanLat = state.baseSpanLat;
+      baseSpanLng = state.baseSpanLng;
+      rotationDeg = state.rotationDeg;
+      scalePercent = state.scalePercent;
+      visualState = { ...state.visualState };
+
+      // Update UI Controls
+      if (rotationSlider) rotationSlider.value = rotationDeg;
+      if (rotationLabel) rotationLabel.textContent = `${rotationDeg}°`;
+      if (boundRot) boundRot.textContent = `${rotationDeg}°`;
+
+      if (scaleSlider) scaleSlider.value = scalePercent;
+      if (scaleLabel) scaleLabel.textContent = `${scalePercent}%`;
+
+      if (opacitySlider) opacitySlider.value = Math.round(visualState.opacity * 100);
+      if (opacityLabel) opacityLabel.textContent = `${Math.round(visualState.opacity * 100)}%`;
+      if (brightnessSlider) brightnessSlider.value = visualState.brightness;
+      if (brightnessLabel) brightnessLabel.textContent = `${visualState.brightness}%`;
+      if (contrastSlider) contrastSlider.value = visualState.contrast;
+      if (contrastLabel) contrastLabel.textContent = `${visualState.contrast}%`;
+      if (saturationSlider) saturationSlider.value = visualState.saturation;
+      if (saturationLabel) saturationLabel.textContent = `${visualState.saturation}%`;
+      if (invertToggle) invertToggle.checked = !!visualState.invert;
+      if (sharpToggle) sharpToggle.checked = !!visualState.crisp;
+
+      updateOverlayGeometry();
+      createHandles();
+      applyVisualFilters();
+      updateReadout();
+    }
+
+    function undoCalibAction() {
+      // If currently picking GCP points, undo the last point
+      if (isGcpMatchingActive) {
+        undoLastGcpPoint();
+        return;
+      }
+
+      if (!overlay || !bounds) {
+        showToast('يرجى تحميل واستيراد خريطة أولاً', 'warning');
+        return;
+      }
+
+      if (calibUndoStack.length === 0) {
+        showToast('لا توجد تعديلات سابقة في سجل المعايرة للتراجع عنها', 'info');
+        return;
+      }
+
+      // Save current state to Redo stack
+      const currentSnapshot = {
+        actionName: 'الحالة الحالية',
+        bounds: L.latLngBounds(bounds.getSouthWest(), bounds.getNorthEast()),
+        baseCenter: baseCenter ? L.latLng(baseCenter.lat, baseCenter.lng) : bounds.getCenter(),
+        baseSpanLat: baseSpanLat,
+        baseSpanLng: baseSpanLng,
+        rotationDeg: rotationDeg,
+        scalePercent: scalePercent,
+        visualState: { ...visualState }
+      };
+      calibRedoStack.push(currentSnapshot);
+      if (calibRedoStack.length > 50) calibRedoStack.shift();
+
+      const prev = calibUndoStack.pop();
+      applyCalibState(prev);
+      updateUndoRedoUI();
+      showToast(`تم التراجع عن: ${prev.actionName}`, 'info');
+    }
+
+    function redoCalibAction() {
+      // If currently picking GCP points, redo the last undone point
+      if (isGcpMatchingActive) {
+        redoLastGcpPoint();
+        return;
+      }
+
+      if (!overlay || !bounds) {
+        showToast('يرجى تحميل واستيراد خريطة أولاً', 'warning');
+        return;
+      }
+
+      if (calibRedoStack.length === 0) {
+        showToast('لا توجد خطوات تالية في سجل المعايرة لإعادتها', 'info');
+        return;
+      }
+
+      // Save current state to Undo stack
+      const currentSnapshot = {
+        actionName: 'الحالة السابقة',
+        bounds: L.latLngBounds(bounds.getSouthWest(), bounds.getNorthEast()),
+        baseCenter: baseCenter ? L.latLng(baseCenter.lat, baseCenter.lng) : bounds.getCenter(),
+        baseSpanLat: baseSpanLat,
+        baseSpanLng: baseSpanLng,
+        rotationDeg: rotationDeg,
+        scalePercent: scalePercent,
+        visualState: { ...visualState }
+      };
+      calibUndoStack.push(currentSnapshot);
+      if (calibUndoStack.length > 50) calibUndoStack.shift();
+
+      const next = calibRedoStack.pop();
+      applyCalibState(next);
+      updateUndoRedoUI();
+      showToast(`تمت إعادة: ${next.actionName}`, 'info');
+    }
+
+    function redoLastGcpPoint() {
+      if (!isGcpMatchingActive || gcpUndonePairs.length === 0) {
+        showToast('لا توجد نقاط سابقة لإعادتها', 'info');
+        return;
+      }
+
+      const item = gcpUndonePairs.pop();
+      if (item.type === 'pendingA') {
+        gcpPendingImgPt = item.imgPt;
+        const pairIndex = gcpPairs.length;
+        const color = getGcpPairColor(pairIndex);
+        gcpPendingMarkerA = createGcpMarker(item.imgPt, `${pairIndex + 1}A (صورة)`, color.a);
+
+        if (overlay) {
+          overlay.setOpacity(0.35);
+          if (opacitySlider) opacitySlider.value = 35;
+          if (opacityLabel) opacityLabel.textContent = '35%';
+        }
+
+        updateGcpUI();
+        showToast(`تمت إعادة تحديد النقطة ${pairIndex + 1}A`, 'info');
+      } else if (item.type === 'pair') {
+        const p = item.pair;
+        const pairIndex = gcpPairs.length;
+        const color = getGcpPairColor(pairIndex);
+        p.markerA = createGcpMarker(p.imgPt, `${pairIndex + 1}A (صورة)`, color.a);
+        p.markerB = createGcpMarker(p.basePt, `${pairIndex + 1}B (واقع)`, color.b);
+        p.line = L.polyline([p.imgPt, p.basePt], { color: color.line, weight: 2.5, dashArray: '5, 5' }).addTo(map);
+
+        gcpLines.push(p.line);
+        gcpPairs.push(p);
+
+        updateGcpUI();
+        showToast(`تمت إعادة ربط الزوج رقم ${pairIndex + 1}`, 'info');
+      }
+    }
+
+    function updateUndoRedoUI() {
+      const canUndoCalib = calibUndoStack.length > 0;
+      const canRedoCalib = calibRedoStack.length > 0;
+      const canUndoGcp = isGcpMatchingActive && (gcpPendingImgPt !== null || gcpPairs.length > 0);
+      const canRedoGcp = isGcpMatchingActive && gcpUndonePairs.length > 0;
+
+      if (isGcpMatchingActive) {
+        if (floatUndoBtn) {
+          floatUndoBtn.disabled = !canUndoGcp;
+          floatUndoBtn.title = 'تراجع عن آخر نقطة GCP (Ctrl+Z)';
+        }
+        if (floatRedoBtn) {
+          floatRedoBtn.disabled = !canRedoGcp;
+          floatRedoBtn.title = 'إعادة النقطة السابقة (Ctrl+Y)';
+        }
+        if (sidebarUndoCalibBtn) {
+          sidebarUndoCalibBtn.disabled = !canUndoGcp;
+        }
+        if (sidebarRedoCalibBtn) {
+          sidebarRedoCalibBtn.disabled = !canRedoGcp;
+        }
+        if (floatUndoGcpBtn) floatUndoGcpBtn.classList.toggle('hidden', !canUndoGcp);
+        if (floatRedoGcpBtn) floatRedoGcpBtn.classList.toggle('hidden', !canRedoGcp);
+        if (sidebarUndoGcpBtn) sidebarUndoGcpBtn.classList.toggle('hidden', !canUndoGcp);
+        if (sidebarRedoGcpBtn) sidebarRedoGcpBtn.classList.toggle('hidden', !canRedoGcp);
+      } else {
+        if (floatUndoBtn) {
+          floatUndoBtn.disabled = !canUndoCalib;
+          floatUndoBtn.title = canUndoCalib
+            ? `تراجع عن: ${calibUndoStack[calibUndoStack.length - 1].actionName} (Ctrl+Z)`
+            : 'تراجع (Ctrl+Z)';
+        }
+        if (floatRedoBtn) {
+          floatRedoBtn.disabled = !canRedoCalib;
+          floatRedoBtn.title = canRedoCalib
+            ? `إعادة: ${calibRedoStack[calibRedoStack.length - 1].actionName} (Ctrl+Y)`
+            : 'إعادة (Ctrl+Y)';
+        }
+        if (sidebarUndoCalibBtn) {
+          sidebarUndoCalibBtn.disabled = !canUndoCalib;
+          sidebarUndoCalibBtn.title = canUndoCalib
+            ? `تراجع عن: ${calibUndoStack[calibUndoStack.length - 1].actionName} (Ctrl+Z)`
+            : 'تراجع (Ctrl+Z)';
+        }
+        if (sidebarRedoCalibBtn) {
+          sidebarRedoCalibBtn.disabled = !canRedoCalib;
+          sidebarRedoCalibBtn.title = canRedoCalib
+            ? `إعادة: ${calibRedoStack[calibRedoStack.length - 1].actionName} (Ctrl+Y)`
+            : 'إعادة (Ctrl+Y)';
+        }
+        if (floatUndoGcpBtn) floatUndoGcpBtn.classList.add('hidden');
+        if (floatRedoGcpBtn) floatRedoGcpBtn.classList.add('hidden');
+        if (sidebarUndoGcpBtn) sidebarUndoGcpBtn.classList.add('hidden');
+        if (sidebarRedoGcpBtn) sidebarRedoGcpBtn.classList.add('hidden');
+      }
+    }
+
     // AI Spatial Alignment & Landmark Matching Studio Elements
     const aiAutoScanHeaderBtn = document.getElementById('aiAutoScanHeaderBtn');
     const aiCoordsTextInput = document.getElementById('aiCoordsTextInput');
@@ -1992,8 +2227,9 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
      * Apply new LatLngBounds to the current calibrated overlay
      */
-    function applyNewOverlayBounds(newBounds) {
+    function applyNewOverlayBounds(newBounds, actionName) {
       if (!overlay || !newBounds) return;
+      pushCalibHistory(actionName || 'تغيير حدود الخريطة');
       bounds = newBounds;
       baseCenter = bounds.getCenter();
       baseSpanLat = bounds.getNorth() - bounds.getSouth();
@@ -2019,7 +2255,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      applyNewOverlayBounds(landmark.bounds);
+      applyNewOverlayBounds(landmark.bounds, `إسقاط على معلم: ${landmark.name}`);
       showToast(`تمت مطابقة وإسقاط الخارطة بنجاح فوق معلم: ${landmark.name}`, 'success');
 
       // Trigger automatic blink comparison to show visual match with real basemap
@@ -2086,7 +2322,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (boundRot) boundRot.textContent = '0°';
         if (scaleSlider) scaleSlider.value = 100;
         if (scaleLabel) scaleLabel.textContent = '100%';
-        applyNewOverlayBounds(targetBounds);
+        applyNewOverlayBounds(targetBounds, `مطابقة تلقائية: ${targetName}`);
         showToast(`⚡ تمت المطابقة التلقائية الذكية بنجاح مع خارطة الأساس: ${targetName}`, 'success');
         setTimeout(() => { blinkCompare(); }, 400);
       } else {
@@ -2602,6 +2838,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const pairIndex = gcpPairs.length;
       const color = getGcpPairColor(pairIndex);
+      gcpUndonePairs = []; // Clear redo stack on new point capture
 
       if (gcpPendingImgPt === null) {
         // Point A (Image Point)
@@ -2660,6 +2897,11 @@ document.addEventListener('DOMContentLoaded', () => {
           const idx = gcpMarkers.indexOf(gcpPendingMarkerA);
           if (idx !== -1) gcpMarkers.splice(idx, 1);
         }
+        gcpUndonePairs.push({
+          type: 'pendingA',
+          imgPt: gcpPendingImgPt,
+          priorOpacity: gcpPriorOpacity
+        });
         gcpPendingImgPt = null;
         gcpPendingMarkerA = null;
 
@@ -2677,6 +2919,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (removed.markerA && map.hasLayer(removed.markerA)) map.removeLayer(removed.markerA);
         if (removed.markerB && map.hasLayer(removed.markerB)) map.removeLayer(removed.markerB);
         if (removed.line && map.hasLayer(removed.line)) map.removeLayer(removed.line);
+
+        gcpUndonePairs.push({
+          type: 'pair',
+          pair: removed
+        });
 
         updateGcpUI();
         showToast(`تم التراجع عن الزوج رقم ${gcpPairs.length + 1}`, 'info');
@@ -2700,6 +2947,7 @@ document.addEventListener('DOMContentLoaded', () => {
         gcpPendingMarkerA = null;
       }
 
+      pushCalibHistory('معايرة نقاط الضبط GCP');
       solveMultiPointGcpAffine(gcpPairs);
 
       // Finish mode
@@ -3568,6 +3816,31 @@ document.addEventListener('DOMContentLoaded', () => {
       sidebarUndoGcpBtn.addEventListener('click', () => undoLastGcpPoint());
     }
 
+    if (floatRedoGcpBtn) {
+      floatRedoGcpBtn.addEventListener('click', () => redoLastGcpPoint());
+    }
+
+    if (sidebarRedoGcpBtn) {
+      sidebarRedoGcpBtn.addEventListener('click', () => redoLastGcpPoint());
+    }
+
+    // General Calibration Undo / Redo Buttons
+    if (floatUndoBtn) {
+      floatUndoBtn.addEventListener('click', () => undoCalibAction());
+    }
+
+    if (floatRedoBtn) {
+      floatRedoBtn.addEventListener('click', () => redoCalibAction());
+    }
+
+    if (sidebarUndoCalibBtn) {
+      sidebarUndoCalibBtn.addEventListener('click', () => undoCalibAction());
+    }
+
+    if (sidebarRedoCalibBtn) {
+      sidebarRedoCalibBtn.addEventListener('click', () => redoCalibAction());
+    }
+
     // ==========================================
     // AI Reality Alignment & Calibration Modal Studio
     // ==========================================
@@ -4309,6 +4582,10 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
           })
         }).addTo(map);
 
+        marker.on('dragstart', () => {
+          pushCalibHistory('تعديل حدود الخريطة بالمقابض');
+        });
+
         marker.on('drag', () => {
           const newPos = marker.getLatLng();
           const curSw = bounds.getSouthWest();
@@ -4347,6 +4624,10 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
           iconSize: [16, 16]
         })
       }).addTo(map);
+
+      centerMarker.on('dragstart', () => {
+        pushCalibHistory('تحريك موقع الخريطة بمقبض المركز');
+      });
 
       centerMarker.on('drag', () => {
         const newCenter = centerMarker.getLatLng();
@@ -4439,6 +4720,7 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
      */
     function nudge(dLat, dLng) {
       if (!bounds) return;
+      pushCalibHistory('إزاحة الخريطة');
       bounds = L.latLngBounds(
         [bounds.getSouth() + dLat, bounds.getWest() + dLng],
         [bounds.getNorth() + dLat, bounds.getEast() + dLng]
@@ -4478,6 +4760,7 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
     if (fitToViewBtn) {
       fitToViewBtn.addEventListener('click', () => {
         if (!overlay) return;
+        pushCalibHistory('مطابقة لنطاق الشاشة');
         const curMapBounds = map.getBounds().pad(-0.15);
         bounds = curMapBounds;
         baseCenter = bounds.getCenter();
@@ -4490,8 +4773,22 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
     }
 
     // Rotation slider
+    let isRotatingActive = false;
     if (rotationSlider) {
+      rotationSlider.addEventListener('pointerdown', () => {
+        if (!isRotatingActive) {
+          pushCalibHistory('تدوير الخريطة');
+          isRotatingActive = true;
+        }
+      });
+      rotationSlider.addEventListener('change', () => {
+        isRotatingActive = false;
+      });
       rotationSlider.addEventListener('input', (e) => {
+        if (!isRotatingActive) {
+          pushCalibHistory('تدوير الخريطة');
+          isRotatingActive = true;
+        }
         rotationDeg = parseInt(e.target.value, 10);
         if (rotationLabel) rotationLabel.textContent = `${rotationDeg}°`;
         if (boundRot) boundRot.textContent = `${rotationDeg}°`;
@@ -4501,6 +4798,7 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
 
     if (resetRotationBtn) {
       resetRotationBtn.addEventListener('click', () => {
+        pushCalibHistory('إعادة تعيين زاوية التدوير');
         rotationDeg = 0;
         if (rotationSlider) rotationSlider.value = 0;
         if (rotationLabel) rotationLabel.textContent = '0°';
@@ -4510,8 +4808,22 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
     }
 
     // Scale slider
+    let isScalingActive = false;
     if (scaleSlider) {
+      scaleSlider.addEventListener('pointerdown', () => {
+        if (!isScalingActive) {
+          pushCalibHistory('تعديل مقياس الحجم');
+          isScalingActive = true;
+        }
+      });
+      scaleSlider.addEventListener('change', () => {
+        isScalingActive = false;
+      });
       scaleSlider.addEventListener('input', (e) => {
+        if (!isScalingActive) {
+          pushCalibHistory('تعديل مقياس الحجم');
+          isScalingActive = true;
+        }
         scalePercent = parseInt(e.target.value, 10);
         if (scaleLabel) scaleLabel.textContent = `${scalePercent}%`;
 
@@ -4578,6 +4890,7 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
 
     if (resetVisualsBtn) {
       resetVisualsBtn.addEventListener('click', () => {
+        pushCalibHistory('إعادة ضبط المؤثرات البصرية');
         visualState = {
           opacity: 0.85,
           brightness: 100,
@@ -4719,6 +5032,10 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
         statusLabel.textContent = 'لم يتم اختيار ملف';
         statusLabel.className = 'text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700';
       }
+      calibUndoStack.length = 0;
+      calibRedoStack.length = 0;
+      gcpUndonePairs.length = 0;
+      updateUndoRedoUI();
       updateVisibilityUI();
       renderActiveLayersTab();
     }
@@ -4729,6 +5046,10 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
         showToast('تمت إزالة الصورة الفضائية المعايرة', 'info');
       });
     }
+
+    // Expose Undo / Redo for global hotkeys & external access
+    window.undoCalibAction = undoCalibAction;
+    window.redoCalibAction = redoCalibAction;
   }
 
   /**
@@ -6583,6 +6904,85 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
         window.print();
       });
     }
+
+    // =========================================================================
+    // Zen Mode / Fullscreen Viewport Mode (Hiding Top Bars & Menus)
+    // =========================================================================
+    const toggleZenModeBtn = document.getElementById('toggleZenModeBtn');
+    const restoreZenModeBtn = document.getElementById('restoreZenModeBtn');
+
+    function toggleZenMode(forceState) {
+      const isCurrentlyZen = document.body.classList.contains('zen-mode-active');
+      const willBeZen = (typeof forceState === 'boolean') ? forceState : !isCurrentlyZen;
+
+      if (willBeZen) {
+        document.body.classList.add('zen-mode-active');
+        if (restoreZenModeBtn) restoreZenModeBtn.classList.remove('hidden');
+        showToast('تم تفعيل وضع الشاشة الكاملة وإخفاء الأشرطة والقوائم (اضغط Esc للعودة)', 'info');
+      } else {
+        document.body.classList.remove('zen-mode-active');
+        if (restoreZenModeBtn) restoreZenModeBtn.classList.add('hidden');
+        showToast('تمت استعادة الأشرطة والقوائم العلوية', 'info');
+      }
+
+      // Re-invalidate Leaflet map dimensions so it smoothly adapts to 100vh
+      setTimeout(() => {
+        if (map) map.invalidateSize();
+      }, 100);
+      setTimeout(() => {
+        if (map) map.invalidateSize();
+      }, 300);
+    }
+
+    if (toggleZenModeBtn) {
+      toggleZenModeBtn.addEventListener('click', () => toggleZenMode());
+    }
+    if (restoreZenModeBtn) {
+      restoreZenModeBtn.addEventListener('click', () => toggleZenMode(false));
+    }
+    window.toggleZenMode = toggleZenMode;
+
+    // =========================================================================
+    // Global Keyboard Shortcuts (Undo, Redo, Zen Mode, Escape)
+    // =========================================================================
+    window.addEventListener('keydown', (e) => {
+      const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+      const isEditable = activeTag === 'input' || activeTag === 'textarea' || (document.activeElement && document.activeElement.isContentEditable);
+
+      // Escape: Exit Zen mode if active
+      if (e.key === 'Escape') {
+        if (document.body.classList.contains('zen-mode-active')) {
+          toggleZenMode(false);
+          return;
+        }
+      }
+
+      // Single 'z' or 'Z' to toggle Zen mode (only if not typing in input)
+      if (!isEditable && (e.key === 'z' || e.key === 'Z') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        toggleZenMode();
+        return;
+      }
+
+      // Undo: Ctrl+Z / Cmd+Z (without shift)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        if (!isEditable) {
+          e.preventDefault();
+          if (typeof window.undoCalibAction === 'function') {
+            window.undoCalibAction();
+          }
+        }
+      }
+
+      // Redo: Ctrl+Y / Cmd+Y OR Ctrl+Shift+Z / Cmd+Shift+Z
+      if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
+        if (!isEditable) {
+          e.preventDefault();
+          if (typeof window.redoCalibAction === 'function') {
+            window.redoCalibAction();
+          }
+        }
+      }
+    });
 
     // Save current bookmark
     const addBookmarkBtn = document.getElementById('saveCurrentViewBookmark');

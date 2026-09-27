@@ -27,7 +27,7 @@
   <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 
   <!-- Custom Styling -->
-  <link rel="stylesheet" href="css/styles.css?v=20260928_05">
+  <link rel="stylesheet" href="css/styles.css?v=20260928_06">
 </head>
 <body class="bg-slate-950 text-slate-100 h-screen w-screen flex flex-col overflow-hidden select-none">
 
@@ -89,6 +89,12 @@
         <span class="hidden sm:inline">تصدير</span>
       </button>
 
+      <!-- Toggle Zen / Fullscreen Mode (Hide Top Bars & Menus) -->
+      <button id="toggleZenModeBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700/80 text-xs font-medium text-slate-200 flex items-center gap-1.5 transition-colors" title="إخفاء الأشرطة والقوائم العلوية (Zen Mode / زر Esc للخروج)">
+        <i class="fa-solid fa-expand text-cyan-400"></i>
+        <span class="hidden sm:inline">إخفاء الأشرطة</span>
+      </button>
+
       <!-- Active Layer Counter Badge -->
       <div class="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-mono">
         <i class="fa-solid fa-layer-group text-[11px]"></i>
@@ -106,11 +112,17 @@
   <!-- =========================================================================
        Main Workspace (Sidebar + Map)
        ========================================================================= -->
-  <div class="flex-1 flex relative overflow-hidden" style="flex: 1 1 0%; position: relative; width: 100%; height: calc(100vh - 56px);">
+  <div id="mainWorkspaceWrapper" class="flex-1 flex relative overflow-hidden" style="flex: 1 1 0%; position: relative; width: 100%; height: calc(100vh - 56px);">
     
     <!-- Map Container -->
     <main class="flex-1 relative h-full" style="flex: 1 1 0%; position: relative; width: 100%; height: 100%;">
       <div id="viewDiv"></div>
+
+      <!-- Floating Restore Top Bar Button (Visible only in Zen Mode) -->
+      <button id="restoreZenModeBtn" class="hidden absolute top-3 left-1/2 -translate-x-1/2 z-40 px-3.5 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-cyan-500/60 shadow-2xl text-xs font-semibold text-cyan-300 hover:text-white flex items-center gap-2 backdrop-blur-md transition-all cursor-pointer">
+        <i class="fa-solid fa-compress text-cyan-400"></i>
+        <span>إظهار الأشرطة والقوائم (Esc)</span>
+      </button>
 
       <!-- Interactive Split-Screen Swipe Divider -->
       <div id="swipeDivider" class="hidden absolute top-0 bottom-0 z-30 w-1 bg-white/90 shadow-[0_0_15px_rgba(0,0,0,0.9)] cursor-ew-resize select-none" style="left: 50%;">
@@ -142,6 +154,18 @@
           <i class="fa-solid fa-bolt text-amber-300"></i>
           <span>مطابقة تلقائية</span>
         </button>
+
+        <!-- History Undo / Redo Buttons -->
+        <div class="flex items-center gap-1 bg-slate-950/80 p-0.5 rounded-lg border border-slate-700/80">
+          <button type="button" id="floatUndoBtn" disabled class="px-2 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1 shadow-sm disabled:opacity-35 disabled:hover:bg-slate-800 disabled:cursor-not-allowed" title="تراجع عن آخر تعديل للمعايرة (Ctrl+Z / Cmd+Z)">
+            <i class="fa-solid fa-rotate-left text-amber-400 text-[11px]"></i>
+            <span>تراجع</span>
+          </button>
+          <button type="button" id="floatRedoBtn" disabled class="px-2 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1 shadow-sm disabled:opacity-35 disabled:hover:bg-slate-800 disabled:cursor-not-allowed" title="إعادة التعديل الملغى (Ctrl+Y / Cmd+Shift+Z)">
+            <i class="fa-solid fa-rotate-right text-sky-400 text-[11px]"></i>
+            <span>إعادة</span>
+          </button>
+        </div>
 
         <!-- 2. Interactive Swipe Tool -->
         <button type="button" id="floatSwipeBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-sky-200 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1.5 shadow-sm" title="تفعيل شريط المسح والمقارنة التفاعلي">
@@ -211,6 +235,11 @@
           <button type="button" id="floatUndoGcpBtn" class="hidden px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg text-xs transition-colors flex items-center gap-1" title="تراجع عن آخر نقطة">
             <i class="fa-solid fa-rotate-left text-[10px]"></i>
             <span>تراجع</span>
+          </button>
+          <!-- Redo Point Button -->
+          <button type="button" id="floatRedoGcpBtn" class="hidden px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg text-xs transition-colors flex items-center gap-1" title="إعادة النقطة الملغاة">
+            <i class="fa-solid fa-rotate-right text-[10px]"></i>
+            <span>إعادة</span>
           </button>
           <!-- Cancel Button -->
           <button type="button" id="floatCancelGcpBtn" class="px-2.5 py-1 bg-slate-800 hover:bg-rose-900/60 text-slate-300 hover:text-rose-200 border border-slate-700 rounded-lg text-xs transition-colors flex items-center gap-1" title="إلغاء المعايرة">
@@ -872,6 +901,9 @@
                       <button type="button" id="sidebarUndoGcpBtn" class="hidden py-1 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded text-[10px] transition-colors" title="تراجع عن آخر نقطة">
                         <i class="fa-solid fa-rotate-left text-xs"></i>
                       </button>
+                      <button type="button" id="sidebarRedoGcpBtn" class="hidden py-1 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded text-[10px] transition-colors" title="إعادة النقطة السابقة">
+                        <i class="fa-solid fa-rotate-right text-xs"></i>
+                      </button>
                       <button type="button" id="cancelGcpMatchBtn" class="hidden py-1 px-2 bg-slate-800 hover:bg-rose-900/50 text-rose-300 border border-slate-700 rounded text-[10px] transition-colors" title="إلغاء">
                         <i class="fa-solid fa-xmark text-xs"></i>
                       </button>
@@ -945,6 +977,24 @@
                   <i class="fa-solid fa-lock-open text-amber-400"></i>
                   <span id="lockBtnText">المعايرة مفعلة</span>
                 </button>
+              </div>
+
+              <!-- History Undo / Redo Toolbar -->
+              <div class="flex items-center justify-between bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-slate-800">
+                <span class="text-[10px] text-slate-300 flex items-center gap-1 font-medium">
+                  <i class="fa-solid fa-clock-rotate-left text-purple-400"></i>
+                  <span>سجل المعايرة:</span>
+                </span>
+                <div class="flex items-center gap-1.5">
+                  <button type="button" id="sidebarUndoCalibBtn" disabled class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded text-[10px] transition-colors flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed" title="تراجع عن آخر تعديل (Ctrl+Z / Cmd+Z)">
+                    <i class="fa-solid fa-rotate-left text-amber-400 text-[9px]"></i>
+                    <span>تراجع (Undo)</span>
+                  </button>
+                  <button type="button" id="sidebarRedoCalibBtn" disabled class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded text-[10px] transition-colors flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed" title="إعادة التعديل (Ctrl+Y / Cmd+Shift+Z)">
+                    <i class="fa-solid fa-rotate-right text-sky-400 text-[9px]"></i>
+                    <span>إعادة (Redo)</span>
+                  </button>
+                </div>
               </div>
 
               <!-- Nudge Direction Pad -->
@@ -1438,13 +1488,13 @@
        Scripts
        ========================================================================= -->
   <!-- Curated Catalog Data -->
-  <script src="js/catalog-data.js?v=20260928_05"></script>
+  <script src="js/catalog-data.js?v=20260928_06"></script>
 
   <!-- Curated Official Archaeological Sites of Iraq -->
-  <script src="js/archaeology-data.js?v=20260928_05"></script>
+  <script src="js/archaeology-data.js?v=20260928_06"></script>
 
   <!-- Living Atlas Engine Entry -->
-  <script src="js/atlas-core.js?v=20260928_05"></script>
+  <script src="js/atlas-core.js?v=20260928_06"></script>
 
 </body>
 </html>
