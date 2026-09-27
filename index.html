@@ -27,7 +27,7 @@
   <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 
   <!-- Custom Styling -->
-  <link rel="stylesheet" href="css/styles.css?v=20260928_04">
+  <link rel="stylesheet" href="css/styles.css?v=20260928_05">
 </head>
 <body class="bg-slate-950 text-slate-100 h-screen w-screen flex flex-col overflow-hidden select-none">
 
@@ -187,23 +187,37 @@
       </div>
 
       <!-- Floating GCP Calibration Status Bar on Map -->
-      <div id="floatingGcpBar" class="hidden absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-4 py-2.5 bg-slate-900/95 backdrop-blur-md border border-purple-500/70 rounded-2xl shadow-2xl transition-all">
+      <div id="floatingGcpBar" class="hidden absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-4 py-2.5 bg-slate-900/95 backdrop-blur-md border border-purple-500/70 rounded-2xl shadow-2xl transition-all flex-wrap justify-center">
         <div class="flex items-center gap-2.5">
           <span class="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center justify-center text-sm shadow-sm">
             <i class="fa-solid fa-location-crosshairs"></i>
           </span>
           <div class="text-right">
-            <div class="flex items-center gap-1.5">
+            <div class="flex items-center gap-1.5 flex-wrap">
               <span id="floatingGcpTitle" class="text-xs font-bold text-purple-200">معايرة نقاط الضبط (GCP)</span>
-              <span id="floatingGcpStepBadge" class="text-[9px] bg-purple-950 text-purple-300 border border-purple-500/40 px-1.5 py-0.2 rounded font-mono font-bold">1 / 4</span>
+              <span id="floatingGcpStepBadge" class="text-[9px] bg-purple-950 text-purple-300 border border-purple-500/40 px-1.5 py-0.2 rounded font-mono font-bold">النقطة 1A (صورة)</span>
+              <span id="floatingGcpPairsBadge" class="text-[9px] bg-emerald-950/80 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded font-mono font-bold">0 أزواج مكتملة</span>
             </div>
             <div id="floatingGcpHint" class="text-[11px] text-amber-300 font-medium leading-tight mt-0.5">انقر على معلم مميز داخل الخارطة المستوردة (1A)</div>
           </div>
         </div>
-        <button type="button" id="floatCancelGcpBtn" class="px-2.5 py-1 bg-slate-800 hover:bg-rose-900/60 text-slate-300 hover:text-rose-200 border border-slate-700 rounded-lg text-xs transition-colors flex items-center gap-1" title="إلغاء المعايرة">
-          <i class="fa-solid fa-xmark text-xs"></i>
-          <span>إلغاء</span>
-        </button>
+        <div class="flex items-center gap-1.5">
+          <!-- Apply & Finish Button (Active once 2 or more pairs are captured) -->
+          <button type="button" id="floatApplyGcpBtn" class="hidden px-3 py-1 bg-gradient-to-r from-emerald-600 via-teal-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white font-bold rounded-lg text-xs shadow-lg transition-all flex items-center gap-1.5 animate-pulse" title="إنهاء وتطبيق المعايرة التآلفية فوراً">
+            <i class="fa-solid fa-check"></i>
+            <span id="floatApplyGcpBtnText">تطبيق المعايرة (2 نقاط)</span>
+          </button>
+          <!-- Undo Last Point Button -->
+          <button type="button" id="floatUndoGcpBtn" class="hidden px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg text-xs transition-colors flex items-center gap-1" title="تراجع عن آخر نقطة">
+            <i class="fa-solid fa-rotate-left text-[10px]"></i>
+            <span>تراجع</span>
+          </button>
+          <!-- Cancel Button -->
+          <button type="button" id="floatCancelGcpBtn" class="px-2.5 py-1 bg-slate-800 hover:bg-rose-900/60 text-slate-300 hover:text-rose-200 border border-slate-700 rounded-lg text-xs transition-colors flex items-center gap-1" title="إلغاء المعايرة">
+            <i class="fa-solid fa-xmark text-xs"></i>
+            <span>إلغاء</span>
+          </button>
+        </div>
       </div>
 
       <!-- Floating Live Measurement Bar on Map -->
@@ -843,19 +857,35 @@
                 <!-- 3. Collapsible Manual GCP Mode -->
                 <details class="text-[10px] bg-slate-950/70 border border-slate-800/80 rounded-lg p-1.5 text-slate-400">
                   <summary class="cursor-pointer text-slate-300 hover:text-purple-300 font-medium select-none flex items-center justify-between">
-                    <span>خيارات متقدمة: نقاط ضبط يدوية (GCP)</span>
+                    <span>خيارات متقدمة: نقاط ضبط متعددة (Multi-GCP)</span>
                     <span id="gcpStatusBadge" class="text-[9px] px-1 rounded bg-slate-800 text-slate-400 font-mono">غير نشط</span>
                   </summary>
                   <div class="mt-1.5 space-y-1.5 pt-1 border-t border-slate-800">
+                    <p class="text-[10px] text-slate-400 leading-relaxed">
+                      حدد نقطتين أو 3 أو أكثر لمطابقة تآلفية دقيقة عبر المربعات الصغرى (Least Squares)، ثم اضغط على زر التطبيق في أي وقت.
+                    </p>
                     <div class="flex items-center gap-1.5">
                       <button type="button" id="startGcpMatchBtn" class="flex-1 py-1 px-2 rounded bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 text-[10px] font-semibold flex items-center justify-center gap-1 transition-all">
                         <i class="fa-solid fa-location-dot text-[9px] text-purple-300"></i>
-                        <span id="gcpBtnLabel">بدء تحديد نقطتي الضبط</span>
+                        <span id="gcpBtnLabel">بدء تحديد نقاط الضبط</span>
+                      </button>
+                      <button type="button" id="sidebarUndoGcpBtn" class="hidden py-1 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded text-[10px] transition-colors" title="تراجع عن آخر نقطة">
+                        <i class="fa-solid fa-rotate-left text-xs"></i>
                       </button>
                       <button type="button" id="cancelGcpMatchBtn" class="hidden py-1 px-2 bg-slate-800 hover:bg-rose-900/50 text-rose-300 border border-slate-700 rounded text-[10px] transition-colors" title="إلغاء">
                         <i class="fa-solid fa-xmark text-xs"></i>
                       </button>
                     </div>
+
+                    <!-- Sidebar Apply & Finish Button -->
+                    <button type="button" id="sidebarApplyGcpBtn" class="hidden w-full py-1.5 px-3 bg-gradient-to-r from-emerald-600 via-teal-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white font-bold rounded-lg text-[10px] shadow transition-all flex items-center justify-center gap-1.5">
+                      <i class="fa-solid fa-check"></i>
+                      <span id="sidebarApplyGcpBtnText">إنهاء وتطبيق المعايرة الآن (0 نقاط)</span>
+                    </button>
+
+                    <!-- Placed Points Summary List -->
+                    <div id="gcpPointsList" class="hidden space-y-1 max-h-32 overflow-y-auto p-1.5 bg-slate-900/90 rounded border border-slate-800 text-[9px] font-mono text-slate-300"></div>
+
                     <div id="gcpInstructionsText" class="text-[10px] text-slate-300 leading-relaxed hidden bg-slate-950/90 p-2 rounded border border-amber-500/40 space-y-1"></div>
                   </div>
                 </details>
@@ -1371,20 +1401,20 @@
             </button>
           </div>
 
-          <!-- 3. Collapsible Advanced GCP (Optional for unreferenced legacy maps) -->
+          <!-- 3. Collapsible Advanced Multi-Point GCP -->
           <details class="text-[11px] bg-slate-950/70 border border-slate-800 rounded-lg p-2 text-slate-400">
             <summary class="cursor-pointer text-slate-300 hover:text-purple-300 font-semibold select-none flex items-center justify-between">
               <span class="flex items-center gap-1.5">
                 <i class="fa-solid fa-crosshairs text-purple-400 text-xs"></i>
-                <span>خيارات متقدمة: المعايرة الكلاسيكية بنقاط الضبط (2-Point GCP)</span>
+                <span>خيارات متقدمة: المعايرة اليدوية بنقاط ضبط متعددة (Multi-Point GCP)</span>
               </span>
               <i class="fa-solid fa-chevron-down text-[10px]"></i>
             </summary>
             <div class="mt-2 space-y-2 text-[10px] text-slate-300 pt-1 border-t border-slate-800">
-              <p>مخصص للخرائط الورقية القديمة غير المعرفة؛ حدد نقطتين مميزتين بالصورة ونفسهما بالواقع لحساب التحويل التآلفي.</p>
+              <p>حدد نقطتين أو أكثر بدقة متناهية؛ يتيح لك النظام إنهاء المعايرة وتطبيق حل المربعات الصغرى التآلفي متى شئت مع حساب دقة RMS.</p>
               <button type="button" id="aiModalLaunchGcpBtn" class="w-full py-1.5 px-3 bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all">
                 <i class="fa-solid fa-location-crosshairs text-purple-300 text-[10px]"></i>
-                <span>بدء وضع نقاط الضبط اليدوي</span>
+                <span>بدء وضع نقاط الضبط اليدوي (Multi-Point)</span>
               </button>
             </div>
           </details>
@@ -1408,13 +1438,13 @@
        Scripts
        ========================================================================= -->
   <!-- Curated Catalog Data -->
-  <script src="js/catalog-data.js?v=20260928_04"></script>
+  <script src="js/catalog-data.js?v=20260928_05"></script>
 
   <!-- Curated Official Archaeological Sites of Iraq -->
-  <script src="js/archaeology-data.js?v=20260928_04"></script>
+  <script src="js/archaeology-data.js?v=20260928_05"></script>
 
   <!-- Living Atlas Engine Entry -->
-  <script src="js/atlas-core.js?v=20260928_04"></script>
+  <script src="js/atlas-core.js?v=20260928_05"></script>
 
 </body>
 </html>

@@ -352,8 +352,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const floatingGcpBar = document.getElementById('floatingGcpBar');
     const floatingGcpStepBadge = document.getElementById('floatingGcpStepBadge');
+    const floatingGcpPairsBadge = document.getElementById('floatingGcpPairsBadge');
     const floatingGcpHint = document.getElementById('floatingGcpHint');
+    const floatApplyGcpBtn = document.getElementById('floatApplyGcpBtn');
+    const floatApplyGcpBtnText = document.getElementById('floatApplyGcpBtnText');
+    const floatUndoGcpBtn = document.getElementById('floatUndoGcpBtn');
     const floatCancelGcpBtn = document.getElementById('floatCancelGcpBtn');
+
+    const sidebarApplyGcpBtn = document.getElementById('sidebarApplyGcpBtn');
+    const sidebarApplyGcpBtnText = document.getElementById('sidebarApplyGcpBtnText');
+    const sidebarUndoGcpBtn = document.getElementById('sidebarUndoGcpBtn');
+    const gcpPointsList = document.getElementById('gcpPointsList');
+
     let gcpPriorOpacity = null;
     let lastGcpClickTime = 0;
 
@@ -373,15 +383,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let lastEcwRawBuffer = null;
     let lastEcwRawFile = null;
 
-    // 2-Point GCP Affine Calibration State
+    // Multi-Point GCP Affine Calibration State
     let isGcpMatchingActive = false;
-    let gcpStep = 0; // 0: inactive, 1: imgPt1, 2: basePt1, 3: imgPt2, 4: basePt2
-    let gcpPoints = {
-      imgPt1: null,
-      basePt1: null,
-      imgPt2: null,
-      basePt2: null
-    };
+    let gcpPairs = []; // Array of { imgPt, basePt, markerA, markerB, line }
+    let gcpPendingImgPt = null;
+    let gcpPendingMarkerA = null;
     let gcpMarkers = [];
     let gcpLines = [];
 
@@ -2298,8 +2304,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     /**
-     * 2-Point Ground Control Points (GCP) Interactive Calibration
+     * Multi-Point Ground Control Points (Multi-GCP) Interactive Calibration Engine
+     * Allows placing 2, 3, 4, 5+ pairs of ground control points with Least Squares Affine solution
+     * Can be finished at any time once >= 2 pairs are captured!
      */
+    const GCP_PAIR_COLORS = [
+      { a: '#2563eb', b: '#059669', line: '#10b981' }, // Pair 1: Blue / Green
+      { a: '#d97706', b: '#0d9488', line: '#14b8a6' }, // Pair 2: Amber / Teal
+      { a: '#7c3aed', b: '#16a34a', line: '#22c55e' }, // Pair 3: Purple / Emerald
+      { a: '#e11d48', b: '#0891b2', line: '#06b6d4' }, // Pair 4: Rose / Cyan
+      { a: '#ea580c', b: '#65a30d', line: '#84cc16' }, // Pair 5: Orange / Lime
+      { a: '#c026d3', b: '#0284c7', line: '#38bdf8' }  // Pair 6+: Fuchsia / Sky
+    ];
+
+    function getGcpPairColor(pairIndex) {
+      return GCP_PAIR_COLORS[pairIndex % GCP_PAIR_COLORS.length];
+    }
+
     function startGcpMatching() {
       if (!overlay) {
         showToast('يرجى استيراد خريطة فضائية أولاً لتفعيل معايرة نقاط الضبط', 'warning');
@@ -2311,11 +2332,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       isGcpMatchingActive = true;
-      gcpStep = 1;
-      gcpPoints = { imgPt1: null, basePt1: null, imgPt2: null, basePt2: null };
+      gcpPairs = [];
+      gcpPendingImgPt = null;
+      gcpPendingMarkerA = null;
       gcpPriorOpacity = (visualState && visualState.opacity) ? visualState.opacity : 1.0;
       clearGcpMarkers();
-      clearHandles(); // Temporarily hide handles so they don't block clicks
+      clearHandles(); // Temporarily hide handles so they don't block landmarks
 
       map.getContainer().classList.add('gcp-calibration-active');
       map.getContainer().addEventListener('click', handleGcpNativeClick, true); // Capturing phase!
@@ -2323,32 +2345,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (floatingGcpBar) floatingGcpBar.classList.remove('hidden');
       if (cancelGcpMatchBtn) cancelGcpMatchBtn.classList.remove('hidden');
-      if (gcpStatusBadge) {
-        gcpStatusBadge.textContent = 'نشط - النقطة 1A (صورة)';
-        gcpStatusBadge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 font-bold';
-      }
       if (gcpBtnLabel) gcpBtnLabel.textContent = 'المعايرة جارية (انقر على الخارطة)...';
 
-      updateGcpInstructions(1);
-      showToast('🎯 وضع نقاط الضبط مفعل: انقر على معلم مميز بالخارطة المستوردة (1A)', 'info');
+      updateGcpUI();
+      showToast('🎯 وضع نقاط الضبط المتعددة مفعل: انقر على المعلم الأول في الخارطة المستوردة (1A)', 'info');
     }
 
     function cancelGcpMatching() {
       isGcpMatchingActive = false;
-      gcpStep = 0;
       map.getContainer().classList.remove('gcp-calibration-active');
       map.getContainer().removeEventListener('click', handleGcpNativeClick, true);
       map.off('click', handleMapGcpClick);
       clearGcpMarkers();
 
+      gcpPairs = [];
+      gcpPendingImgPt = null;
+      gcpPendingMarkerA = null;
+
       if (floatingGcpBar) floatingGcpBar.classList.add('hidden');
       if (cancelGcpMatchBtn) cancelGcpMatchBtn.classList.add('hidden');
+      if (floatApplyGcpBtn) floatApplyGcpBtn.classList.add('hidden');
+      if (sidebarApplyGcpBtn) sidebarApplyGcpBtn.classList.add('hidden');
+      if (floatUndoGcpBtn) floatUndoGcpBtn.classList.add('hidden');
+      if (sidebarUndoGcpBtn) sidebarUndoGcpBtn.classList.add('hidden');
       if (gcpInstructionsText) gcpInstructionsText.classList.add('hidden');
+      if (gcpPointsList) gcpPointsList.classList.add('hidden');
+
       if (gcpStatusBadge) {
         gcpStatusBadge.textContent = 'غير نشط';
         gcpStatusBadge.className = 'text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-mono';
       }
-      if (gcpBtnLabel) gcpBtnLabel.textContent = 'بدء تحديد نقطتي الضبط (GCP)';
+      if (gcpBtnLabel) gcpBtnLabel.textContent = 'بدء تحديد نقاط الضبط (GCP)';
 
       // Restore handles and opacity
       if (overlay && bounds && !isLocked) createHandles();
@@ -2367,72 +2394,173 @@ document.addEventListener('DOMContentLoaded', () => {
       gcpLines = [];
     }
 
-    function updateGcpInstructions(step) {
+    function updateGcpUI() {
+      if (!isGcpMatchingActive) return;
+      const count = gcpPairs.length;
+      const isPending = gcpPendingImgPt !== null;
+      const pairNum = count + 1;
+
+      // Update Floating Bar UI
       if (floatingGcpBar) floatingGcpBar.classList.remove('hidden');
 
-      if (step === 1) {
-        if (floatingGcpStepBadge) floatingGcpStepBadge.textContent = '1 / 4 (صورة)';
-        if (floatingGcpHint) floatingGcpHint.textContent = 'انقر على معلم مميز داخل الخارطة المستوردة (1A)';
-        if (gcpInstructionsText) {
-          gcpInstructionsText.classList.remove('hidden');
-          gcpInstructionsText.innerHTML = `
-            <div class="flex items-center gap-1.5 text-blue-400 font-bold">
-              <span class="w-4 h-4 rounded-full bg-blue-500/30 text-blue-300 flex items-center justify-center text-[9px]">1</span>
-              <span>الخطوة 1 من 4: حدد النقطة الأولى (صورة)</span>
-            </div>
-            <p class="text-slate-300 text-[10px]">انقر على معلم مميز وواضح داخل <strong>الخارطة المستوردة</strong> (مثل: تقاطع طرق، زاوية مبنى، رأس جسر).</p>
-          `;
+      if (floatingGcpStepBadge) {
+        if (isPending) {
+          floatingGcpStepBadge.textContent = `النقطة ${pairNum}B (الواقع)`;
+          floatingGcpStepBadge.className = 'text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.2 rounded font-mono font-bold';
+        } else {
+          floatingGcpStepBadge.textContent = `النقطة ${pairNum}A (صورة)`;
+          floatingGcpStepBadge.className = 'text-[9px] bg-blue-950 text-blue-300 border border-blue-500/40 px-1.5 py-0.2 rounded font-mono font-bold';
         }
-      } else if (step === 2) {
-        if (floatingGcpStepBadge) floatingGcpStepBadge.textContent = '2 / 4 (الواقع)';
-        if (floatingGcpHint) floatingGcpHint.textContent = 'انقر الآن على نفس المعلم في خارطة الأساس الواقعية (1B)';
-        if (gcpInstructionsText) {
-          gcpInstructionsText.classList.remove('hidden');
+      }
+
+      if (floatingGcpPairsBadge) {
+        floatingGcpPairsBadge.textContent = `${count} أزواج مكتملة${count >= 2 ? ' (جاهز للتطبيق)' : ''}`;
+        floatingGcpPairsBadge.className = count >= 2 
+          ? 'text-[9px] bg-emerald-900/80 text-emerald-200 border border-emerald-400/60 px-1.5 py-0.2 rounded font-mono font-bold shadow-sm'
+          : 'text-[9px] bg-slate-800 text-slate-300 border border-slate-700 px-1.5 py-0.2 rounded font-mono font-bold';
+      }
+
+      if (floatingGcpHint) {
+        if (isPending) {
+          floatingGcpHint.textContent = `انقر الآن على نفس المعلم في خارطة الأساس الواقعية بالأسفل (${pairNum}B)`;
+        } else {
+          floatingGcpHint.textContent = count >= 2
+            ? `انقر لإضافة زوج إضافي (${pairNum}A)، أو اضغط "تطبيق المعايرة" لإنهاء المطابقة فوراً`
+            : `انقر على معلم مميز داخل الخارطة المستوردة (${pairNum}A)`;
+        }
+      }
+
+      // Show/Hide Apply & Finish buttons (active once count >= 2 and not pending)
+      const canApply = count >= 2;
+      const applyBtnText = `تطبيق وإنهاء المعايرة (${count} أزواج)`;
+      if (floatApplyGcpBtn) {
+        floatApplyGcpBtn.classList.toggle('hidden', !canApply);
+        if (floatApplyGcpBtnText) floatApplyGcpBtnText.textContent = applyBtnText;
+      }
+      if (sidebarApplyGcpBtn) {
+        sidebarApplyGcpBtn.classList.toggle('hidden', !canApply);
+        if (sidebarApplyGcpBtnText) sidebarApplyGcpBtnText.textContent = applyBtnText;
+      }
+
+      // Show/Hide Undo buttons (if there's a pending point or at least 1 pair)
+      const canUndo = isPending || count > 0;
+      if (floatUndoGcpBtn) floatUndoGcpBtn.classList.toggle('hidden', !canUndo);
+      if (sidebarUndoGcpBtn) sidebarUndoGcpBtn.classList.toggle('hidden', !canUndo);
+
+      // Sidebar Status Badge
+      if (gcpStatusBadge) {
+        if (isPending) {
+          gcpStatusBadge.textContent = `نشط - النقطة ${pairNum}B (الواقع)`;
+          gcpStatusBadge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold';
+        } else {
+          gcpStatusBadge.textContent = `نشط - ${count} أزواج`;
+          gcpStatusBadge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold';
+        }
+      }
+
+      // Sidebar Instructions Text
+      if (gcpInstructionsText) {
+        gcpInstructionsText.classList.remove('hidden');
+        if (isPending) {
           gcpInstructionsText.innerHTML = `
             <div class="flex items-center gap-1.5 text-emerald-400 font-bold">
-              <span class="w-4 h-4 rounded-full bg-emerald-500/30 text-emerald-300 flex items-center justify-center text-[9px]">2</span>
-              <span>الخطوة 2 من 4: حدد النقطة المقابلة في الواقع (خارطة الأساس)</span>
+              <span class="w-4 h-4 rounded-full bg-emerald-500/30 text-emerald-300 flex items-center justify-center text-[9px]">${pairNum}B</span>
+              <span>تحديد النقطة المقابلة في الواقع (خارطة الأساس)</span>
             </div>
-            <p class="text-slate-300 text-[10px]">تم تخفيف الشفافية تلقائياً؛ انقر الآن على <strong>نفس المعلم تماماً</strong> في خارطة الأساس الفضائية الواقعية بالأسفل.</p>
+            <p class="text-slate-300 text-[10px]">خُففت الشفافية تلقائياً؛ انقر الآن على <strong>نفس المعلم تماماً</strong> في خارطة الأساس الفضائية الواقعية بالأسفل.</p>
           `;
-        }
-      } else if (step === 3) {
-        if (floatingGcpStepBadge) floatingGcpStepBadge.textContent = '3 / 4 (صورة)';
-        if (floatingGcpHint) floatingGcpHint.textContent = 'انقر على معلم ثانٍ متباعد داخل الخارطة المستوردة (2A)';
-        if (gcpInstructionsText) {
-          gcpInstructionsText.classList.remove('hidden');
+        } else {
           gcpInstructionsText.innerHTML = `
-            <div class="flex items-center gap-1.5 text-amber-400 font-bold">
-              <span class="w-4 h-4 rounded-full bg-amber-500/30 text-amber-300 flex items-center justify-center text-[9px]">3</span>
-              <span>الخطوة 3 من 4: حدد النقطة الثانية (صورة)</span>
+            <div class="flex items-center gap-1.5 text-blue-400 font-bold">
+              <span class="w-4 h-4 rounded-full bg-blue-500/30 text-blue-300 flex items-center justify-center text-[9px]">${pairNum}A</span>
+              <span>تحديد النقطة في الصورة المستوردة</span>
             </div>
-            <p class="text-slate-300 text-[10px]">انقر على معلم ثانٍ مميز ومتباعد داخل <strong>الخارطة المستوردة</strong> لحساب الدوران والمقياس بدقة.</p>
-          `;
-        }
-      } else if (step === 4) {
-        if (floatingGcpStepBadge) floatingGcpStepBadge.textContent = '4 / 4 (الواقع)';
-        if (floatingGcpHint) floatingGcpHint.textContent = 'انقر الآن على نفس المعلم الثاني في خارطة الأساس الواقعية (2B)';
-        if (gcpInstructionsText) {
-          gcpInstructionsText.classList.remove('hidden');
-          gcpInstructionsText.innerHTML = `
-            <div class="flex items-center gap-1.5 text-teal-400 font-bold">
-              <span class="w-4 h-4 rounded-full bg-teal-500/30 text-teal-300 flex items-center justify-center text-[9px]">4</span>
-              <span>الخطوة 4 من 4: حدد النقطة المقابلة الثانية في الواقع</span>
-            </div>
-            <p class="text-slate-300 text-[10px]">انقر الآن على <strong>نفس المعلم الثاني</strong> في خارطة الأساس الواقعية لإنهاء حل مصفوفة التحويل.</p>
+            <p class="text-slate-300 text-[10px]">انقر على معلم مميز (تقاطع طرق، زاوية مبنى، رأس جسر) داخل <strong>الخارطة المستوردة</strong>.</p>
+            ${count >= 2 ? '<p class="text-emerald-300 font-bold text-[10px] mt-1">✨ لديك نقطتان أو أكثر! يمكنك الضغط على "إنهاء وتطبيق المعايرة" الآن، أو الاستمرار بإضافة نقاط جديدة.</p>' : ''}
           `;
         }
       }
+
+      // Render Sidebar Points List
+      renderGcpPointsList();
     }
 
-    function createGcpMarker(latlng, label, bgColor) {
-      const icon = L.divIcon({
+    function renderGcpPointsList() {
+      if (!gcpPointsList) return;
+      if (gcpPairs.length === 0) {
+        gcpPointsList.classList.add('hidden');
+        gcpPointsList.innerHTML = '';
+        return;
+      }
+
+      gcpPointsList.classList.remove('hidden');
+      gcpPointsList.innerHTML = `
+        <div class="flex items-center justify-between text-[10px] font-bold text-slate-300 pb-1 border-b border-slate-800">
+          <span>قائمة نقاط الضبط المحددة (${gcpPairs.length}):</span>
+          <span class="text-emerald-400 font-mono">${gcpPairs.length >= 2 ? 'جاهز للتطبيق' : 'مطلوب نقطتان'}</span>
+        </div>
+      `;
+
+      gcpPairs.forEach((pair, idx) => {
+        const color = getGcpPairColor(idx);
+        const row = document.createElement('div');
+        row.className = 'flex items-center justify-between py-1 border-b border-slate-800/60 last:border-0 hover:bg-slate-800/40 px-1 rounded';
+        row.innerHTML = `
+          <div class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full" style="background-color: ${color.line};"></span>
+            <span class="font-bold text-white">زوج ${idx + 1}:</span>
+            <span class="text-slate-400 text-[8px]">[${pair.imgPt.lat.toFixed(3)}, ${pair.imgPt.lng.toFixed(3)}] -> [${pair.basePt.lat.toFixed(3)}, ${pair.basePt.lng.toFixed(3)}]</span>
+          </div>
+          <button type="button" class="text-rose-400 hover:text-rose-300 p-0.5" title="حذف هذا الزوج">
+            <i class="fa-solid fa-trash text-[9px]"></i>
+          </button>
+        `;
+
+        row.querySelector('button').addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteGcpPair(idx);
+        });
+
+        gcpPointsList.appendChild(row);
+      });
+    }
+
+    function deleteGcpPair(index) {
+      if (index < 0 || index >= gcpPairs.length) return;
+      const p = gcpPairs.splice(index, 1)[0];
+      if (p.markerA && map.hasLayer(p.markerA)) map.removeLayer(p.markerA);
+      if (p.markerB && map.hasLayer(p.markerB)) map.removeLayer(p.markerB);
+      if (p.line && map.hasLayer(p.line)) map.removeLayer(p.line);
+
+      // Re-index remaining markers
+      gcpPairs.forEach((pair, idx) => {
+        const c = getGcpPairColor(idx);
+        if (pair.markerA) {
+          pair.markerA.setIcon(createGcpIcon(`${idx + 1}A (صورة)`, c.a));
+        }
+        if (pair.markerB) {
+          pair.markerB.setIcon(createGcpIcon(`${idx + 1}B (واقع)`, c.b));
+        }
+        if (pair.line) {
+          pair.line.setStyle({ color: c.line });
+        }
+      });
+
+      updateGcpUI();
+      showToast(`تم حذف الزوج رقم ${index + 1}`, 'info');
+    }
+
+    function createGcpIcon(label, bgColor) {
+      return L.divIcon({
         className: 'gcp-marker-wrapper',
         html: `<div style="background-color: ${bgColor};" class="gcp-marker-pin text-white font-bold text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 border-2 border-white shadow-xl whitespace-nowrap"><i class="fa-solid fa-location-dot text-[9px]"></i><span>${label}</span></div>`,
         iconSize: [60, 24],
         iconAnchor: [30, 12]
       });
-      const marker = L.marker(latlng, { icon: icon, interactive: false }).addTo(map);
+    }
+
+    function createGcpMarker(latlng, label, bgColor) {
+      const marker = L.marker(latlng, { icon: createGcpIcon(label, bgColor), interactive: false }).addTo(map);
       gcpMarkers.push(marker);
       return marker;
     }
@@ -2472,153 +2600,219 @@ document.addEventListener('DOMContentLoaded', () => {
       if (now - lastGcpClickTime < 300) return;
       lastGcpClickTime = now;
 
-      if (gcpStep === 1) {
-        gcpPoints.imgPt1 = pt;
-        createGcpMarker(pt, '1A (صورة)', '#2563eb');
-        gcpStep = 2;
-        if (gcpStatusBadge) {
-          gcpStatusBadge.textContent = 'نشط - النقطة 1B (الواقع)';
-          gcpStatusBadge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold';
-        }
-        updateGcpInstructions(2);
+      const pairIndex = gcpPairs.length;
+      const color = getGcpPairColor(pairIndex);
 
-        // Lower opacity to 0.35 so user can see underlying basemap roads/bridges clearly
+      if (gcpPendingImgPt === null) {
+        // Point A (Image Point)
+        gcpPendingImgPt = pt;
+        gcpPendingMarkerA = createGcpMarker(pt, `${pairIndex + 1}A (صورة)`, color.a);
+
+        // Lower opacity to 0.35 so user can see through to the basemap
         if (overlay) {
           overlay.setOpacity(0.35);
           if (opacitySlider) opacitySlider.value = 35;
           if (opacityLabel) opacityLabel.textContent = '35%';
         }
-        showToast('تم التقاط النقطة 1A! انقر الآن على نفس المعلم في خارطة الأساس (تم تخفيف الشفافية)', 'info');
 
-      } else if (gcpStep === 2) {
-        gcpPoints.basePt1 = pt;
-        createGcpMarker(pt, '1B (واقع)', '#059669');
-        const line = L.polyline([gcpPoints.imgPt1, pt], { color: '#10b981', weight: 2.5, dashArray: '5, 5' }).addTo(map);
+        updateGcpUI();
+        showToast(`تم التقاط النقطة ${pairIndex + 1}A! انقر الآن على نفس المعلم في خارطة الأساس (${pairIndex + 1}B)`, 'info');
+      } else {
+        // Point B (Ground / Basemap Point)
+        const markerB = createGcpMarker(pt, `${pairIndex + 1}B (واقع)`, color.b);
+        const line = L.polyline([gcpPendingImgPt, pt], { color: color.line, weight: 2.5, dashArray: '5, 5' }).addTo(map);
         gcpLines.push(line);
-        gcpStep = 3;
-        if (gcpStatusBadge) {
-          gcpStatusBadge.textContent = 'نشط - النقطة 2A (صورة)';
-          gcpStatusBadge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold';
-        }
-        updateGcpInstructions(3);
 
-        // Restore overlay opacity for second image point
+        gcpPairs.push({
+          imgPt: gcpPendingImgPt,
+          basePt: pt,
+          markerA: gcpPendingMarkerA,
+          markerB: markerB,
+          line: line
+        });
+
+        gcpPendingImgPt = null;
+        gcpPendingMarkerA = null;
+
+        // Restore overlay opacity
         if (overlay && gcpPriorOpacity !== null) {
           overlay.setOpacity(gcpPriorOpacity);
           if (opacitySlider) opacitySlider.value = Math.round(gcpPriorOpacity * 100);
           if (opacityLabel) opacityLabel.textContent = `${Math.round(gcpPriorOpacity * 100)}%`;
         }
-        showToast('تم ربط النقطة الأولى! انقر الآن على معلم ثانٍ متباعد في الخارطة المستوردة (2A)', 'info');
 
-      } else if (gcpStep === 3) {
-        gcpPoints.imgPt2 = pt;
-        createGcpMarker(pt, '2A (صورة)', '#d97706');
-        gcpStep = 4;
-        if (gcpStatusBadge) {
-          gcpStatusBadge.textContent = 'نشط - النقطة 2B (الواقع)';
-          gcpStatusBadge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/40 font-bold';
+        updateGcpUI();
+
+        if (gcpPairs.length >= 2) {
+          showToast(`تم ربط الزوج ${pairIndex + 1}! يمكنك الآن الضغط على "تطبيق المعايرة" أو الاستمرار بإضافة نقاط إضافية`, 'success');
+        } else {
+          showToast(`تم ربط الزوج ${pairIndex + 1}! حدد الآن نقطة ثانية (2A) لتفعيل إمكانية تطبيق المعايرة`, 'info');
         }
-        updateGcpInstructions(4);
-
-        // Lower opacity again for second ground point
-        if (overlay) {
-          overlay.setOpacity(0.35);
-          if (opacitySlider) opacitySlider.value = 35;
-          if (opacityLabel) opacityLabel.textContent = '35%';
-        }
-        showToast('تم التقاط النقطة 2A! انقر الآن على نفس المعلم الثاني في خارطة الأساس الواقعية (2B)', 'info');
-
-      } else if (gcpStep === 4) {
-        gcpPoints.basePt2 = pt;
-        createGcpMarker(pt, '2B (واقع)', '#0d9488');
-        const line = L.polyline([gcpPoints.imgPt2, pt], { color: '#0d9488', weight: 2.5, dashArray: '5, 5' }).addTo(map);
-        gcpLines.push(line);
-
-        // All 4 points captured -> Solve Affine Transformation!
-        solve2PointGcpAffine(gcpPoints.imgPt1, gcpPoints.basePt1, gcpPoints.imgPt2, gcpPoints.basePt2);
-
-        // Finish mode
-        isGcpMatchingActive = false;
-        gcpStep = 0;
-        map.getContainer().classList.remove('gcp-calibration-active');
-        map.getContainer().removeEventListener('click', handleGcpNativeClick, true);
-        map.off('click', handleMapGcpClick);
-
-        if (floatingGcpBar) floatingGcpBar.classList.add('hidden');
-        if (cancelGcpMatchBtn) cancelGcpMatchBtn.classList.add('hidden');
-
-        // Restore handles and original opacity
-        if (overlay && bounds && !isLocked) createHandles();
-        if (overlay && gcpPriorOpacity !== null) {
-          visualState.opacity = gcpPriorOpacity;
-          overlay.setOpacity(gcpPriorOpacity);
-          if (opacitySlider) opacitySlider.value = Math.round(gcpPriorOpacity * 100);
-          if (opacityLabel) opacityLabel.textContent = `${Math.round(gcpPriorOpacity * 100)}%`;
-        }
-
-        if (gcpStatusBadge) {
-          gcpStatusBadge.textContent = 'تمت المعايرة بنجاح';
-          gcpStatusBadge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold';
-        }
-        if (gcpBtnLabel) gcpBtnLabel.textContent = 'إعادة المعايرة بنقاط الضبط (GCP)';
-        if (gcpInstructionsText) {
-          gcpInstructionsText.innerHTML = `
-            <div class="text-emerald-400 font-bold flex items-center gap-1.5">
-              <i class="fa-solid fa-circle-check"></i>
-              <span>اكتملت المعايرة بنجاح!</span>
-            </div>
-            <p class="text-slate-300 text-[10px]">تم حل التحويل التآلفي وتطبيق الإزاحة، المقياس، وزاوية الدوران بدقة على الخريطة المستوردة.</p>
-          `;
-        }
-
-        // Clean up visual GCP markers after 8 seconds
-        setTimeout(() => {
-          clearGcpMarkers();
-          if (gcpInstructionsText) gcpInstructionsText.classList.add('hidden');
-          if (gcpStatusBadge) {
-            gcpStatusBadge.textContent = 'غير نشط';
-            gcpStatusBadge.className = 'text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-mono';
-          }
-        }, 8000);
       }
     }
 
-    /**
-     * Solve Affine Transformation Matrix for 2-Point Ground Control Points (GCP)
-     * Handles translation, scale matching, and rotation matching
-     */
-    function solve2PointGcpAffine(p1A, p1B, p2A, p2B) {
-      if (!overlay || !bounds) return;
+    function undoLastGcpPoint() {
+      if (!isGcpMatchingActive) return;
 
-      // Image points (x = lng, y = lat)
-      const x1 = p1A.lng, y1 = p1A.lat;
-      const x2 = p2A.lng, y2 = p2A.lat;
+      if (gcpPendingImgPt !== null) {
+        if (gcpPendingMarkerA && map.hasLayer(gcpPendingMarkerA)) {
+          map.removeLayer(gcpPendingMarkerA);
+          const idx = gcpMarkers.indexOf(gcpPendingMarkerA);
+          if (idx !== -1) gcpMarkers.splice(idx, 1);
+        }
+        gcpPendingImgPt = null;
+        gcpPendingMarkerA = null;
 
-      // Ground points (X = lng, Y = lat)
-      const X1 = p1B.lng, Y1 = p1B.lat;
-      const X2 = p2B.lng, Y2 = p2B.lat;
+        // Restore opacity
+        if (overlay && gcpPriorOpacity !== null) {
+          overlay.setOpacity(gcpPriorOpacity);
+          if (opacitySlider) opacitySlider.value = Math.round(gcpPriorOpacity * 100);
+          if (opacityLabel) opacityLabel.textContent = `${Math.round(gcpPriorOpacity * 100)}%`;
+        }
 
-      const dImgX = x2 - x1;
-      const dImgY = y2 - y1;
-      const dImgDist = Math.sqrt(dImgX * dImgX + dImgY * dImgY);
+        updateGcpUI();
+        showToast('تم التراجع عن النقطة قيد التحديد', 'info');
+      } else if (gcpPairs.length > 0) {
+        const removed = gcpPairs.pop();
+        if (removed.markerA && map.hasLayer(removed.markerA)) map.removeLayer(removed.markerA);
+        if (removed.markerB && map.hasLayer(removed.markerB)) map.removeLayer(removed.markerB);
+        if (removed.line && map.hasLayer(removed.line)) map.removeLayer(removed.line);
 
-      const dGrdX = X2 - X1;
-      const dGrdY = Y2 - Y1;
-      const dGrdDist = Math.sqrt(dGrdX * dGrdX + dGrdY * dGrdY);
+        updateGcpUI();
+        showToast(`تم التراجع عن الزوج رقم ${gcpPairs.length + 1}`, 'info');
+      }
+    }
 
-      if (dImgDist < 0.000001 || dGrdDist < 0.000001) {
-        showToast('نقاط الضبط قريبة جداً من بعضها، يرجى اختيار نقاط متباعدة', 'warning');
+    function applyMultiPointGcp() {
+      if (gcpPairs.length < 2) {
+        showToast('يرجى تحديد نقطتي ضبط (زوجين) على الأقل لإجراء المعايرة', 'warning');
         return;
       }
 
-      // 1. Scale Ratio
-      const scaleRatio = dGrdDist / dImgDist;
+      // If user had clicked point A and forgot point B, remove the pending point A
+      if (gcpPendingImgPt !== null) {
+        if (gcpPendingMarkerA && map.hasLayer(gcpPendingMarkerA)) {
+          map.removeLayer(gcpPendingMarkerA);
+          const idx = gcpMarkers.indexOf(gcpPendingMarkerA);
+          if (idx !== -1) gcpMarkers.splice(idx, 1);
+        }
+        gcpPendingImgPt = null;
+        gcpPendingMarkerA = null;
+      }
 
-      // 2. Rotation Angle (Degrees)
-      const angleImg = Math.atan2(dImgY, dImgX);
-      const angleGrd = Math.atan2(dGrdY, dGrdX);
-      let deltaAngleRad = angleGrd - angleImg;
-      let deltaAngleDeg = deltaAngleRad * (180 / Math.PI);
+      solveMultiPointGcpAffine(gcpPairs);
+
+      // Finish mode
+      isGcpMatchingActive = false;
+      map.getContainer().classList.remove('gcp-calibration-active');
+      map.getContainer().removeEventListener('click', handleGcpNativeClick, true);
+      map.off('click', handleMapGcpClick);
+
+      if (floatingGcpBar) floatingGcpBar.classList.add('hidden');
+      if (cancelGcpMatchBtn) cancelGcpMatchBtn.classList.add('hidden');
+      if (floatApplyGcpBtn) floatApplyGcpBtn.classList.add('hidden');
+      if (sidebarApplyGcpBtn) sidebarApplyGcpBtn.classList.add('hidden');
+      if (floatUndoGcpBtn) floatUndoGcpBtn.classList.add('hidden');
+      if (sidebarUndoGcpBtn) sidebarUndoGcpBtn.classList.add('hidden');
+
+      // Restore handles and original opacity
+      if (overlay && bounds && !isLocked) createHandles();
+      if (overlay && gcpPriorOpacity !== null) {
+        visualState.opacity = gcpPriorOpacity;
+        overlay.setOpacity(gcpPriorOpacity);
+        if (opacitySlider) opacitySlider.value = Math.round(gcpPriorOpacity * 100);
+        if (opacityLabel) opacityLabel.textContent = `${Math.round(gcpPriorOpacity * 100)}%`;
+      }
+
+      if (gcpStatusBadge) {
+        gcpStatusBadge.textContent = `معايرة مكتملة (${gcpPairs.length} نقاط)`;
+        gcpStatusBadge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold';
+      }
+      if (gcpBtnLabel) gcpBtnLabel.textContent = 'إعادة المعايرة بنقاط الضبط (GCP)';
+
+      // Retain markers for 10 seconds for user visual verification, then clear
+      setTimeout(() => {
+        clearGcpMarkers();
+        if (gcpInstructionsText) gcpInstructionsText.classList.add('hidden');
+        if (gcpPointsList) gcpPointsList.classList.add('hidden');
+        if (gcpStatusBadge) {
+          gcpStatusBadge.textContent = 'غير نشط';
+          gcpStatusBadge.className = 'text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-mono';
+        }
+      }, 10000);
+    }
+
+    /**
+     * Solve Least Squares Affine / Helmert Similarity Transformation for N Points (N >= 2)
+     * Finds optimal translation, scale, and rotation that minimizes Mean Squared Error
+     */
+    function solveMultiPointGcpAffine(pairs) {
+      if (!overlay || !bounds || !pairs || pairs.length < 2) return;
+      const N = pairs.length;
+
+      // Centroids
+      let sumImgX = 0, sumImgY = 0, sumGrdX = 0, sumGrdY = 0;
+      pairs.forEach(p => {
+        sumImgX += p.imgPt.lng;
+        sumImgY += p.imgPt.lat;
+        sumGrdX += p.basePt.lng;
+        sumGrdY += p.basePt.lat;
+      });
+
+      const meanImgX = sumImgX / N;
+      const meanImgY = sumImgY / N;
+      const meanGrdX = sumGrdX / N;
+      const meanGrdY = sumGrdY / N;
+
+      // Normal equations for similarity transform
+      let denom = 0;
+      let numA = 0;
+      let numB = 0;
+
+      pairs.forEach(p => {
+        const u = p.imgPt.lng - meanImgX;
+        const v = p.imgPt.lat - meanImgY;
+        const U = p.basePt.lng - meanGrdX;
+        const V = p.basePt.lat - meanGrdY;
+
+        denom += (u * u + v * v);
+        numA += (u * U + v * V);
+        numB += (u * V - v * U);
+      });
+
+      if (denom < 1e-12) {
+        showToast('نقاط الضبط متقاربة جداً أو متطابقة، يرجى اختيار نقاط متباعدة عبر الخارطة', 'warning');
+        return;
+      }
+
+      const a = numA / denom;
+      const b = numB / denom;
+
+      // Scale & Rotation
+      const scaleRatio = Math.sqrt(a * a + b * b);
+      const deltaAngleRad = Math.atan2(b, a);
+      const deltaAngleDeg = deltaAngleRad * (180 / Math.PI);
+
+      if (scaleRatio < 0.05 || scaleRatio > 20) {
+        showToast('نسبة المقياس المحسوبة غير معقولة، يرجى التحقق من صحة النقاط المحددة', 'warning');
+        return;
+      }
+
+      // Calculate Root Mean Square Error (RMSE)
+      let sumSqResiduals = 0;
+      pairs.forEach(p => {
+        const u = p.imgPt.lng - meanImgX;
+        const v = p.imgPt.lat - meanImgY;
+        const predU = a * u - b * v;
+        const predV = b * u + a * v;
+        const actualU = p.basePt.lng - meanGrdX;
+        const actualV = p.basePt.lat - meanGrdY;
+        const errX = actualU - predU;
+        const errY = actualV - predV;
+        sumSqResiduals += (errX * errX + errY * errY);
+      });
+      const rmseDegrees = Math.sqrt(sumSqResiduals / N);
+      const rmseMeters = Math.round(rmseDegrees * 111320);
 
       // Accumulate rotation
       rotationDeg = Math.round((rotationDeg + deltaAngleDeg) % 360);
@@ -2627,27 +2821,18 @@ document.addEventListener('DOMContentLoaded', () => {
       if (rotationLabel) rotationLabel.textContent = `${rotationDeg}°`;
       if (boundRot) boundRot.textContent = `${rotationDeg}°`;
 
-      // 3. Image & Ground Midpoints
-      const mImgLng = (x1 + x2) / 2;
-      const mImgLat = (y1 + y2) / 2;
-      const mGrdLng = (X1 + X2) / 2;
-      const mGrdLat = (Y1 + Y2) / 2;
-
-      // 4. Center Translation
+      // Center translation
       const curCenter = bounds.getCenter();
-      const relLng = curCenter.lng - mImgLng;
-      const relLat = curCenter.lat - mImgLat;
+      const relLng = curCenter.lng - meanImgX;
+      const relLat = curCenter.lat - meanImgY;
 
-      // Rotate and scale the relative center vector
-      const cosA = Math.cos(deltaAngleRad);
-      const sinA = Math.sin(deltaAngleRad);
-      const newRelLng = scaleRatio * (relLng * cosA - relLat * sinA);
-      const newRelLat = scaleRatio * (relLng * sinA + relLat * cosA);
+      const newRelLng = a * relLng - b * relLat;
+      const newRelLat = b * relLng + a * relLat;
 
-      const newCenterLng = mGrdLng + newRelLng;
-      const newCenterLat = mGrdLat + newRelLat;
+      const newCenterLng = meanGrdX + newRelLng;
+      const newCenterLat = meanGrdY + newRelLat;
 
-      // 5. Update Span & Bounds
+      // Update Spans & Bounds
       const newSpanLat = (bounds.getNorth() - bounds.getSouth()) * scaleRatio;
       const newSpanLng = (bounds.getEast() - bounds.getWest()) * scaleRatio;
 
@@ -2669,7 +2854,21 @@ document.addEventListener('DOMContentLoaded', () => {
       updateReadout();
       map.flyToBounds(bounds, { padding: [40, 40], duration: 1.2 });
 
-      showToast(`تمت المعايرة بنجاح عبر نقطتي الضبط (GCP)! دوران: ${Math.round(deltaAngleDeg)}°، مقياس: ${(scaleRatio * 100).toFixed(0)}%`, 'success');
+      if (gcpInstructionsText) {
+        gcpInstructionsText.innerHTML = `
+          <div class="text-emerald-400 font-bold flex items-center gap-1.5">
+            <i class="fa-solid fa-circle-check"></i>
+            <span>اكتملت المعايرة بنجاح عبر (${N}) نقاط ضبط!</span>
+          </div>
+          <div class="text-[10px] text-slate-300 space-y-0.5 mt-1">
+            <div>دوران الخارطة: <strong class="text-white">${Math.round(deltaAngleDeg)}°</strong> | المقياس: <strong class="text-white">${(scaleRatio * 100).toFixed(0)}%</strong></div>
+            <div>دقة التطابق (RMS Error): <strong class="text-emerald-300">≈ ${rmseMeters} متر</strong></div>
+          </div>
+        `;
+      }
+
+      showToast(`⚡ تمت المعايرة التآلفية بنجاح عبر (${N}) نقاط! دوران: ${Math.round(deltaAngleDeg)}°، مقياس: ${(scaleRatio * 100).toFixed(0)}%، خطأ المطابقة: ≈ ${rmseMeters}م`, 'success');
+      setTimeout(() => { blinkCompare(); }, 500);
     }
 
     /**
@@ -3353,6 +3552,22 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
+    if (floatApplyGcpBtn) {
+      floatApplyGcpBtn.addEventListener('click', () => applyMultiPointGcp());
+    }
+
+    if (sidebarApplyGcpBtn) {
+      sidebarApplyGcpBtn.addEventListener('click', () => applyMultiPointGcp());
+    }
+
+    if (floatUndoGcpBtn) {
+      floatUndoGcpBtn.addEventListener('click', () => undoLastGcpPoint());
+    }
+
+    if (sidebarUndoGcpBtn) {
+      sidebarUndoGcpBtn.addEventListener('click', () => undoLastGcpPoint());
+    }
+
     // ==========================================
     // AI Reality Alignment & Calibration Modal Studio
     // ==========================================
@@ -3508,6 +3723,8 @@ document.addEventListener('DOMContentLoaded', () => {
     window.performSmartAutoAlignment = performSmartAutoAlignment;
     window.toggleSwipeMode = toggleSwipeMode;
     window.toggleSpyglassMode = toggleSpyglassMode;
+    window.applyMultiPointGcp = applyMultiPointGcp;
+    window.undoLastGcpPoint = undoLastGcpPoint;
 
     // ==========================================
     // Gemini Vision API - Auto Geolocation (Direct File Upload)
