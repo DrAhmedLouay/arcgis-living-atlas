@@ -821,6 +821,141 @@ document.addEventListener('DOMContentLoaded', () => {
       return Math.min(255, Math.max(0, Math.round(((val - stat.min) / range) * 255)));
     }
 
+    function createSampleNormalizer(sampleArray) {
+      if (!sampleArray || sampleArray.length === 0) return (v) => 0;
+      const isFloat = sampleArray instanceof Float32Array || sampleArray instanceof Float64Array;
+      let maxSample = 0;
+      const testLen = Math.min(sampleArray.length, 1000);
+      for (let i = 0; i < testLen; i++) {
+        const v = sampleArray[i];
+        if (v > maxSample) maxSample = v;
+      }
+      if (isFloat && maxSample <= 1.0) {
+        return (v) => Math.min(255, Math.max(0, Math.round((v || 0) * 255)));
+      }
+      if (maxSample > 255) {
+        const shift = maxSample > 4095 ? 8 : 4;
+        return (v) => Math.min(255, Math.max(0, ((v || 0) >> shift)));
+      }
+      return (v) => Math.min(255, Math.max(0, Math.round(v || 0)));
+    }
+
+    function rasterToDataUrl(rgb, w, h) {
+      if (!rgb || w <= 0 || h <= 0) return null;
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        const imgData = ctx.createImageData(w, h);
+        const data = imgData.data;
+        const numPixels = w * h;
+
+        if (Array.isArray(rgb) && rgb.length > 0 && (rgb[0] instanceof Uint8Array || rgb[0] instanceof Uint16Array || rgb[0] instanceof Float32Array || Array.isArray(rgb[0]))) {
+          const rB = rgb[0];
+          const gB = rgb.length > 1 ? rgb[1] : rB;
+          const bB = rgb.length > 2 ? rgb[2] : rB;
+          const aB = rgb.length > 3 ? rgb[3] : null;
+
+          const normR = createSampleNormalizer(rB);
+          const normG = createSampleNormalizer(gB);
+          const normB = createSampleNormalizer(bB);
+
+          for (let idx = 0, p = 0; idx < numPixels && idx < rB.length; idx++, p += 4) {
+            data[p]     = normR(rB[idx]);
+            data[p + 1] = normG(gB[idx]);
+            data[p + 2] = normB(bB[idx]);
+            data[p + 3] = aB ? Math.min(255, Math.max(0, Math.round(aB[idx]))) : 255;
+          }
+        } else {
+          const total = rgb.length;
+          const ch = Math.max(1, Math.round(total / numPixels));
+          const norm = createSampleNormalizer(rgb);
+
+          for (let idx = 0, p = 0; idx < numPixels; idx++, p += 4) {
+            const i = idx * ch;
+            if (ch >= 4) {
+              data[p]     = norm(rgb[i]);
+              data[p + 1] = norm(rgb[i + 1]);
+              data[p + 2] = norm(rgb[i + 2]);
+              data[p + 3] = Math.min(255, Math.max(0, Math.round(rgb[i + 3])));
+            } else if (ch === 3) {
+              data[p]     = norm(rgb[i]);
+              data[p + 1] = norm(rgb[i + 1]);
+              data[p + 2] = norm(rgb[i + 2]);
+              data[p + 3] = 255;
+            } else {
+              const v = norm(rgb[i]);
+              data[p]     = v;
+              data[p + 1] = v;
+              data[p + 2] = v;
+              data[p + 3] = ch > 1 ? Math.min(255, Math.max(0, Math.round(rgb[i + 1]))) : 255;
+            }
+          }
+        }
+
+        ctx.putImageData(imgData, 0, 0);
+
+        const maxDim = 3840;
+        if (w > maxDim || h > maxDim) {
+          const sc = Math.min(maxDim / w, maxDim / h);
+          const tw = Math.max(32, Math.round(w * sc));
+          const th = Math.max(32, Math.round(h * sc));
+          const destCanvas = document.createElement('canvas');
+          destCanvas.width = tw;
+          destCanvas.height = th;
+          destCanvas.getContext('2d').drawImage(canvas, 0, 0, tw, th);
+          return destCanvas.toDataURL('image/jpeg', 0.92);
+        }
+
+        return canvas.toDataURL('image/jpeg', 0.92);
+      } catch (e) {
+        console.warn('rasterToDataUrl error:', e);
+        return null;
+      }
+    }
+
+    function rastersToDataUrl(rasters, w, h) {
+      if (!rasters || rasters.length === 0 || !rasters[0]) return null;
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        const imgData = ctx.createImageData(w, h);
+        const data = imgData.data;
+
+        const b0 = rasters[0];
+        const b1 = rasters.length > 1 ? rasters[1] : b0;
+        const b2 = rasters.length > 2 ? rasters[2] : b0;
+        const bA = rasters.length > 3 ? rasters[3] : null;
+
+        const rStat = getTiffBandStats(b0);
+        const gStat = rasters.length > 1 ? getTiffBandStats(b1) : rStat;
+        const bStat = rasters.length > 2 ? getTiffBandStats(b2) : rStat;
+
+        for (let idx = 0, p = 0; idx < w * h && idx < b0.length; idx++, p += 4) {
+          data[p]     = normalizeTiffVal(b0[idx], rStat);
+          data[p + 1] = normalizeTiffVal(b1[idx], gStat);
+          data[p + 2] = normalizeTiffVal(b2[idx], bStat);
+          data[p + 3] = bA ? Math.min(255, Math.max(0, Math.round(bA[idx]))) : 255;
+        }
+
+        ctx.putImageData(imgData, 0, 0);
+        return canvas.toDataURL('image/jpeg', 0.92);
+      } catch (e) {
+        console.warn('rastersToDataUrl error:', e);
+        return null;
+      }
+    }
+
+    function withTimeout(promise, ms, desc = 'Timeout') {
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`${desc} after ${ms}ms`)), ms))
+      ]);
+    }
+
     /**
      * Advanced Dual-Engine TIFF & GeoTIFF Decoder
      * Engine 1: GeoTIFF.js (Standard for satellite, BigTIFF, and tiled raster mosaics)
@@ -836,9 +971,9 @@ document.addEventListener('DOMContentLoaded', () => {
       // 1. Try GeoTIFF.js first (Supports BigTIFF, Tiled, Overviews, LZW, Deflate, JPEG)
       if (typeof GeoTIFF !== 'undefined') {
         try {
-          const tiff = await GeoTIFF.fromArrayBuffer(buffer);
-          const imageCount = typeof tiff.getImageCount === 'function' ? await tiff.getImageCount() : 1;
-          const mainImage = await tiff.getImage(0);
+          const tiff = await withTimeout(GeoTIFF.fromArrayBuffer(buffer), 5000, 'GeoTIFF.fromArrayBuffer');
+          const imageCount = typeof tiff.getImageCount === 'function' ? await withTimeout(tiff.getImageCount(), 3000, 'getImageCount') : 1;
+          const mainImage = await withTimeout(tiff.getImage(0), 3000, 'getImage(0)');
           width = mainImage.getWidth();
           height = mainImage.getHeight();
 
@@ -881,7 +1016,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let utmZone = 38;
             let proj = `UTM Zone 38N (EPSG:${epsgCode})`;
-            if (epsgCode === 32637 || (minX > 100000 && minX < 500000 && fileName.includes('37'))) {
+            if (epsgCode === 3857 || epsgCode === 900913 || epsgCode === 102100 || minX > 900000 || Math.abs(minX) > 900000) {
+              proj = 'WGS 84 / Pseudo-Mercator (EPSG:3857)';
+            } else if (epsgCode === 32637 || (minX > 100000 && minX < 500000 && fileName.includes('37'))) {
               utmZone = 37;
               proj = 'UTM Zone 37N (EPSG:32637)';
             } else if (epsgCode === 32639) {
@@ -910,7 +1047,9 @@ document.addEventListener('DOMContentLoaded', () => {
           } else if (originX !== null && originY !== null) {
             let utmZone = 38;
             let proj = `UTM Zone 38N (EPSG:${epsgCode})`;
-            if (epsgCode === 4326 || (originX >= -180 && originX <= 180 && originY >= -90 && originY <= 90)) {
+            if (epsgCode === 3857 || epsgCode === 900913 || epsgCode === 102100 || Math.abs(originX) > 900000) {
+              proj = 'WGS 84 / Pseudo-Mercator (EPSG:3857)';
+            } else if (epsgCode === 4326 || (originX >= -180 && originX <= 180 && originY >= -90 && originY <= 90)) {
               proj = 'WGS84 Geodetic (EPSG:4326)';
             }
             geoMeta = {
@@ -931,169 +1070,106 @@ document.addEventListener('DOMContentLoaded', () => {
             };
           }
 
-          // Select best resolution image to render: if overviews exist, pick overview closest to 3840px
-          const targetUHD = 3840;
-          let renderImage = mainImage;
-          if (imageCount > 1 && (width > targetUHD || height > targetUHD)) {
-            let bestOverview = null;
-            let bestDiff = Infinity;
+          // 1. Check for Overviews (Pyramids) - Ideal for massive orthomosaics
+          let bestOverview = null;
+          let bestOverviewDim = 0;
+          if (imageCount > 1) {
             for (let idx = 1; idx < imageCount; idx++) {
               try {
-                const ov = await tiff.getImage(idx);
+                const ov = await withTimeout(tiff.getImage(idx), 2000, `getImage(${idx})`);
                 const ow = ov.getWidth();
                 const oh = ov.getHeight();
                 const maxO = Math.max(ow, oh);
-                const diff = Math.abs(maxO - targetUHD);
-                if (diff < bestDiff) {
-                  bestDiff = diff;
-                  bestOverview = ov;
+                // Sweet spot for high clarity and instant decode: 800px to 4096px
+                if (maxO >= 800 && maxO <= 4096) {
+                  if (!bestOverview || maxO > bestOverviewDim) {
+                    bestOverview = ov;
+                    bestOverviewDim = maxO;
+                  }
                 }
               } catch (ove) {}
             }
-            if (bestOverview) {
-              renderImage = bestOverview;
+            if (!bestOverview) {
+              let minDiff = Infinity;
+              for (let idx = 1; idx < imageCount; idx++) {
+                try {
+                  const ov = await withTimeout(tiff.getImage(idx), 2000, `getImage(${idx})`);
+                  const maxO = Math.max(ov.getWidth(), ov.getHeight());
+                  const diff = Math.abs(maxO - 2560);
+                  if (diff < minDiff) {
+                    minDiff = diff;
+                    bestOverview = ov;
+                    bestOverviewDim = maxO;
+                  }
+                } catch (ove) {}
+              }
             }
           }
 
-          const rw = renderImage.getWidth();
-          const rh = renderImage.getHeight();
-
-          // Safe, multi-tiered target resolution: try 3840px (4K UHD), then 2560px, then 1600px
-          // Pass { width, height, resampleMethod } so GeoTIFF.js resamples streaming on-the-fly
-          // without ever allocating multi-gigabyte buffers in browser RAM for massive 30,000px rasters!
-          const targetDimensions = [3840, 2560, 1600];
-
-          for (const targetMax of targetDimensions) {
-            if (pngDataUrl) break;
-            const sc = Math.min(1, targetMax / Math.max(rw, rh));
-            const tw = Math.max(32, Math.round(rw * sc));
-            const th = Math.max(32, Math.round(rh * sc));
-
-            // Strategy A: readRGB with downsampled dimensions
+          // Strategy 1: If an overview exists, read it directly without resampling!
+          // Overviews are already downsampled pyramids; reading them directly is ultra-fast (~50ms)
+          if (bestOverview) {
             try {
-              const rgb = await renderImage.readRGB({ width: tw, height: th, resampleMethod: 'bilinear' });
-              if (rgb && (rgb.length >= tw * th || (Array.isArray(rgb) && rgb.length > 0))) {
-                const canvas = document.createElement('canvas');
-                canvas.width = tw;
-                canvas.height = th;
-                const ctx = canvas.getContext('2d');
-                const imgData = ctx.createImageData(tw, th);
-
-                if (Array.isArray(rgb)) {
-                  const rB = rgb[0];
-                  const gB = rgb.length > 1 ? rgb[1] : rB;
-                  const bB = rgb.length > 2 ? rgb[2] : rB;
-                  const aB = rgb.length > 3 ? rgb[3] : null;
-                  for (let idx = 0, p = 0; idx < tw * th && idx < rB.length; idx++, p += 4) {
-                    imgData.data[p]     = rB[idx];
-                    imgData.data[p + 1] = gB[idx];
-                    imgData.data[p + 2] = bB[idx];
-                    imgData.data[p + 3] = aB ? aB[idx] : 255;
-                  }
-                } else {
-                  const total = rgb.length;
-                  const ch = Math.max(1, Math.round(total / (tw * th)));
-                  for (let idx = 0, p = 0; idx < tw * th; idx++, p += 4) {
-                    const i = idx * ch;
-                    if (ch >= 4) {
-                      imgData.data[p]     = rgb[i];
-                      imgData.data[p + 1] = rgb[i + 1];
-                      imgData.data[p + 2] = rgb[i + 2];
-                      imgData.data[p + 3] = rgb[i + 3];
-                    } else if (ch === 3) {
-                      imgData.data[p]     = rgb[i];
-                      imgData.data[p + 1] = rgb[i + 1];
-                      imgData.data[p + 2] = rgb[i + 2];
-                      imgData.data[p + 3] = 255;
-                    } else {
-                      imgData.data[p]     = rgb[i];
-                      imgData.data[p + 1] = rgb[i];
-                      imgData.data[p + 2] = rgb[i];
-                      imgData.data[p + 3] = ch > 1 ? rgb[i + 1] : 255;
-                    }
-                  }
-                }
-
-                ctx.putImageData(imgData, 0, 0);
-                pngDataUrl = canvas.toDataURL('image/jpeg', 0.94);
-                break;
+              const ow = bestOverview.getWidth();
+              const oh = bestOverview.getHeight();
+              const rgb = await withTimeout(bestOverview.readRGB(), 6000, 'bestOverview.readRGB');
+              if (rgb) {
+                pngDataUrl = rasterToDataUrl(rgb, ow, oh);
               }
-            } catch (rgbE) {
-              console.warn(`readRGB at ${tw}x${th} failed:`, rgbE);
-            }
-
-            // Strategy B: readRasters with downsampled dimensions
-            try {
-              const rasters = await renderImage.readRasters({ width: tw, height: th, resampleMethod: 'bilinear' });
-              if (rasters && rasters.length > 0 && rasters[0] && rasters[0].length === tw * th) {
-                const canvas = document.createElement('canvas');
-                canvas.width = tw;
-                canvas.height = th;
-                const ctx = canvas.getContext('2d');
-                const imgData = ctx.createImageData(tw, th);
-
-                const b0 = rasters[0];
-                const b1 = rasters.length > 1 ? rasters[1] : b0;
-                const b2 = rasters.length > 2 ? rasters[2] : b0;
-                const bA = rasters.length > 3 ? rasters[3] : null;
-
-                const rStat = getTiffBandStats(b0);
-                const gStat = rasters.length > 1 ? getTiffBandStats(b1) : rStat;
-                const bStat = rasters.length > 2 ? getTiffBandStats(b2) : rStat;
-
-                for (let idx = 0, p = 0; idx < tw * th; idx++, p += 4) {
-                  imgData.data[p]     = normalizeTiffVal(b0[idx], rStat);
-                  imgData.data[p + 1] = normalizeTiffVal(b1[idx], gStat);
-                  imgData.data[p + 2] = normalizeTiffVal(b2[idx], bStat);
-                  imgData.data[p + 3] = bA ? Math.min(255, Math.max(0, Math.round(bA[idx]))) : 255;
-                }
-
-                ctx.putImageData(imgData, 0, 0);
-                pngDataUrl = canvas.toDataURL('image/jpeg', 0.94);
-                break;
-              }
-            } catch (rastE) {
-              console.warn(`readRasters at ${tw}x${th} failed:`, rastE);
+            } catch (ovErr) {
+              console.warn('Overview readRGB failed or timed out:', ovErr);
             }
           }
 
-          // Strategy C: If image is <= 16MP and downsampling wasn't supported by codec, read native & scale
-          if (!pngDataUrl && rw * rh <= 16777216) {
-            try {
-              const rgb = await renderImage.readRGB();
-              if (rgb && rgb.length >= rw * rh) {
-                const srcCanvas = document.createElement('canvas');
-                srcCanvas.width = rw;
-                srcCanvas.height = rh;
-                const ctx = srcCanvas.getContext('2d');
-                const imgData = ctx.createImageData(rw, rh);
-                const total = rgb.length;
-                const ch = Math.max(1, Math.round(total / (rw * rh)));
-                for (let idx = 0, p = 0; idx < rw * rh; idx++, p += 4) {
-                  const i = idx * ch;
-                  imgData.data[p]     = rgb[i];
-                  imgData.data[p + 1] = ch >= 2 ? rgb[i + 1] : rgb[i];
-                  imgData.data[p + 2] = ch >= 3 ? rgb[i + 2] : rgb[i];
-                  imgData.data[p + 3] = ch >= 4 ? rgb[i + 3] : 255;
-                }
-                ctx.putImageData(imgData, 0, 0);
+          // Strategy 2: If no overview exists or overview failed, decode from mainImage
+          if (!pngDataUrl) {
+            const rw = mainImage.getWidth();
+            const rh = mainImage.getHeight();
 
-                const maxDim = 3840;
-                if (rw > maxDim || rh > maxDim) {
-                  const sc = Math.min(maxDim / rw, maxDim / rh);
-                  const tw = Math.round(rw * sc);
-                  const th = Math.round(rh * sc);
-                  const destCanvas = document.createElement('canvas');
-                  destCanvas.width = tw;
-                  destCanvas.height = th;
-                  destCanvas.getContext('2d').drawImage(srcCanvas, 0, 0, tw, th);
-                  pngDataUrl = destCanvas.toDataURL('image/jpeg', 0.94);
-                } else {
-                  pngDataUrl = srcCanvas.toDataURL('image/jpeg', 0.94);
+            // If mainImage is reasonably sized (<= 16MP), try native readRGB directly
+            if (rw * rh <= 16777216) {
+              try {
+                const rgb = await withTimeout(mainImage.readRGB(), 6000, 'mainImage.readRGB native');
+                if (rgb) {
+                  pngDataUrl = rasterToDataUrl(rgb, rw, rh);
+                }
+              } catch (nativeErr) {
+                console.warn('mainImage native readRGB failed:', nativeErr);
+              }
+            }
+
+            // If still no raster (e.g. giant 707MP image or native read failed):
+            // Use streaming downsampled readRGB or readRasters with fast nearest-neighbor (NO bilinear!)
+            if (!pngDataUrl) {
+              const targetDimensions = [2048, 1536];
+              for (const targetMax of targetDimensions) {
+                if (pngDataUrl) break;
+                const sc = Math.min(1, targetMax / Math.max(rw, rh));
+                const tw = Math.max(32, Math.round(rw * sc));
+                const th = Math.max(32, Math.round(rh * sc));
+
+                // 2a: readRGB downsampled with default nearest-neighbor (fast stream)
+                try {
+                  const rgb = await withTimeout(mainImage.readRGB({ width: tw, height: th }), 5000, `mainImage.readRGB(${tw}x${th})`);
+                  if (rgb) {
+                    pngDataUrl = rasterToDataUrl(rgb, tw, th);
+                    break;
+                  }
+                } catch (rgbE) {
+                  console.warn(`readRGB at ${tw}x${th} failed:`, rgbE);
+                }
+
+                // 2b: readRasters downsampled with default nearest-neighbor
+                try {
+                  const rasters = await withTimeout(mainImage.readRasters({ width: tw, height: th }), 5000, `mainImage.readRasters(${tw}x${th})`);
+                  if (rasters) {
+                    pngDataUrl = rastersToDataUrl(rasters, tw, th);
+                    break;
+                  }
+                } catch (rastE) {
+                  console.warn(`readRasters at ${tw}x${th} failed:`, rastE);
                 }
               }
-            } catch (nativeE) {
-              console.warn('Native readRGB failed:', nativeE);
             }
           }
         } catch (gtErr) {
@@ -1106,8 +1182,8 @@ document.addEventListener('DOMContentLoaded', () => {
         geoMeta = parseTIFFGeoHeader(buffer, fileName);
       }
 
-      // 3. Fallback to UTIF.js if GeoTIFF.js didn't produce visual raster
-      if (!pngDataUrl && typeof UTIF !== 'undefined') {
+      // 3. Fallback to UTIF.js if GeoTIFF.js didn't produce visual raster (only for <= 25 MP to protect RAM)
+      if (!pngDataUrl && typeof UTIF !== 'undefined' && width > 0 && width * height <= 25000000) {
         try {
           const ifds = UTIF.decode(buffer);
           if (ifds && ifds.length > 0) {
@@ -1118,13 +1194,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (rgba && w > 0 && h > 0) {
               width = width || w;
               height = height || h;
-              const srcCanvas = document.createElement('canvas');
-              srcCanvas.width = w;
-              srcCanvas.height = h;
-              const srcCtx = srcCanvas.getContext('2d');
-              const imgData = srcCtx.createImageData(w, h);
+              const canvas = document.createElement('canvas');
+              canvas.width = w;
+              canvas.height = h;
+              const ctx = canvas.getContext('2d');
+              const imgData = ctx.createImageData(w, h);
               imgData.data.set(rgba);
-              srcCtx.putImageData(imgData, 0, 0);
+              ctx.putImageData(imgData, 0, 0);
 
               const maxDim = 3840;
               if (w > maxDim || h > maxDim) {
@@ -1134,10 +1210,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const destCanvas = document.createElement('canvas');
                 destCanvas.width = tw;
                 destCanvas.height = th;
-                destCanvas.getContext('2d').drawImage(srcCanvas, 0, 0, tw, th);
-                pngDataUrl = destCanvas.toDataURL('image/jpeg', 0.94);
+                destCanvas.getContext('2d').drawImage(canvas, 0, 0, tw, th);
+                pngDataUrl = destCanvas.toDataURL('image/jpeg', 0.92);
               } else {
-                pngDataUrl = srcCanvas.toDataURL('image/jpeg', 0.94);
+                pngDataUrl = canvas.toDataURL('image/jpeg', 0.92);
               }
             }
           }
@@ -2207,8 +2283,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           }
 
-          if (geoMeta.originX) {
-            showToast(`تم استيراد GeoTIFF بنجاح: ${geoMeta.detectionSource}`, 'success');
+          const isSvgPlaceholder = decoded.pngDataUrl && decoded.pngDataUrl.startsWith('data:image/svg+xml');
+          if (isSvgPlaceholder) {
+            showToast(`تم استيراد نطاق وإحداثيات الخارطة بنجاح (${(geoMeta.width || 0).toLocaleString('ar-IQ')} × ${(geoMeta.height || 0).toLocaleString('ar-IQ')} بكسل)`, 'success');
+          } else if (geoMeta.originX) {
+            showToast(`تم استيراد وعرض خارطة GeoTIFF الفضائية بنجاح: ${geoMeta.detectionSource}`, 'success');
           } else {
             showToast(`تم استيراد وعرض صورة TIFF بنجاح للمعايرة`, 'success');
           }
