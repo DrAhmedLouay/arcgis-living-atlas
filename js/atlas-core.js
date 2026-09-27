@@ -1007,7 +1007,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Advanced Dual-Engine TIFF & GeoTIFF Decoder
+    /**
+     * Advanced Ultra-Fast TIFF & GeoTIFF Decoder
      * Supports both File/Blob (zero-RAM streaming) and ArrayBuffer
+     * Optimized for massive multi-gigabyte satellite & aerial ortho-mosaics
      */
     async function decodeTiffDataset(source, fileName) {
       let geoMeta = null;
@@ -1020,86 +1023,90 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
           let tiff = null;
 
-          // Engine 1: In-Memory ArrayBuffer (Fastest, zero-I/O bottleneck, battle-tested)
-          try {
-            let buf = null;
-            if (source instanceof ArrayBuffer) {
-              buf = source;
-            } else if (source instanceof Blob) {
-              try {
-                buf = await source.arrayBuffer();
-              } catch (abErr) {
-                buf = await new Promise((resolve, reject) => {
-                  const r = new FileReader();
-                  r.onload = () => resolve(r.target.result);
-                  r.onerror = (err) => reject(err);
-                  r.readAsArrayBuffer(source);
-                });
-              }
+          // Priority 1: Streaming fromBlob (Instant, zero-RAM bottleneck, reads IFDs on demand)
+          if (source instanceof Blob) {
+            try {
+              tiff = await withTimeout(GeoTIFF.fromBlob(source), 8000, 'GeoTIFF.fromBlob');
+            } catch (blobErr) {
+              console.warn('GeoTIFF.fromBlob failed, trying fromArrayBuffer:', blobErr);
             }
-            if (buf && typeof GeoTIFF !== 'undefined') {
-              tiff = await GeoTIFF.fromArrayBuffer(buf);
-            }
-          } catch (arrErr) {
-            console.warn('ArrayBuffer read failed, trying fromBlob:', arrErr);
           }
 
-          // Engine 2: fromBlob streaming fallback (for ultra-massive multi-gigabyte files where ArrayBuffer might OOM)
-          if (!tiff && source instanceof Blob && typeof GeoTIFF !== 'undefined') {
+          // Priority 2: fromArrayBuffer for ArrayBuffers or small files (<= 150MB)
+          if (!tiff) {
             try {
-              tiff = await GeoTIFF.fromBlob(source);
-            } catch (blobErr) {
-              console.warn('GeoTIFF.fromBlob failed:', blobErr);
+              let buf = null;
+              if (source instanceof ArrayBuffer) {
+                buf = source;
+              } else if (source instanceof Blob && source.size <= 150 * 1024 * 1024) {
+                buf = await withTimeout(source.arrayBuffer(), 8000, 'source.arrayBuffer');
+              }
+              if (buf) {
+                tiff = await withTimeout(GeoTIFF.fromArrayBuffer(buf), 8000, 'GeoTIFF.fromArrayBuffer');
+              }
+            } catch (arrErr) {
+              console.warn('GeoTIFF.fromArrayBuffer failed:', arrErr);
             }
-          } else if (!tiff && source instanceof ArrayBuffer && typeof GeoTIFF !== 'undefined') {
-            tiff = await GeoTIFF.fromArrayBuffer(source);
           }
 
           if (tiff) {
-            const imageCount = typeof tiff.getImageCount === 'function' ? await tiff.getImageCount() : 1;
-            const mainImage = await tiff.getImage(0);
+            const imageCount = typeof tiff.getImageCount === 'function' ? await withTimeout(tiff.getImageCount(), 4000, 'getImageCount') : 1;
+            const mainImage = await withTimeout(tiff.getImage(0), 5000, 'getImage(0)');
             width = mainImage.getWidth();
             height = mainImage.getHeight();
 
-            // Geographic bounding box: [minX, minY, maxX, maxY]
+            const fd = mainImage.fileDirectory || {};
+
+            // 1. Direct tiepoints from fileDirectory or getOrigin
+            let originX = null, originY = null;
+            const tiepointData = fd.ModelTiepoint || fd[33922] || fd.ModelTiepointTag;
+            if (tiepointData && tiepointData.length >= 6) {
+              originX = tiepointData[3];
+              originY = tiepointData[4];
+            }
+            if ((originX === null || originX === 0) && typeof mainImage.getOrigin === 'function') {
+              try {
+                const orig = mainImage.getOrigin();
+                if (orig && orig.length >= 2 && (orig[0] !== 0 || orig[1] !== 0)) {
+                  originX = orig[0];
+                  originY = orig[1];
+                }
+              } catch (oe) {}
+            }
+
+            // 2. Direct pixel scale from fileDirectory or getResolution
+            let resX = null, resY = null;
+            const scaleData = fd.ModelPixelScale || fd[33550] || fd.ModelPixelScaleTag;
+            if (scaleData && scaleData.length >= 2) {
+              resX = Math.abs(scaleData[0]);
+              resY = Math.abs(scaleData[1]);
+            }
+            if ((!resX || resX <= 0) && typeof mainImage.getResolution === 'function') {
+              try {
+                const res = mainImage.getResolution();
+                if (res && res.length >= 2) {
+                  resX = Math.abs(res[0]);
+                  resY = Math.abs(res[1]);
+                }
+              } catch (re) {}
+            }
+
+            // 3. Transformation matrix
+            const transformData = fd.ModelTransformation || fd[34264] || fd.ModelTransformationTag;
+            if (transformData && transformData.length >= 16) {
+              if (originX === null || originX === 0) originX = transformData[3];
+              if (originY === null || originY === 0) originY = transformData[7];
+              if (!resX || resX <= 0) resX = Math.abs(transformData[0]);
+              if (!resY || resY <= 0) resY = Math.abs(transformData[5]);
+            }
+
+            // 4. Bounding Box
             let bbox = null;
             try {
-              bbox = mainImage.getBoundingBox();
+              if (typeof mainImage.getBoundingBox === 'function') {
+                bbox = mainImage.getBoundingBox();
+              }
             } catch (be) {}
-
-            let originX = null, originY = null, resX = null, resY = null;
-            try {
-              const origin = mainImage.getOrigin();
-              if (origin && origin.length >= 2 && (origin[0] !== 0 || origin[1] !== 0)) {
-                originX = origin[0];
-                originY = origin[1];
-              }
-            } catch (oe) {}
-
-            try {
-              const res = mainImage.getResolution();
-              if (res && res.length >= 2) {
-                resX = Math.abs(res[0]);
-                resY = Math.abs(res[1]);
-              }
-            } catch (re) {}
-
-            // Inspect fileDirectory directly for ModelTiepoint, ModelPixelScale, ModelTransformation
-            const fd = mainImage.fileDirectory || {};
-            if ((originX === null || originX === 0) && fd.ModelTiepoint && fd.ModelTiepoint.length >= 6) {
-              originX = fd.ModelTiepoint[3];
-              originY = fd.ModelTiepoint[4];
-            }
-            if ((!resX || resX === 0.5) && fd.ModelPixelScale && fd.ModelPixelScale.length >= 2) {
-              resX = Math.abs(fd.ModelPixelScale[0]);
-              resY = Math.abs(fd.ModelPixelScale[1]);
-            }
-            if ((originX === null || originX === 0) && fd.ModelTransformation && fd.ModelTransformation.length >= 16) {
-              originX = fd.ModelTransformation[3];
-              originY = fd.ModelTransformation[7];
-              resX = Math.abs(fd.ModelTransformation[0]);
-              resY = Math.abs(fd.ModelTransformation[5]);
-            }
 
             if (bbox && bbox.length >= 4) {
               const bMinX = Math.min(bbox[0], bbox[2]);
@@ -1121,11 +1128,18 @@ document.addEventListener('DOMContentLoaded', () => {
             resX = resX || 0.5;
             resY = resY || 0.5;
 
+            // 5. CRS / EPSG Code
             let epsgCode = 32638;
             try {
-              const geoKeys = mainImage.getGeoKeys();
+              const geoKeys = (typeof mainImage.getGeoKeys === 'function') ? mainImage.getGeoKeys() : null;
               if (geoKeys) {
                 epsgCode = geoKeys.ProjectedCSTypeGeoKey || geoKeys.GeographicTypeGeoKey || geoKeys.ProjectedCRSGeoKey || 32638;
+                if (epsgCode === 32767 && geoKeys.ProjNatOriginLongGeoKey) {
+                  const cm = Math.round(geoKeys.ProjNatOriginLongGeoKey);
+                  if (cm === 45) epsgCode = 32638;
+                  else if (cm === 39) epsgCode = 32637;
+                  else if (cm === 51) epsgCode = 32639;
+                }
               }
             } catch (ge) {}
 
@@ -1149,7 +1163,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 isECW: false,
                 width: width,
                 height: height,
-                bands: mainImage.getSamplesPerPixel() || 3,
+                bands: (typeof mainImage.getSamplesPerPixel === 'function' ? mainImage.getSamplesPerPixel() : 3) || 3,
                 compression: 1,
                 originX: originX,
                 originY: originY,
@@ -1164,18 +1178,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Overview Selection: Pick highest resolution overview closest to UHD 3840
-            const targetUHD = 3840;
+            const maxUHD = 3840;
             let renderImage = mainImage;
-            if (imageCount > 1 && (width > targetUHD || height > targetUHD)) {
+            if (imageCount > 1 && (width > maxUHD || height > maxUHD)) {
               let bestOverview = null;
               let bestDiff = Infinity;
               for (let idx = 1; idx < imageCount; idx++) {
                 try {
-                  const ov = await tiff.getImage(idx);
+                  const ov = await withTimeout(tiff.getImage(idx), 2000, `getImage(${idx})`);
                   const ow = ov.getWidth();
                   const oh = ov.getHeight();
                   const maxO = Math.max(ow, oh);
-                  const diff = Math.abs(maxO - targetUHD);
+                  const diff = Math.abs(maxO - maxUHD);
                   if (diff < bestDiff) {
                     bestDiff = diff;
                     bestOverview = ov;
@@ -1190,85 +1204,71 @@ document.addEventListener('DOMContentLoaded', () => {
             const rw = renderImage.getWidth();
             const rh = renderImage.getHeight();
 
-            // Strategy A: readRGB directly on renderImage (Proven fast and high quality)
+            // Safe target dimensions for canvas (never exceed maxUHD 3840 to prevent OOM/freeze)
+            let targetW = rw;
+            let targetH = rh;
+            if (targetW > maxUHD || targetH > maxUHD) {
+              const sc = Math.min(maxUHD / targetW, maxUHD / targetH);
+              targetW = Math.max(32, Math.round(targetW * sc));
+              targetH = Math.max(32, Math.round(targetH * sc));
+            }
+
+            const readOptions = (targetW < rw || targetH < rh) ? { width: targetW, height: targetH } : {};
+
+            // Strategy A: readRGB directly on renderImage with target dimensions
             try {
-              const rgb = await renderImage.readRGB();
-              if (rgb && rgb.length >= rw * rh * 3) {
+              const rgb = await withTimeout(renderImage.readRGB(readOptions), 10000, 'readRGB');
+              if (rgb && rgb.length >= targetW * targetH * 3) {
                 const is8Bit = (rgb instanceof Uint8Array || rgb instanceof Uint8ClampedArray);
                 if (is8Bit) {
                   const srcCanvas = document.createElement('canvas');
-                  srcCanvas.width = rw;
-                  srcCanvas.height = rh;
+                  srcCanvas.width = targetW;
+                  srcCanvas.height = targetH;
                   const ctx = srcCanvas.getContext('2d');
-                  const imgData = ctx.createImageData(rw, rh);
+                  const imgData = ctx.createImageData(targetW, targetH);
                   const data = imgData.data;
 
-                  // Direct fast 8-bit copy (zero overhead)
-                  for (let i = 0, j = 0; i < rgb.length && j < rw * rh * 4; i += 3, j += 4) {
+                  for (let i = 0, j = 0; i < rgb.length && j < targetW * targetH * 4; i += 3, j += 4) {
                     data[j]     = rgb[i];
                     data[j + 1] = rgb[i + 1];
                     data[j + 2] = rgb[i + 2];
                     data[j + 3] = 255;
                   }
                   ctx.putImageData(imgData, 0, 0);
-
-                  const maxDim = 3840;
-                  if (rw > maxDim || rh > maxDim) {
-                    const sc = Math.min(maxDim / rw, maxDim / rh);
-                    const tw = Math.round(rw * sc);
-                    const th = Math.round(rh * sc);
-                    const destCanvas = document.createElement('canvas');
-                    destCanvas.width = tw;
-                    destCanvas.height = th;
-                    destCanvas.getContext('2d').drawImage(srcCanvas, 0, 0, tw, th);
-                    pngDataUrl = destCanvas.toDataURL('image/jpeg', 0.94);
-                  } else {
-                    pngDataUrl = srcCanvas.toDataURL('image/jpeg', 0.94);
-                  }
+                  pngDataUrl = srcCanvas.toDataURL('image/jpeg', 0.94);
                 } else {
-                  pngDataUrl = rasterToDataUrl(rgb, rw, rh);
+                  pngDataUrl = rasterToDataUrl(rgb, targetW, targetH);
                 }
               }
             } catch (rgbE) {
-              console.warn('readRGB on renderImage failed, trying readRasters:', rgbE);
+              console.warn('readRGB failed, trying readRasters:', rgbE);
             }
 
-            // Strategy B: readRasters on renderImage (for multi-band / scientific rasters)
+            // Strategy B: readRasters on renderImage
             if (!pngDataUrl) {
               try {
-                const rasters = await renderImage.readRasters();
+                const rasters = await withTimeout(renderImage.readRasters(readOptions), 10000, 'readRasters');
                 if (rasters && rasters.length > 0 && rasters[0]) {
-                  pngDataUrl = rasterToDataUrl(rasters, rw, rh);
+                  const actualW = (rasters.width && rasters.width > 0) ? rasters.width : targetW;
+                  const actualH = (rasters.height && rasters.height > 0) ? rasters.height : targetH;
+                  pngDataUrl = rasterToDataUrl(rasters, actualW, actualH);
                 }
               } catch (rastE) {
-                console.warn('readRasters on renderImage failed:', rastE);
+                console.warn('readRasters failed:', rastE);
               }
             }
 
-            // Strategy C: If renderImage was an overview and failed, try mainImage if <= 25MP
-            if (!pngDataUrl && renderImage !== mainImage && width * height <= 25000000) {
+            // Strategy C: Progressive downsample fallback (1920 Full HD) if UHD failed
+            if (!pngDataUrl && (targetW > 1920 || targetH > 1920)) {
               try {
-                const rgb = await mainImage.readRGB();
-                if (rgb && rgb.length >= width * height * 3) {
-                  pngDataUrl = rasterToDataUrl(rgb, width, height);
+                const sc2 = Math.min(1920 / rw, 1920 / rh);
+                const tw2 = Math.max(32, Math.round(rw * sc2));
+                const th2 = Math.max(32, Math.round(rh * sc2));
+                const rgb2 = await withTimeout(renderImage.readRGB({ width: tw2, height: th2 }), 6000, 'readRGB-1920');
+                if (rgb2) {
+                  pngDataUrl = rasterToDataUrl(rgb2, tw2, th2);
                 }
-              } catch (mainE) {}
-            }
-
-            // Strategy D: If single image (no overview) and giant, downsample readRGB/readRasters
-            if (!pngDataUrl && rw * rh > 25000000) {
-              try {
-                const maxDim = 2560;
-                const sc = Math.min(maxDim / rw, maxDim / rh);
-                const tw = Math.max(32, Math.round(rw * sc));
-                const th = Math.max(32, Math.round(rh * sc));
-                const rgb = await renderImage.readRGB({ width: tw, height: th });
-                if (rgb) {
-                  pngDataUrl = rasterToDataUrl(rgb, tw, th);
-                }
-              } catch (dsErr) {
-                console.warn('Downsampled readRGB failed:', dsErr);
-              }
+              } catch (e2) {}
             }
           }
         } catch (gtErr) {
@@ -1283,8 +1283,8 @@ document.addEventListener('DOMContentLoaded', () => {
           if (source instanceof ArrayBuffer) {
             hBuf = source;
           } else if (source instanceof Blob) {
-            const slice = source.slice(0, Math.min(source.size, 4 * 1024 * 1024));
-            hBuf = await withTimeout(slice.arrayBuffer(), 2000, 'headerSlice');
+            const slice = source.slice(0, Math.min(source.size, 8 * 1024 * 1024));
+            hBuf = await withTimeout(slice.arrayBuffer(), 3000, 'headerSlice');
           }
         } catch (e) {}
         if (hBuf) {
@@ -1327,24 +1327,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      // 4. Guaranteed metadata fallback
+      // 4. Guaranteed metadata fallback with Iraqi Geographic Heuristics
       if (!geoMeta) {
-        geoMeta = {
-          fileName: fileName,
-          isECW: false,
-          width: width || 2048,
-          height: height || 2048,
-          bands: 3,
-          compression: 1,
-          originX: null,
-          originY: null,
-          cellIncrementX: 0.5,
-          cellIncrementY: -0.5,
-          projection: 'WGS84',
-          utmZone: 38,
-          datum: 'WGS84',
-          detectionSource: 'استيراد مباشر للمعايرة وضبط الموقع'
-        };
+        geoMeta = parseECWHeader(new ArrayBuffer(32), fileName, (source && source.size) ? source.size : 0);
+        if (width > 0 && height > 0) {
+          geoMeta.width = width;
+          geoMeta.height = height;
+        }
       }
 
       // 5. Guaranteed raster / vector footprint fallback
@@ -1625,7 +1614,15 @@ document.addEventListener('DOMContentLoaded', () => {
           meta.detectionSource = 'مطابقة ذكية لاسم المحافظة (ديالى)';
         } else if (lowerName.includes('fadileh') || lowerName.includes('fadhili') || lowerName.includes('fadili') || lowerName.includes('فضيلية') || lowerName.includes('فاضلية')) {
           meta.originX = 458000; meta.originY = 3690000; meta.utmZone = 38;
-          meta.detectionSource = 'مطابقة ذكية لاسم المنطقة (الفضيلية / شرق بغداد)';
+          if (lowerName.includes('64km') || lowerName.includes('64km2')) {
+            const wM = 8000;
+            const hM = 8000;
+            meta.cellIncrementX = wM / (meta.width || 16000);
+            meta.cellIncrementY = -(hM / (meta.height || 16000));
+            meta.detectionSource = 'مطابقة ذكية لاسم المنطقة (الفضيلية / مساحة 64 كم² - شرق بغداد)';
+          } else {
+            meta.detectionSource = 'مطابقة ذكية لاسم المنطقة (الفضيلية / شرق بغداد)';
+          }
         } else if (lowerName.includes('baghdad') || lowerName.includes('بغداد')) {
           meta.originX = 444500; meta.originY = 3687500; meta.utmZone = 38;
           meta.detectionSource = 'مطابقة ذكية لاسم العاصمة (بغداد)';
@@ -1752,12 +1749,10 @@ document.addEventListener('DOMContentLoaded', () => {
           const zone = meta.utmZone || 38;
           const pTL = utmToLatLng(xLeft, yTop, zone, true);
           const pBR = utmToLatLng(xRight, yBottom, zone, true);
-          const pTR = utmToLatLng(xRight, yTop, zone, true);
-          const pBL = utmToLatLng(xLeft, yBottom, zone, true);
-          north = Math.max(pTL.lat, pTR.lat);
-          south = Math.min(pBL.lat, pBR.lat);
-          west = Math.min(pTL.lng, pBL.lng);
-          east = Math.max(pTR.lng, pBR.lng);
+          north = Math.max(pTL.lat, pBR.lat);
+          south = Math.min(pTL.lat, pBR.lat);
+          west = Math.min(pTL.lng, pBR.lng);
+          east = Math.max(pTL.lng, pBR.lng);
         }
         // Case C: WGS84 Geodetic in degrees
         else if (xLeft >= -180 && xRight <= 180 && yBottom >= -90 && yTop <= 90) {
