@@ -232,6 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const urlInput = document.getElementById('satelliteImageUrlInput');
     const loadUrlBtn = document.getElementById('loadFromUrlBtn');
     const sampleBtn = document.getElementById('loadSampleSatelliteBtn');
+    const loadFadilehTiffBtn = document.getElementById('loadFadilehTiffBtn');
     const loadBaghdadEcwBtn = document.getElementById('loadBaghdadEcwBtn');
     const loadBasraEcwBtn = document.getElementById('loadBasraEcwBtn');
     const loadErbilEcwBtn = document.getElementById('loadErbilEcwBtn');
@@ -374,6 +375,13 @@ document.addEventListener('DOMContentLoaded', () => {
         icon: 'fa-plane-departure',
         bounds: L.latLngBounds([33.2200, 44.1800], [33.2940, 44.2880]),
         center: [33.2570, 44.2340]
+      },
+      'baghdad-fadileh': {
+        name: 'بغداد: الفضيلية وموزاييك شرق العاصمة (64 كم²)',
+        province: 'بغداد',
+        icon: 'fa-satellite',
+        bounds: L.latLngBounds([33.2765, 44.5486], [33.3484, 44.6349]),
+        center: [33.3124, 44.5918]
       },
       'basra-port': {
         name: 'البصرة: شط العرب وميناء المعقل والتنومة',
@@ -565,47 +573,50 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Extract Embedded Raster (JPEG / PNG Thumbnail or Preview) from Raw Binary Buffer
+     * Capped scan to prevent UI freeze and false positive binary garbage
      */
     function extractEmbeddedRaster(buffer) {
-      if (!buffer || buffer.byteLength < 1000) return null;
+      if (!buffer || buffer.byteLength < 2048) return null;
       const bytes = new Uint8Array(buffer);
-      const len = bytes.length;
+      const len = Math.min(bytes.length, 131072); // Only scan first 128KB max
 
-      // 1. Scan for JPEG Start of Image (0xFF, 0xD8, 0xFF)
+      // 1. Look for valid JPEG (SOI: 0xFF, 0xD8, 0xFF followed by APP0/APP1/DQT)
       for (let i = 0; i < len - 4; i++) {
         if (bytes[i] === 0xFF && bytes[i + 1] === 0xD8 && bytes[i + 2] === 0xFF) {
-          // Look for JPEG End of Image (0xFF, 0xD9)
-          for (let j = i + 100; j < len - 1; j++) {
-            if (bytes[j] === 0xFF && bytes[j + 1] === 0xD9) {
-              const jpegSlice = bytes.subarray(i, j + 2);
-              if (jpegSlice.length >= 2048) { // Valid image preview >= 2KB
-                try {
-                  const blob = new Blob([jpegSlice], { type: 'image/jpeg' });
-                  return URL.createObjectURL(blob);
-                } catch (err) {
-                  console.warn('Failed to construct JPEG preview blob:', err);
+          const marker = bytes[i + 3];
+          if (marker === 0xE0 || marker === 0xE1 || marker === 0xDB || marker === 0xEE) {
+            const maxJ = Math.min(bytes.length - 1, i + 524288);
+            for (let j = i + 100; j < maxJ; j++) {
+              if (bytes[j] === 0xFF && bytes[j + 1] === 0xD9) {
+                const jpegSlice = bytes.subarray(i, j + 2);
+                if (jpegSlice.length >= 4096) {
+                  try {
+                    const blob = new Blob([jpegSlice], { type: 'image/jpeg' });
+                    return URL.createObjectURL(blob);
+                  } catch (err) {}
                 }
+                break;
               }
             }
           }
         }
       }
 
-      // 2. Scan for PNG Signature (0x89 0x50 0x4E 0x47 0x0D 0x0A 0x1A 0x0A)
-      for (let i = 0; i < len - 8; i++) {
+      // 2. Look for PNG Signature within first 1KB
+      for (let i = 0; i < Math.min(len, 1024); i++) {
         if (bytes[i] === 0x89 && bytes[i+1] === 0x50 && bytes[i+2] === 0x4E && bytes[i+3] === 0x47 &&
             bytes[i+4] === 0x0D && bytes[i+5] === 0x0A && bytes[i+6] === 0x1A && bytes[i+7] === 0x0A) {
-          for (let j = i + 100; j < len - 7; j++) {
+          const maxJ = Math.min(bytes.length - 7, i + 524288);
+          for (let j = i + 100; j < maxJ; j++) {
             if (bytes[j] === 0x49 && bytes[j+1] === 0x45 && bytes[j+2] === 0x4E && bytes[j+3] === 0x44) {
               const pngSlice = bytes.subarray(i, j + 8);
-              if (pngSlice.length >= 2048) {
+              if (pngSlice.length >= 4096) {
                 try {
                   const blob = new Blob([pngSlice], { type: 'image/png' });
                   return URL.createObjectURL(blob);
-                } catch (err) {
-                  console.warn('Failed to construct PNG preview blob:', err);
-                }
+                } catch (err) {}
               }
+              break;
             }
           }
         }
@@ -613,6 +624,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       return null;
     }
+
 
     /**
      * Generate Informative High-Tech Vector Grid Footprint (SVG Data URL)
@@ -1184,7 +1196,7 @@ document.addEventListener('DOMContentLoaded', () => {
               let bestPixelCount = 0;
               for (let idx = 1; idx < imageCount; idx++) {
                 try {
-                  const ov = await withTimeout(tiff.getImage(idx), 1000, `getImage(${idx})`);
+                  const ov = await withTimeout(tiff.getImage(idx), 800, `getImage(${idx})`);
                   const ow = ov.getWidth();
                   const oh = ov.getHeight();
                   const pixels = ow * oh;
@@ -1198,8 +1210,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const ow = bestOverview.getWidth();
                 const oh = bestOverview.getHeight();
                 try {
-                  // Direct native readRGB with NO options (avoids GeoTIFF.js full-parent buffer allocation bug)
-                  const rgb = await withTimeout(bestOverview.readRGB(), 3000, 'overview.readRGB');
+                  const rgb = await withTimeout(bestOverview.readRGB(), 2500, 'overview.readRGB');
                   if (rgb && rgb.length >= ow * oh * 3) {
                     const is8Bit = (rgb instanceof Uint8Array || rgb instanceof Uint8ClampedArray);
                     if (is8Bit) {
@@ -1227,27 +1238,16 @@ document.addEventListener('DOMContentLoaded', () => {
               }
             }
 
-            // Condition 2: If single image and <= 16MP, read directly
-            if (!pngDataUrl && width * height <= 16777216) {
+            // Condition 2: If single image and <= 8MP, read directly
+            if (!pngDataUrl && width > 0 && height > 0 && width * height <= 8388608) {
               try {
-                const rgb = await withTimeout(mainImage.readRGB(), 4000, 'mainImage.readRGB');
+                const rgb = await withTimeout(mainImage.readRGB(), 3000, 'mainImage.readRGB');
                 if (rgb && rgb.length >= width * height * 3) {
                   pngDataUrl = rasterToDataUrl(rgb, width, height);
                 }
               } catch (me) {
                 console.warn('mainImage.readRGB failed:', me);
               }
-            }
-
-            // Condition 3: Check for embedded JPEG / PNG preview thumbnail in the first 16MB
-            if (!pngDataUrl && source instanceof Blob) {
-              try {
-                const sliceBuf = await withTimeout(source.slice(0, Math.min(source.size, 16 * 1024 * 1024)).arrayBuffer(), 2000, 'sliceBuf');
-                const emb = extractEmbeddedRaster(sliceBuf);
-                if (emb) {
-                  pngDataUrl = emb;
-                }
-              } catch (se) {}
             }
           }
         } catch (gtErr) {
@@ -1701,12 +1701,12 @@ document.addEventListener('DOMContentLoaded', () => {
       if ((xLeft === null || yTop === null) && meta.originX !== null && meta.originX !== undefined && meta.originY !== null && meta.originY !== undefined && (meta.originX !== 0 || meta.originY !== 0)) {
         let resX = Math.abs(meta.cellIncrementX || 0.5);
         let resY = Math.abs(meta.cellIncrementY || 0.5);
+        let wMeters = (meta.width || 8000) * resX;
+        let hMeters = (meta.height || 6000) * resY;
         if (meta.fileName && meta.fileName.toLowerCase().includes('fadileh') && (meta.fileName.toLowerCase().includes('64km') || meta.fileName.toLowerCase().includes('64km2'))) {
-          resX = 8000 / (meta.width || 30083);
-          resY = 8000 / (meta.height || 23500);
+          wMeters = 8000;
+          hMeters = 8000;
         }
-        const wMeters = (meta.width || 8000) * resX;
-        const hMeters = (meta.height || 6000) * resY;
         xLeft = meta.originX;
         yTop = meta.originY;
         xRight = meta.originX + wMeters;
@@ -2386,6 +2386,16 @@ document.addEventListener('DOMContentLoaded', () => {
           const customBounds = computeBoundsFromMeta(geoMeta);
           displayECWMetadata(geoMeta, customBounds);
 
+          // Fly directly and immediately to matching coordinates
+          if (customBounds && customBounds.isValid && customBounds.isValid()) {
+            map.invalidateSize();
+            try {
+              map.flyToBounds(customBounds, { padding: [40, 40], maxZoom: 17, duration: 1.4 });
+            } catch (e) {
+              map.fitBounds(customBounds, { padding: [40, 40] });
+            }
+          }
+
           let imageSrcToUse = decoded.pngDataUrl;
           if (!imageSrcToUse || imageSrcToUse.startsWith('data:image/svg+xml')) {
             imageSrcToUse = getSatelliteServiceUrlForBounds(customBounds);
@@ -2441,6 +2451,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const customBounds = computeBoundsFromMeta(geoMeta);
         displayECWMetadata(geoMeta, customBounds);
 
+        // Fly directly and immediately to matching coordinates
+        if (customBounds && customBounds.isValid && customBounds.isValid()) {
+          map.invalidateSize();
+          try {
+            map.flyToBounds(customBounds, { padding: [40, 40], maxZoom: 17, duration: 1.4 });
+          } catch (e) {
+            map.fitBounds(customBounds, { padding: [40, 40] });
+          }
+        }
+
         initCalibrationOverlay(displayDataUrl, imageFile.name, customBounds);
 
         // Prepare Gemini Vision / AI Reality Studio
@@ -2474,7 +2494,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       let ecwFile = null;
       let sidecarFile = null;
-      let imageFile = null;
+      let tiffFile = null;
+      let companionRasterFile = null;
 
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
@@ -3448,6 +3469,35 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       });
     }
 
+    if (loadFadilehTiffBtn) {
+      loadFadilehTiffBtn.addEventListener('click', () => {
+        const meta = {
+          fileName: 'ALFadileh_OrthoSatellite_FullArea_64km2_21Apr_6May2023.tif',
+          fileSizeMb: '380.0',
+          isECW: false,
+          version: 2,
+          width: 30083,
+          height: 23500,
+          bands: 3,
+          compression: 1,
+          projection: 'UTM Zone 38N (EPSG:32638)',
+          datum: 'WGS84',
+          cellSizeUnits: 'METERS',
+          cellIncrementX: 0.35,
+          cellIncrementY: -0.35,
+          originX: 458000,
+          originY: 3690000,
+          utmZone: 38,
+          isNorthern: true,
+          detectionSource: 'مطابقة ذكية لاسم المنطقة (الفضيلية / مساحة 64 كم² - شرق بغداد)'
+        };
+        const sampleBounds = computeBoundsFromMeta(meta);
+        displayECWMetadata(meta, sampleBounds);
+        const imageUrl = getSatelliteServiceUrlForBounds(sampleBounds);
+        initCalibrationOverlay(imageUrl, 'الفضيلية: خارطة فضائية 64 كم² (شرق بغداد)', sampleBounds);
+      });
+    }
+
     // Generic Sample Button (Baghdad Tigris)
     if (sampleBtn) {
       sampleBtn.addEventListener('click', () => {
@@ -3513,12 +3563,23 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       // Fly directly to image matching coordinates with original basemap
       if (bounds && bounds.isValid && bounds.isValid()) {
         map.invalidateSize();
-        map.fitBounds(bounds, {
-          padding: [40, 40],
-          maxZoom: 18,
-          animate: true,
-          duration: 1.0
-        });
+        try {
+          map.flyToBounds(bounds, {
+            padding: [40, 40],
+            maxZoom: 17,
+            duration: 1.4
+          });
+        } catch (e) {
+          map.fitBounds(bounds, { padding: [40, 40] });
+        }
+        setTimeout(() => {
+          if (map) {
+            map.invalidateSize();
+            if (!map.getBounds().contains(bounds.getCenter())) {
+              map.setView(bounds.getCenter(), Math.min(15, map.getBoundsZoom(bounds)));
+            }
+          }
+        }, 1200);
       }
 
       // Create boundary outline & corner handles
