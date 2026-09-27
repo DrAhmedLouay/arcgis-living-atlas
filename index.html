@@ -27,7 +27,7 @@
   <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 
   <!-- Custom Styling -->
-  <link rel="stylesheet" href="css/styles.css?v=20260928_02">
+  <link rel="stylesheet" href="css/styles.css?v=20260928_03">
 </head>
 <body class="bg-slate-950 text-slate-100 h-screen w-screen flex flex-col overflow-hidden select-none">
 
@@ -112,8 +112,49 @@
     <main class="flex-1 relative h-full" style="flex: 1 1 0%; position: relative; width: 100%; height: 100%;">
       <div id="viewDiv"></div>
 
+      <!-- Interactive Split-Screen Swipe Divider -->
+      <div id="swipeDivider" class="hidden absolute top-0 bottom-0 z-30 w-1 bg-white/90 shadow-[0_0_15px_rgba(0,0,0,0.9)] cursor-ew-resize select-none" style="left: 50%;">
+        <div class="swipe-handle absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center border-2 border-white text-xs hover:scale-110 active:scale-95 transition-transform cursor-ew-resize">
+          <i class="fa-solid fa-arrows-left-right text-xs"></i>
+        </div>
+        <div class="absolute top-4 -translate-x-full pr-2 text-[10px] font-bold text-white bg-slate-950/85 backdrop-blur px-2.5 py-1 rounded-md border border-slate-700 shadow pointer-events-none whitespace-nowrap">
+          خارطة الأساس الأصلية
+        </div>
+        <div class="absolute top-4 pl-2 text-[10px] font-bold text-sky-300 bg-slate-950/85 backdrop-blur px-2.5 py-1 rounded-md border border-slate-700 shadow pointer-events-none whitespace-nowrap">
+          الخارطة المستوردة
+        </div>
+      </div>
+
+      <!-- Interactive Spyglass Reticle -->
+      <div id="spyglassReticle" class="hidden pointer-events-none fixed z-30 w-52 h-52 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.5)]">
+        <div class="absolute inset-0 rounded-full border border-dashed border-white/60"></div>
+        <div class="absolute top-1 left-1/2 -translate-x-1/2 -translate-y-full text-[9px] font-bold bg-slate-950/90 text-amber-300 px-2 py-0.5 rounded border border-amber-500/40 shadow whitespace-nowrap">
+          عدسة الفحص الشفافة (كشف الأساس)
+        </div>
+        <div class="absolute top-1/2 left-0 right-0 h-px bg-amber-400/40"></div>
+        <div class="absolute top-0 bottom-0 left-1/2 w-px bg-amber-400/40"></div>
+      </div>
+
       <!-- Floating Map Comparison & Visibility Controls -->
-      <div id="floatingVisibilityBar" class="hidden absolute top-3 left-3 z-20 flex items-center gap-1.5 p-1 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-xl shadow-2xl">
+      <div id="floatingVisibilityBar" class="hidden absolute top-3 left-3 z-20 flex items-center gap-1.5 p-1 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-xl shadow-2xl flex-wrap">
+        <!-- 1. One-Click Smart Auto-Align -->
+        <button type="button" id="floatAutoAlignBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow transition-all flex items-center gap-1.5" title="مطابقة تلقائية فورية مع خارطة الأساس بنقرة واحدة">
+          <i class="fa-solid fa-bolt text-amber-300"></i>
+          <span>مطابقة تلقائية</span>
+        </button>
+
+        <!-- 2. Interactive Swipe Tool -->
+        <button type="button" id="floatSwipeBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-sky-200 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1.5 shadow-sm" title="تفعيل شريط المسح والمقارنة التفاعلي">
+          <i class="fa-solid fa-arrows-left-right text-sky-400"></i>
+          <span id="floatSwipeBtnText">مسح تفاعلي</span>
+        </button>
+
+        <!-- 3. Interactive Spyglass Lens -->
+        <button type="button" id="floatSpyglassBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-amber-200 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1.5 shadow-sm" title="عدسة الفحص الشفافة بالماوس">
+          <i class="fa-solid fa-magnifying-glass text-amber-400"></i>
+          <span id="floatSpyglassBtnText">عدسة فحص</span>
+        </button>
+
         <!-- Toggle Imported Map -->
         <button type="button" id="floatToggleImportedBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-sky-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1.5 shadow-sm" title="إظهار / إخفاء الخريطة المستوردة">
           <i id="floatImportedEyeIcon" class="fa-solid fa-eye text-sky-400"></i>
@@ -141,7 +182,7 @@
         <!-- AI Reality Alignment Studio Trigger -->
         <button type="button" id="floatAiAlignBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-purple-200 hover:text-white bg-indigo-900/70 hover:bg-indigo-800 border border-indigo-500/50 transition-all flex items-center gap-1.5 shadow-sm" title="مساعد الذكاء الاصطناعي للمعايرة والمطابقة مع الواقع">
           <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i>
-          <span>مطابقة بالذكاء الاصطناعي</span>
+          <span>استوديو المطابقة</span>
         </button>
       </div>
 
@@ -751,28 +792,53 @@
                 <p class="text-[10px] text-slate-400 leading-tight">ينقل الخارطة المستوردة ويضبط مقياسها فوراً فوق المعلم الجغرافي المقابل في الواقع بدقة عالية مع تفعيل وميض المقارنة.</p>
               </div>
 
-              <!-- Mode 3: 2-Point Ground Control Points (GCP) Affine Calibration -->
-              <div class="space-y-1.5 pt-2 border-t border-slate-800">
+              <!-- Mode 3: Smart Automated Alignment & Interactive Visual Tools -->
+              <div class="space-y-2 pt-2 border-t border-slate-800">
                 <div class="flex items-center justify-between">
-                  <span class="text-[11px] font-semibold text-slate-300 flex items-center gap-1">
-                    <i class="fa-solid fa-crosshairs text-amber-400 text-[10px]"></i>
-                    <span>3. المعايرة بنقاط الضبط الأرضية (2-Point GCP Matching):</span>
+                  <span class="text-[11px] font-semibold text-slate-200 flex items-center gap-1.5">
+                    <i class="fa-solid fa-wand-magic-sparkles text-amber-400 text-[10px]"></i>
+                    <span>3. المطابقة التلقائية وأدوات الفحص السلس:</span>
                   </span>
-                  <span id="gcpStatusBadge" class="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-mono">غير نشط</span>
+                  <span class="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded font-mono">سلس وفوري</span>
                 </div>
-                
-                <div class="flex items-center gap-2">
-                  <button type="button" id="startGcpMatchBtn" class="flex-1 py-1.5 px-2.5 rounded-lg bg-amber-600/30 hover:bg-amber-600/50 text-amber-200 border border-amber-500/40 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all">
-                    <i class="fa-solid fa-location-dot text-[10px] text-amber-400"></i>
-                    <span id="gcpBtnLabel">بدء تحديد نقطتي الضبط (GCP)</span>
+
+                <!-- 1. One-click Auto Align Button -->
+                <button type="button" id="sidebarAutoAlignBtn" class="w-full py-2 px-3 bg-gradient-to-r from-emerald-600 via-teal-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white font-bold rounded-lg shadow text-xs flex items-center justify-center gap-1.5 transition-all shadow-emerald-950/40">
+                  <i class="fa-solid fa-bolt text-amber-300 text-xs"></i>
+                  <span>⚡ مطابقة تلقائية فورية مع خارطة الأساس</span>
+                </button>
+
+                <!-- 2. Visual Tools Grid: Swipe & Spyglass -->
+                <div class="grid grid-cols-2 gap-1.5">
+                  <button type="button" id="sidebarSwipeBtn" class="py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-blue-900/40 border border-slate-700 hover:border-blue-500/50 text-slate-200 hover:text-white text-[11px] font-semibold flex items-center justify-center gap-1 transition-all">
+                    <i class="fa-solid fa-arrows-left-right text-sky-400 text-[10px]"></i>
+                    <span id="sidebarSwipeBtnText">مسح تفاعلي (Swipe)</span>
                   </button>
-                  <button type="button" id="cancelGcpMatchBtn" class="hidden py-1.5 px-2 bg-slate-800 hover:bg-rose-900/50 text-rose-300 border border-slate-700 rounded-lg text-xs transition-colors" title="إلغاء">
-                    <i class="fa-solid fa-xmark text-xs"></i>
+                  <button type="button" id="sidebarSpyglassBtn" class="py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-amber-900/40 border border-slate-700 hover:border-amber-500/50 text-slate-200 hover:text-white text-[11px] font-semibold flex items-center justify-center gap-1 transition-all">
+                    <i class="fa-solid fa-magnifying-glass text-amber-400 text-[10px]"></i>
+                    <span id="sidebarSpyglassBtnText">عدسة فحص (Lens)</span>
                   </button>
                 </div>
-                <div id="gcpInstructionsText" class="text-[10px] text-slate-300 leading-relaxed hidden bg-slate-950/80 p-2.5 rounded-lg border border-amber-500/40 space-y-1">
-                  <!-- Dynamic instructions for user -->
-                </div>
+
+                <!-- 3. Collapsible Manual GCP Mode -->
+                <details class="text-[10px] bg-slate-950/70 border border-slate-800/80 rounded-lg p-1.5 text-slate-400">
+                  <summary class="cursor-pointer text-slate-300 hover:text-purple-300 font-medium select-none flex items-center justify-between">
+                    <span>خيارات متقدمة: نقاط ضبط يدوية (GCP)</span>
+                    <span id="gcpStatusBadge" class="text-[9px] px-1 rounded bg-slate-800 text-slate-400 font-mono">غير نشط</span>
+                  </summary>
+                  <div class="mt-1.5 space-y-1.5 pt-1 border-t border-slate-800">
+                    <div class="flex items-center gap-1.5">
+                      <button type="button" id="startGcpMatchBtn" class="flex-1 py-1 px-2 rounded bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 text-[10px] font-semibold flex items-center justify-center gap-1 transition-all">
+                        <i class="fa-solid fa-location-dot text-[9px] text-purple-300"></i>
+                        <span id="gcpBtnLabel">بدء تحديد نقطتي الضبط</span>
+                      </button>
+                      <button type="button" id="cancelGcpMatchBtn" class="hidden py-1 px-2 bg-slate-800 hover:bg-rose-900/50 text-rose-300 border border-slate-700 rounded text-[10px] transition-colors" title="إلغاء">
+                        <i class="fa-solid fa-xmark text-xs"></i>
+                      </button>
+                    </div>
+                    <div id="gcpInstructionsText" class="text-[10px] text-slate-300 leading-relaxed hidden bg-slate-950/90 p-2 rounded border border-amber-500/40 space-y-1"></div>
+                  </div>
+                </details>
               </div>
             </div>
 
@@ -1253,22 +1319,55 @@
           </div>
         </div>
 
-        <!-- Section 3: 2-Point GCP Affine Calibration -->
-        <div class="bg-slate-900/90 border border-purple-500/40 rounded-xl p-3.5 space-y-2.5">
+        <!-- Section 3: Smart Automated Alignment & Visual Comparison Tools -->
+        <div class="bg-gradient-to-br from-indigo-950/60 via-slate-900 to-slate-900 border border-indigo-500/40 rounded-xl p-3.5 space-y-3">
           <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2 text-xs font-bold text-purple-200">
-              <i class="fa-solid fa-crosshairs text-purple-400"></i>
-              <span>3. المعايرة بنقاط الضبط الأرضية (2-Point GCP Affine Calibration)</span>
+            <div class="flex items-center gap-2 text-xs font-bold text-indigo-200">
+              <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i>
+              <span>3. المطابقة التلقائية الذكية وأدوات الفحص السلس (Smart Alignment)</span>
             </div>
-            <span class="text-[10px] text-purple-300 font-mono">Affine Matrix</span>
+            <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-mono font-bold">بديل سلس وفوري لـ GCP</span>
           </div>
+
           <p class="text-[11px] text-slate-300 leading-relaxed">
-            حدد نقطتين مميزتين في الخريطة المستوردة ونفس النقطتين المقابلتين في خارطة الأساس الواقعية ليقوم النظام بحساب مصفوفة التحويل التآلفي وتطبيق زاوية الدوران والمقياس والإزاحة بدقة ميليمترية.
+            بدلاً من تحديد نقاط يدوية متعبة، يمكنك استخدام <strong>المطابقة التلقائية الفورية</strong> أو أدوات <strong>المسح التفاعلي وعدسة الفحص</strong> لمطابقة الخارطة والتحقق من محاذاة الطرق بدقة مطلقة:
           </p>
-          <button type="button" id="aiModalLaunchGcpBtn" class="w-full py-2 px-3 bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all">
-            <i class="fa-solid fa-location-crosshairs text-purple-300"></i>
-            <span>بدء وضع نقاط الضبط (GCP) التفاعلي على الخارطة</span>
+
+          <!-- 1. One-Click Instant Auto-Align -->
+          <button type="button" id="aiModalAutoAlignBtn" class="w-full py-2.5 px-4 bg-gradient-to-r from-emerald-600 via-teal-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 text-xs transition-all border border-emerald-400/40">
+            <i class="fa-solid fa-bolt text-amber-300 text-sm"></i>
+            <span>⚡ مطابقة تلقائية فورية مع خارطة الأساس بنقرة واحدة</span>
           </button>
+
+          <!-- 2. Interactive Visual Tools (Swipe & Spyglass) -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+            <button type="button" id="aiModalSwipeBtn" class="py-2 px-3 rounded-lg bg-slate-800 hover:bg-blue-900/40 border border-slate-700 hover:border-blue-500/50 text-slate-200 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all">
+              <i class="fa-solid fa-arrows-left-right text-sky-400"></i>
+              <span>↔️ شريط المسح المقسم (Swipe)</span>
+            </button>
+            <button type="button" id="aiModalSpyglassBtn" class="py-2 px-3 rounded-lg bg-slate-800 hover:bg-amber-900/40 border border-slate-700 hover:border-amber-500/50 text-slate-200 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all">
+              <i class="fa-solid fa-magnifying-glass text-amber-400"></i>
+              <span>🔍 عدسة الفحص الشفافة (Lens)</span>
+            </button>
+          </div>
+
+          <!-- 3. Collapsible Advanced GCP (Optional for unreferenced legacy maps) -->
+          <details class="text-[11px] bg-slate-950/70 border border-slate-800 rounded-lg p-2 text-slate-400">
+            <summary class="cursor-pointer text-slate-300 hover:text-purple-300 font-semibold select-none flex items-center justify-between">
+              <span class="flex items-center gap-1.5">
+                <i class="fa-solid fa-crosshairs text-purple-400 text-xs"></i>
+                <span>خيارات متقدمة: المعايرة الكلاسيكية بنقاط الضبط (2-Point GCP)</span>
+              </span>
+              <i class="fa-solid fa-chevron-down text-[10px]"></i>
+            </summary>
+            <div class="mt-2 space-y-2 text-[10px] text-slate-300 pt-1 border-t border-slate-800">
+              <p>مخصص للخرائط الورقية القديمة غير المعرفة؛ حدد نقطتين مميزتين بالصورة ونفسهما بالواقع لحساب التحويل التآلفي.</p>
+              <button type="button" id="aiModalLaunchGcpBtn" class="w-full py-1.5 px-3 bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all">
+                <i class="fa-solid fa-location-crosshairs text-purple-300 text-[10px]"></i>
+                <span>بدء وضع نقاط الضبط اليدوي</span>
+              </button>
+            </div>
+          </details>
         </div>
 
       </div>
@@ -1289,13 +1388,13 @@
        Scripts
        ========================================================================= -->
   <!-- Curated Catalog Data -->
-  <script src="js/catalog-data.js?v=20260928_02"></script>
+  <script src="js/catalog-data.js?v=20260928_03"></script>
 
   <!-- Curated Official Archaeological Sites of Iraq -->
-  <script src="js/archaeology-data.js?v=20260928_02"></script>
+  <script src="js/archaeology-data.js?v=20260928_03"></script>
 
   <!-- Living Atlas Engine Entry -->
-  <script src="js/atlas-core.js?v=20260928_02"></script>
+  <script src="js/atlas-core.js?v=20260928_03"></script>
 
 </body>
 </html>

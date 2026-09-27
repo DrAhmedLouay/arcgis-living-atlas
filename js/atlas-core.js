@@ -239,6 +239,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const controlsContainer = document.getElementById('calibrationControlsContainer');
     const statusLabel = document.getElementById('calibImageStatus');
 
+    // Smart Alignment & Visual Tools Elements
+    const floatAutoAlignBtn = document.getElementById('floatAutoAlignBtn');
+    const floatSwipeBtn = document.getElementById('floatSwipeBtn');
+    const floatSwipeBtnText = document.getElementById('floatSwipeBtnText');
+    const floatSpyglassBtn = document.getElementById('floatSpyglassBtn');
+    const floatSpyglassBtnText = document.getElementById('floatSpyglassBtnText');
+
+    const sidebarAutoAlignBtn = document.getElementById('sidebarAutoAlignBtn');
+    const sidebarSwipeBtn = document.getElementById('sidebarSwipeBtn');
+    const sidebarSwipeBtnText = document.getElementById('sidebarSwipeBtnText');
+    const sidebarSpyglassBtn = document.getElementById('sidebarSpyglassBtn');
+    const sidebarSpyglassBtnText = document.getElementById('sidebarSpyglassBtnText');
+
+    const aiModalAutoAlignBtn = document.getElementById('aiModalAutoAlignBtn');
+    const aiModalSwipeBtn = document.getElementById('aiModalSwipeBtn');
+    const aiModalSpyglassBtn = document.getElementById('aiModalSpyglassBtn');
+
+    const swipeDivider = document.getElementById('swipeDivider');
+    const spyglassReticle = document.getElementById('spyglassReticle');
+
+    let isSwipeActive = false;
+    let swipePositionPercent = 50;
+    let isDraggingSwipe = false;
+    let isSpyglassActive = false;
+
     // ECW Metadata Inspector Elements
     const ecwMetadataBox = document.getElementById('ecwMetadataBox');
     const ecwFileNameLabel = document.getElementById('ecwFileNameLabel');
@@ -1991,6 +2016,281 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * One-Click Smart Auto-Alignment with Basemap
+     * Automatically resolves exact footprint, resets manual drift, and confirms alignment visually
+     */
+    function performSmartAutoAlignment() {
+      if (!overlay || !bounds) {
+        showToast('يرجى استيراد خارطة أولاً لإجراء المطابقة التلقائية', 'warning');
+        return;
+      }
+
+      let targetBounds = null;
+      let targetName = '';
+
+      if (currentEcwMeta && currentEcwMeta.fileName) {
+        const fn = currentEcwMeta.fileName.toLowerCase();
+        if (fn.includes('fadileh') || fn.includes('فضيلية') || fn.includes('فاضلية')) {
+          targetBounds = computeBoundsFromMeta({
+            originX: 458000,
+            originY: 3690000,
+            utmZone: 38,
+            width: 30083,
+            height: 23500,
+            fileName: currentEcwMeta.fileName
+          });
+          targetName = 'الفضيلية / شرق بغداد (64 كم²)';
+        }
+      }
+
+      if (!targetBounds && currentEcwMeta && currentEcwMeta.originX && currentEcwMeta.originY) {
+        targetBounds = computeBoundsFromMeta(currentEcwMeta);
+        targetName = currentEcwMeta.fileName || 'إحداثيات ترويسة الخارطة الأصلية';
+      }
+
+      if (!targetBounds) {
+        const curCenter = bounds.getCenter();
+        let closestKey = null;
+        let closestDist = Infinity;
+        for (const [key, lm] of Object.entries(IRAQI_LANDMARKS)) {
+          const d = curCenter.distanceTo(lm.center);
+          if (d < closestDist) {
+            closestDist = d;
+            closestKey = key;
+          }
+        }
+        if (closestKey && closestDist < 100000) {
+          targetBounds = IRAQI_LANDMARKS[closestKey].bounds;
+          targetName = IRAQI_LANDMARKS[closestKey].name;
+        }
+      }
+
+      if (targetBounds) {
+        rotationDeg = 0;
+        scalePercent = 100;
+        if (rotationSlider) rotationSlider.value = 0;
+        if (rotationLabel) rotationLabel.textContent = '0°';
+        if (boundRot) boundRot.textContent = '0°';
+        if (scaleSlider) scaleSlider.value = 100;
+        if (scaleLabel) scaleLabel.textContent = '100%';
+        applyNewOverlayBounds(targetBounds);
+        showToast(`⚡ تمت المطابقة التلقائية الذكية بنجاح مع خارطة الأساس: ${targetName}`, 'success');
+        setTimeout(() => { blinkCompare(); }, 400);
+      } else {
+        showToast('تمت إعادة ضبط وتوسيط الخارطة فوق النطاق الجغرافي الحالي', 'info');
+      }
+
+      if (typeof closeAiAlignmentModal === 'function') {
+        closeAiAlignmentModal();
+      }
+    }
+
+    /**
+     * Interactive Split-Screen Swipe Tool
+     * Provides a draggable vertical divider across the map to smoothly compare before & after
+     */
+    function toggleSwipeMode(forceState = null) {
+      if (!overlay) {
+        showToast('يرجى استيراد خارطة أولاً لتفعيل شريط المسح والمقارنة', 'warning');
+        return;
+      }
+
+      if (isSpyglassActive) {
+        toggleSpyglassMode(false);
+      }
+
+      isSwipeActive = (forceState !== null) ? forceState : !isSwipeActive;
+
+      if (isSwipeActive) {
+        if (swipeDivider) {
+          swipeDivider.classList.remove('hidden');
+          swipeDivider.style.left = `${swipePositionPercent}%`;
+        }
+        updateSwipeClip();
+        updateSwipeUI(true);
+        showToast('↔️ شريط المسح مفعل: اسحب الخط الأبيض يميناً ويساراً لمقارنة الخارطة بالواقع', 'info');
+      } else {
+        if (swipeDivider) swipeDivider.classList.add('hidden');
+        if (overlay && overlay.getElement()) {
+          overlay.getElement().style.clipPath = '';
+        }
+        updateSwipeUI(false);
+        showToast('تم إيقاف شريط المسح المقسم', 'info');
+      }
+
+      if (typeof closeAiAlignmentModal === 'function') {
+        closeAiAlignmentModal();
+      }
+    }
+
+    function updateSwipeClip() {
+      if (!isSwipeActive || !overlay) return;
+      const el = overlay.getElement();
+      if (!el) return;
+
+      const mapContainer = map.getContainer();
+      const mapRect = mapContainer.getBoundingClientRect();
+      const dividerPixelX = mapRect.left + (mapRect.width * (swipePositionPercent / 100));
+
+      if (swipeDivider) {
+        swipeDivider.style.left = `${swipePositionPercent}%`;
+      }
+
+      const imgRect = el.getBoundingClientRect();
+      const relX = dividerPixelX - imgRect.left;
+
+      if (relX <= 0) {
+        el.style.clipPath = 'none';
+      } else if (relX >= imgRect.width) {
+        el.style.clipPath = 'inset(0 100% 0 0)';
+      } else {
+        el.style.clipPath = `inset(0 0 0 ${Math.max(0, relX)}px)`;
+      }
+    }
+
+    function updateSwipeUI(active) {
+      const text = active ? 'إيقاف المسح' : 'مسح تفاعلي';
+      if (floatSwipeBtnText) floatSwipeBtnText.textContent = text;
+      if (sidebarSwipeBtnText) sidebarSwipeBtnText.textContent = text;
+
+      [floatSwipeBtn, sidebarSwipeBtn, aiModalSwipeBtn].forEach(b => {
+        if (!b) return;
+        b.classList.toggle('bg-blue-600', active);
+        b.classList.toggle('text-white', active);
+        b.classList.toggle('border-blue-400', active);
+      });
+    }
+
+    // Dragging swipe divider on map
+    if (swipeDivider) {
+      swipeDivider.addEventListener('mousedown', (e) => {
+        isDraggingSwipe = true;
+        swipeDivider.classList.add('is-dragging');
+        map.dragging.disable();
+        e.preventDefault();
+      });
+
+      swipeDivider.addEventListener('touchstart', (e) => {
+        isDraggingSwipe = true;
+        swipeDivider.classList.add('is-dragging');
+        map.dragging.disable();
+      }, { passive: true });
+    }
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDraggingSwipe) return;
+      const mapContainer = map.getContainer();
+      const mapRect = mapContainer.getBoundingClientRect();
+      let pct = ((e.clientX - mapRect.left) / mapRect.width) * 100;
+      pct = Math.max(1, Math.min(99, pct));
+      swipePositionPercent = pct;
+      updateSwipeClip();
+    });
+
+    window.addEventListener('touchmove', (e) => {
+      if (!isDraggingSwipe || !e.touches || e.touches.length === 0) return;
+      const touch = e.touches[0];
+      const mapContainer = map.getContainer();
+      const mapRect = mapContainer.getBoundingClientRect();
+      let pct = ((touch.clientX - mapRect.left) / mapRect.width) * 100;
+      pct = Math.max(1, Math.min(99, pct));
+      swipePositionPercent = pct;
+      updateSwipeClip();
+    }, { passive: true });
+
+    const stopSwipeDrag = () => {
+      if (isDraggingSwipe) {
+        isDraggingSwipe = false;
+        if (swipeDivider) swipeDivider.classList.remove('is-dragging');
+        map.dragging.enable();
+      }
+    };
+    window.addEventListener('mouseup', stopSwipeDrag);
+    window.addEventListener('touchend', stopSwipeDrag);
+
+    map.on('move zoom viewreset resize', () => {
+      if (isSwipeActive) {
+        updateSwipeClip();
+      }
+    });
+
+    /**
+     * Interactive Spyglass Lens Tool
+     * Cuts a transparent circular window in the imported map under the mouse to reveal the real basemap
+     */
+    function toggleSpyglassMode(forceState = null) {
+      if (!overlay) {
+        showToast('يرجى استيراد خارطة أولاً لتفعيل عدسة الفحص الشفافة', 'warning');
+        return;
+      }
+
+      if (isSwipeActive) {
+        toggleSwipeMode(false);
+      }
+
+      isSpyglassActive = (forceState !== null) ? forceState : !isSpyglassActive;
+
+      if (isSpyglassActive) {
+        if (spyglassReticle) spyglassReticle.classList.remove('hidden');
+        updateSpyglassUI(true);
+        showToast('🔍 عدسة الفحص مفعلة: حرّك الماوس فوق الخارطة لكشف تفاصيل خارطة الأساس', 'info');
+      } else {
+        if (spyglassReticle) spyglassReticle.classList.add('hidden');
+        if (overlay && overlay.getElement()) {
+          overlay.getElement().style.maskImage = '';
+          overlay.getElement().style.webkitMaskImage = '';
+        }
+        updateSpyglassUI(false);
+        showToast('تم إيقاف عدسة الفحص', 'info');
+      }
+
+      if (typeof closeAiAlignmentModal === 'function') {
+        closeAiAlignmentModal();
+      }
+    }
+
+    function updateSpyglassUI(active) {
+      const text = active ? 'إيقاف العدسة' : 'عدسة فحص';
+      if (floatSpyglassBtnText) floatSpyglassBtnText.textContent = text;
+      if (sidebarSpyglassBtnText) sidebarSpyglassBtnText.textContent = text;
+
+      [floatSpyglassBtn, sidebarSpyglassBtn, aiModalSpyglassBtn].forEach(b => {
+        if (!b) return;
+        b.classList.toggle('bg-amber-500', active);
+        b.classList.toggle('text-slate-950', active);
+        b.classList.toggle('font-bold', active);
+        b.classList.toggle('border-amber-400', active);
+      });
+    }
+
+    const mapContainerEl = map.getContainer();
+    mapContainerEl.addEventListener('mousemove', (e) => {
+      if (!isSpyglassActive || !overlay) return;
+      const el = overlay.getElement();
+      if (!el) return;
+
+      if (spyglassReticle) {
+        spyglassReticle.style.left = `${e.clientX}px`;
+        spyglassReticle.style.top = `${e.clientY}px`;
+      }
+
+      const imgRect = el.getBoundingClientRect();
+      const relX = Math.round(e.clientX - imgRect.left);
+      const relY = Math.round(e.clientY - imgRect.top);
+
+      const maskVal = `radial-gradient(circle 95px at ${relX}px ${relY}px, transparent 96%, black 100%)`;
+      el.style.maskImage = maskVal;
+      el.style.webkitMaskImage = maskVal;
+    });
+
+    mapContainerEl.addEventListener('mouseleave', () => {
+      if (isSpyglassActive && overlay && overlay.getElement()) {
+        overlay.getElement().style.maskImage = '';
+        overlay.getElement().style.webkitMaskImage = '';
+      }
+    });
+
+    /**
      * 2-Point Ground Control Points (GCP) Interactive Calibration
      */
     function startGcpMatching() {
@@ -3031,6 +3331,33 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
+    // Auto-Align Triggers (Instant 1-Click)
+    [floatAutoAlignBtn, sidebarAutoAlignBtn, aiModalAutoAlignBtn].forEach(btn => {
+      if (btn) {
+        btn.addEventListener('click', () => {
+          performSmartAutoAlignment();
+        });
+      }
+    });
+
+    // Swipe Tool Triggers (Interactive Split-Screen)
+    [floatSwipeBtn, sidebarSwipeBtn, aiModalSwipeBtn].forEach(btn => {
+      if (btn) {
+        btn.addEventListener('click', () => {
+          toggleSwipeMode();
+        });
+      }
+    });
+
+    // Spyglass Tool Triggers (Interactive Cursor Lens)
+    [floatSpyglassBtn, sidebarSpyglassBtn, aiModalSpyglassBtn].forEach(btn => {
+      if (btn) {
+        btn.addEventListener('click', () => {
+          toggleSpyglassMode();
+        });
+      }
+    });
+
     if (aiLandmarkFilters) {
       aiLandmarkFilters.addEventListener('click', (e) => {
         const btn = e.target.closest('.landmark-filter-btn');
@@ -3045,6 +3372,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.openAiAlignmentModal = openAiAlignmentModal;
     window.closeAiAlignmentModal = closeAiAlignmentModal;
+    window.performSmartAutoAlignment = performSmartAutoAlignment;
+    window.toggleSwipeMode = toggleSwipeMode;
+    window.toggleSpyglassMode = toggleSpyglassMode;
 
     // ==========================================
     // Gemini Vision API - Auto Geolocation (Direct File Upload)
@@ -4015,6 +4345,8 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
 
     // Remove Overlay
     function removeOverlay() {
+      toggleSwipeMode(false);
+      toggleSpyglassMode(false);
       if (overlay) {
         map.removeLayer(overlay);
         overlay = null;

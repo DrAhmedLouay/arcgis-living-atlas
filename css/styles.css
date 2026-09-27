@@ -337,4 +337,28 @@ html, body {
   background: rgba(15, 23, 42, 0.96) !important;
 }
 
+/* ==========================================================================
+   Interactive Swipe Split-View & Spyglass Lens
+   ========================================================================== */
+#swipeDivider {
+  touch-action: none;
+  transition: opacity 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#swipeDivider .swipe-handle {
+  box-shadow: 0 0 20px rgba(37, 99, 235, 0.7), 0 4px 12px rgba(0, 0, 0, 0.6);
+}
+
+#swipeDivider:hover, #swipeDivider.is-dragging {
+  background: #38bdf8 !important;
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.9);
+}
+
+#spyglassReticle {
+  pointer-events: none;
+  will-change: transform, left, top;
+}
+
 
