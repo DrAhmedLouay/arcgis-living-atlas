@@ -27,7 +27,7 @@
   <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 
   <!-- Custom Styling -->
-  <link rel="stylesheet" href="css/styles.css?v=20260928_03">
+  <link rel="stylesheet" href="css/styles.css?v=20260928_04">
 </head>
 <body class="bg-slate-950 text-slate-100 h-screen w-screen flex flex-col overflow-hidden select-none">
 
@@ -183,6 +183,26 @@
         <button type="button" id="floatAiAlignBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-purple-200 hover:text-white bg-indigo-900/70 hover:bg-indigo-800 border border-indigo-500/50 transition-all flex items-center gap-1.5 shadow-sm" title="مساعد الذكاء الاصطناعي للمعايرة والمطابقة مع الواقع">
           <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i>
           <span>استوديو المطابقة</span>
+        </button>
+      </div>
+
+      <!-- Floating GCP Calibration Status Bar on Map -->
+      <div id="floatingGcpBar" class="hidden absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-4 py-2.5 bg-slate-900/95 backdrop-blur-md border border-purple-500/70 rounded-2xl shadow-2xl transition-all">
+        <div class="flex items-center gap-2.5">
+          <span class="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center justify-center text-sm shadow-sm">
+            <i class="fa-solid fa-location-crosshairs"></i>
+          </span>
+          <div class="text-right">
+            <div class="flex items-center gap-1.5">
+              <span id="floatingGcpTitle" class="text-xs font-bold text-purple-200">معايرة نقاط الضبط (GCP)</span>
+              <span id="floatingGcpStepBadge" class="text-[9px] bg-purple-950 text-purple-300 border border-purple-500/40 px-1.5 py-0.2 rounded font-mono font-bold">1 / 4</span>
+            </div>
+            <div id="floatingGcpHint" class="text-[11px] text-amber-300 font-medium leading-tight mt-0.5">انقر على معلم مميز داخل الخارطة المستوردة (1A)</div>
+          </div>
+        </div>
+        <button type="button" id="floatCancelGcpBtn" class="px-2.5 py-1 bg-slate-800 hover:bg-rose-900/60 text-slate-300 hover:text-rose-200 border border-slate-700 rounded-lg text-xs transition-colors flex items-center gap-1" title="إلغاء المعايرة">
+          <i class="fa-solid fa-xmark text-xs"></i>
+          <span>إلغاء</span>
         </button>
       </div>
 
@@ -1388,13 +1408,13 @@
        Scripts
        ========================================================================= -->
   <!-- Curated Catalog Data -->
-  <script src="js/catalog-data.js?v=20260928_03"></script>
+  <script src="js/catalog-data.js?v=20260928_04"></script>
 
   <!-- Curated Official Archaeological Sites of Iraq -->
-  <script src="js/archaeology-data.js?v=20260928_03"></script>
+  <script src="js/archaeology-data.js?v=20260928_04"></script>
 
   <!-- Living Atlas Engine Entry -->
-  <script src="js/atlas-core.js?v=20260928_03"></script>
+  <script src="js/atlas-core.js?v=20260928_04"></script>
 
 </body>
 </html>

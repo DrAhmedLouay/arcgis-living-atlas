@@ -361,4 +361,44 @@ html, body {
   will-change: transform, left, top;
 }
 
+/* ==========================================================================
+   Ground Control Points (GCP) Calibration Active State
+   ========================================================================== */
+.gcp-calibration-active,
+.gcp-calibration-active .leaflet-container,
+.gcp-calibration-active .leaflet-grab,
+.gcp-calibration-active .leaflet-pane {
+  cursor: crosshair !important;
+}
+
+/* Ensure clicks pass directly through interfering vector layers during GCP */
+.gcp-calibration-active .leaflet-overlay-pane svg,
+.gcp-calibration-active .leaflet-overlay-pane path,
+.gcp-calibration-active .leaflet-interactive:not(.gcp-marker-pin),
+.gcp-calibration-active .leaflet-tooltip-pane,
+.gcp-calibration-active .leaflet-tooltip,
+.gcp-calibration-active .gov-label {
+  pointer-events: none !important;
+}
+
+/* Suppress popups during active GCP point placement */
+.gcp-calibration-active .leaflet-popup-pane {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+/* GCP Marker Pin Animations and Styling */
+.gcp-marker-pin {
+  animation: gcpPulse 1.6s infinite ease-in-out;
+  box-shadow: 0 0 16px rgba(0, 0, 0, 0.8), 0 2px 8px rgba(0, 0, 0, 0.6);
+  pointer-events: none !important;
+  user-select: none;
+}
+
+@keyframes gcpPulse {
+  0% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.1); filter: brightness(1.25); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+
 

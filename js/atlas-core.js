@@ -350,6 +350,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const gcpBtnLabel = document.getElementById('gcpBtnLabel');
     const gcpInstructionsText = document.getElementById('gcpInstructionsText');
 
+    const floatingGcpBar = document.getElementById('floatingGcpBar');
+    const floatingGcpStepBadge = document.getElementById('floatingGcpStepBadge');
+    const floatingGcpHint = document.getElementById('floatingGcpHint');
+    const floatCancelGcpBtn = document.getElementById('floatCancelGcpBtn');
+    let gcpPriorOpacity = null;
+    let lastGcpClickTime = 0;
+
     // Calibration Internal State
     let overlay = null;
     let bounds = null; // L.latLngBounds
@@ -2299,29 +2306,42 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
+      if (typeof closeAiAlignmentModal === 'function') {
+        closeAiAlignmentModal();
+      }
+
       isGcpMatchingActive = true;
       gcpStep = 1;
       gcpPoints = { imgPt1: null, basePt1: null, imgPt2: null, basePt2: null };
+      gcpPriorOpacity = (visualState && visualState.opacity) ? visualState.opacity : 1.0;
       clearGcpMarkers();
+      clearHandles(); // Temporarily hide handles so they don't block clicks
 
+      map.getContainer().classList.add('gcp-calibration-active');
+      map.getContainer().addEventListener('click', handleGcpNativeClick, true); // Capturing phase!
+      map.on('click', handleMapGcpClick); // Fallback
+
+      if (floatingGcpBar) floatingGcpBar.classList.remove('hidden');
       if (cancelGcpMatchBtn) cancelGcpMatchBtn.classList.remove('hidden');
       if (gcpStatusBadge) {
-        gcpStatusBadge.textContent = 'نشط - النقطة 1A';
-        gcpStatusBadge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold';
+        gcpStatusBadge.textContent = 'نشط - النقطة 1A (صورة)';
+        gcpStatusBadge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 font-bold';
       }
       if (gcpBtnLabel) gcpBtnLabel.textContent = 'المعايرة جارية (انقر على الخارطة)...';
 
       updateGcpInstructions(1);
-      map.on('click', handleMapGcpClick);
-      showToast('وضع نقاط الضبط (GCP) مفعل: انقر على معلم بالخارطة المستوردة', 'info');
+      showToast('🎯 وضع نقاط الضبط مفعل: انقر على معلم مميز بالخارطة المستوردة (1A)', 'info');
     }
 
     function cancelGcpMatching() {
       isGcpMatchingActive = false;
       gcpStep = 0;
+      map.getContainer().classList.remove('gcp-calibration-active');
+      map.getContainer().removeEventListener('click', handleGcpNativeClick, true);
       map.off('click', handleMapGcpClick);
       clearGcpMarkers();
 
+      if (floatingGcpBar) floatingGcpBar.classList.add('hidden');
       if (cancelGcpMatchBtn) cancelGcpMatchBtn.classList.add('hidden');
       if (gcpInstructionsText) gcpInstructionsText.classList.add('hidden');
       if (gcpStatusBadge) {
@@ -2329,6 +2349,15 @@ document.addEventListener('DOMContentLoaded', () => {
         gcpStatusBadge.className = 'text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-mono';
       }
       if (gcpBtnLabel) gcpBtnLabel.textContent = 'بدء تحديد نقطتي الضبط (GCP)';
+
+      // Restore handles and opacity
+      if (overlay && bounds && !isLocked) createHandles();
+      if (overlay && gcpPriorOpacity !== null) {
+        visualState.opacity = gcpPriorOpacity;
+        overlay.setOpacity(gcpPriorOpacity);
+        if (opacitySlider) opacitySlider.value = Math.round(gcpPriorOpacity * 100);
+        if (opacityLabel) opacityLabel.textContent = `${Math.round(gcpPriorOpacity * 100)}%`;
+      }
     }
 
     function clearGcpMarkers() {
@@ -2339,87 +2368,170 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateGcpInstructions(step) {
-      if (!gcpInstructionsText) return;
-      gcpInstructionsText.classList.remove('hidden');
+      if (floatingGcpBar) floatingGcpBar.classList.remove('hidden');
 
       if (step === 1) {
-        gcpInstructionsText.innerHTML = `
-          <div class="flex items-center gap-1.5 text-blue-400 font-bold">
-            <span class="w-4 h-4 rounded-full bg-blue-500/30 text-blue-300 flex items-center justify-center text-[9px]">1</span>
-            <span>الخطوة 1 من 4: حدد النقطة الأولى (صورة)</span>
-          </div>
-          <p class="text-slate-300 text-[10px]">انقر على معلم مميز وواضح داخل <strong>الخارطة المستوردة</strong> (مثل: رأس جسر، تقاطع طرق، زاوية مدرج).</p>
-        `;
+        if (floatingGcpStepBadge) floatingGcpStepBadge.textContent = '1 / 4 (صورة)';
+        if (floatingGcpHint) floatingGcpHint.textContent = 'انقر على معلم مميز داخل الخارطة المستوردة (1A)';
+        if (gcpInstructionsText) {
+          gcpInstructionsText.classList.remove('hidden');
+          gcpInstructionsText.innerHTML = `
+            <div class="flex items-center gap-1.5 text-blue-400 font-bold">
+              <span class="w-4 h-4 rounded-full bg-blue-500/30 text-blue-300 flex items-center justify-center text-[9px]">1</span>
+              <span>الخطوة 1 من 4: حدد النقطة الأولى (صورة)</span>
+            </div>
+            <p class="text-slate-300 text-[10px]">انقر على معلم مميز وواضح داخل <strong>الخارطة المستوردة</strong> (مثل: تقاطع طرق، زاوية مبنى، رأس جسر).</p>
+          `;
+        }
       } else if (step === 2) {
-        gcpInstructionsText.innerHTML = `
-          <div class="flex items-center gap-1.5 text-emerald-400 font-bold">
-            <span class="w-4 h-4 rounded-full bg-emerald-500/30 text-emerald-300 flex items-center justify-center text-[9px]">2</span>
-            <span>الخطوة 2 من 4: حدد النقطة المقابلة في الواقع (خارطة الأساس)</span>
-          </div>
-          <p class="text-slate-300 text-[10px]">انقر الآن على <strong>نفس المعلم تماماً</strong> في خارطة الأساس الفضائية الواقعية بالأسفل.</p>
-        `;
+        if (floatingGcpStepBadge) floatingGcpStepBadge.textContent = '2 / 4 (الواقع)';
+        if (floatingGcpHint) floatingGcpHint.textContent = 'انقر الآن على نفس المعلم في خارطة الأساس الواقعية (1B)';
+        if (gcpInstructionsText) {
+          gcpInstructionsText.classList.remove('hidden');
+          gcpInstructionsText.innerHTML = `
+            <div class="flex items-center gap-1.5 text-emerald-400 font-bold">
+              <span class="w-4 h-4 rounded-full bg-emerald-500/30 text-emerald-300 flex items-center justify-center text-[9px]">2</span>
+              <span>الخطوة 2 من 4: حدد النقطة المقابلة في الواقع (خارطة الأساس)</span>
+            </div>
+            <p class="text-slate-300 text-[10px]">تم تخفيف الشفافية تلقائياً؛ انقر الآن على <strong>نفس المعلم تماماً</strong> في خارطة الأساس الفضائية الواقعية بالأسفل.</p>
+          `;
+        }
       } else if (step === 3) {
-        gcpInstructionsText.innerHTML = `
-          <div class="flex items-center gap-1.5 text-amber-400 font-bold">
-            <span class="w-4 h-4 rounded-full bg-amber-500/30 text-amber-300 flex items-center justify-center text-[9px]">3</span>
-            <span>الخطوة 3 من 4: حدد النقطة الثانية (صورة)</span>
-          </div>
-          <p class="text-slate-300 text-[10px]">انقر على معلم ثانٍ مميز ومتباعد داخل <strong>الخارطة المستوردة</strong> لحساب الدوران والمقياس.</p>
-        `;
+        if (floatingGcpStepBadge) floatingGcpStepBadge.textContent = '3 / 4 (صورة)';
+        if (floatingGcpHint) floatingGcpHint.textContent = 'انقر على معلم ثانٍ متباعد داخل الخارطة المستوردة (2A)';
+        if (gcpInstructionsText) {
+          gcpInstructionsText.classList.remove('hidden');
+          gcpInstructionsText.innerHTML = `
+            <div class="flex items-center gap-1.5 text-amber-400 font-bold">
+              <span class="w-4 h-4 rounded-full bg-amber-500/30 text-amber-300 flex items-center justify-center text-[9px]">3</span>
+              <span>الخطوة 3 من 4: حدد النقطة الثانية (صورة)</span>
+            </div>
+            <p class="text-slate-300 text-[10px]">انقر على معلم ثانٍ مميز ومتباعد داخل <strong>الخارطة المستوردة</strong> لحساب الدوران والمقياس بدقة.</p>
+          `;
+        }
       } else if (step === 4) {
-        gcpInstructionsText.innerHTML = `
-          <div class="flex items-center gap-1.5 text-teal-400 font-bold">
-            <span class="w-4 h-4 rounded-full bg-teal-500/30 text-teal-300 flex items-center justify-center text-[9px]">4</span>
-            <span>الخطوة 4 من 4: حدد النقطة المقابلة الثانية في الواقع</span>
-          </div>
-          <p class="text-slate-300 text-[10px]">انقر الآن على <strong>نفس المعلم الثاني</strong> في خارطة الأساس الواقعية لإنهاء حل مصفوفة التحويل.</p>
-        `;
+        if (floatingGcpStepBadge) floatingGcpStepBadge.textContent = '4 / 4 (الواقع)';
+        if (floatingGcpHint) floatingGcpHint.textContent = 'انقر الآن على نفس المعلم الثاني في خارطة الأساس الواقعية (2B)';
+        if (gcpInstructionsText) {
+          gcpInstructionsText.classList.remove('hidden');
+          gcpInstructionsText.innerHTML = `
+            <div class="flex items-center gap-1.5 text-teal-400 font-bold">
+              <span class="w-4 h-4 rounded-full bg-teal-500/30 text-teal-300 flex items-center justify-center text-[9px]">4</span>
+              <span>الخطوة 4 من 4: حدد النقطة المقابلة الثانية في الواقع</span>
+            </div>
+            <p class="text-slate-300 text-[10px]">انقر الآن على <strong>نفس المعلم الثاني</strong> في خارطة الأساس الواقعية لإنهاء حل مصفوفة التحويل.</p>
+          `;
+        }
       }
     }
 
     function createGcpMarker(latlng, label, bgColor) {
       const icon = L.divIcon({
         className: 'gcp-marker-wrapper',
-        html: `<div style="background-color: ${bgColor};" class="text-white font-bold text-[10px] w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow-lg">${label}</div>`,
-        iconSize: [24, 24],
-        iconAnchor: [12, 12]
+        html: `<div style="background-color: ${bgColor};" class="gcp-marker-pin text-white font-bold text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 border-2 border-white shadow-xl whitespace-nowrap"><i class="fa-solid fa-location-dot text-[9px]"></i><span>${label}</span></div>`,
+        iconSize: [60, 24],
+        iconAnchor: [30, 12]
       });
       const marker = L.marker(latlng, { icon: icon, interactive: false }).addTo(map);
       gcpMarkers.push(marker);
       return marker;
     }
 
+    function handleGcpNativeClick(e) {
+      if (!isGcpMatchingActive) return;
+
+      // Ignore clicks on UI controls, sidebars, modals, floating bars, or buttons
+      if (e.target.closest('#appSidebar, #aiAlignmentModal, #floatingVisibilityBar, #floatingMeasureBar, #floatingGcpBar, .leaflet-control, button, input, select, textarea, a')) {
+        return;
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.stopImmediatePropagation) {
+        e.stopImmediatePropagation();
+      }
+
+      const pt = map.mouseEventToLatLng(e);
+      if (!pt || !pt.lat || !pt.lng) return;
+
+      handleGcpPoint(pt);
+    }
+
     function handleMapGcpClick(e) {
       if (!isGcpMatchingActive) return;
-      const pt = e.latlng;
+      if (e && e.latlng) {
+        handleGcpPoint(e.latlng);
+      }
+    }
+
+    function handleGcpPoint(pt) {
+      if (!isGcpMatchingActive) return;
+
+      // Debounce fast double-clicks
+      const now = Date.now();
+      if (now - lastGcpClickTime < 300) return;
+      lastGcpClickTime = now;
 
       if (gcpStep === 1) {
         gcpPoints.imgPt1 = pt;
-        createGcpMarker(pt, '1A', '#2563eb');
+        createGcpMarker(pt, '1A (صورة)', '#2563eb');
         gcpStep = 2;
-        if (gcpStatusBadge) gcpStatusBadge.textContent = 'نشط - النقطة 1B (الواقع)';
+        if (gcpStatusBadge) {
+          gcpStatusBadge.textContent = 'نشط - النقطة 1B (الواقع)';
+          gcpStatusBadge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold';
+        }
         updateGcpInstructions(2);
-        // Quick blink to help user see beneath
-        blinkCompare();
+
+        // Lower opacity to 0.35 so user can see underlying basemap roads/bridges clearly
+        if (overlay) {
+          overlay.setOpacity(0.35);
+          if (opacitySlider) opacitySlider.value = 35;
+          if (opacityLabel) opacityLabel.textContent = '35%';
+        }
+        showToast('تم التقاط النقطة 1A! انقر الآن على نفس المعلم في خارطة الأساس (تم تخفيف الشفافية)', 'info');
+
       } else if (gcpStep === 2) {
         gcpPoints.basePt1 = pt;
-        createGcpMarker(pt, '1B', '#059669');
-        const line = L.polyline([gcpPoints.imgPt1, pt], { color: '#10b981', weight: 2, dashArray: '4, 4' }).addTo(map);
+        createGcpMarker(pt, '1B (واقع)', '#059669');
+        const line = L.polyline([gcpPoints.imgPt1, pt], { color: '#10b981', weight: 2.5, dashArray: '5, 5' }).addTo(map);
         gcpLines.push(line);
         gcpStep = 3;
-        if (gcpStatusBadge) gcpStatusBadge.textContent = 'نشط - النقطة 2A (الصورة)';
+        if (gcpStatusBadge) {
+          gcpStatusBadge.textContent = 'نشط - النقطة 2A (صورة)';
+          gcpStatusBadge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold';
+        }
         updateGcpInstructions(3);
+
+        // Restore overlay opacity for second image point
+        if (overlay && gcpPriorOpacity !== null) {
+          overlay.setOpacity(gcpPriorOpacity);
+          if (opacitySlider) opacitySlider.value = Math.round(gcpPriorOpacity * 100);
+          if (opacityLabel) opacityLabel.textContent = `${Math.round(gcpPriorOpacity * 100)}%`;
+        }
+        showToast('تم ربط النقطة الأولى! انقر الآن على معلم ثانٍ متباعد في الخارطة المستوردة (2A)', 'info');
+
       } else if (gcpStep === 3) {
         gcpPoints.imgPt2 = pt;
-        createGcpMarker(pt, '2A', '#d97706');
+        createGcpMarker(pt, '2A (صورة)', '#d97706');
         gcpStep = 4;
-        if (gcpStatusBadge) gcpStatusBadge.textContent = 'نشط - النقطة 2B (الواقع)';
+        if (gcpStatusBadge) {
+          gcpStatusBadge.textContent = 'نشط - النقطة 2B (الواقع)';
+          gcpStatusBadge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/40 font-bold';
+        }
         updateGcpInstructions(4);
-        blinkCompare();
+
+        // Lower opacity again for second ground point
+        if (overlay) {
+          overlay.setOpacity(0.35);
+          if (opacitySlider) opacitySlider.value = 35;
+          if (opacityLabel) opacityLabel.textContent = '35%';
+        }
+        showToast('تم التقاط النقطة 2A! انقر الآن على نفس المعلم الثاني في خارطة الأساس الواقعية (2B)', 'info');
+
       } else if (gcpStep === 4) {
         gcpPoints.basePt2 = pt;
-        createGcpMarker(pt, '2B', '#0d9488');
-        const line = L.polyline([gcpPoints.imgPt2, pt], { color: '#0d9488', weight: 2, dashArray: '4, 4' }).addTo(map);
+        createGcpMarker(pt, '2B (واقع)', '#0d9488');
+        const line = L.polyline([gcpPoints.imgPt2, pt], { color: '#0d9488', weight: 2.5, dashArray: '5, 5' }).addTo(map);
         gcpLines.push(line);
 
         // All 4 points captured -> Solve Affine Transformation!
@@ -2428,8 +2540,22 @@ document.addEventListener('DOMContentLoaded', () => {
         // Finish mode
         isGcpMatchingActive = false;
         gcpStep = 0;
+        map.getContainer().classList.remove('gcp-calibration-active');
+        map.getContainer().removeEventListener('click', handleGcpNativeClick, true);
         map.off('click', handleMapGcpClick);
+
+        if (floatingGcpBar) floatingGcpBar.classList.add('hidden');
         if (cancelGcpMatchBtn) cancelGcpMatchBtn.classList.add('hidden');
+
+        // Restore handles and original opacity
+        if (overlay && bounds && !isLocked) createHandles();
+        if (overlay && gcpPriorOpacity !== null) {
+          visualState.opacity = gcpPriorOpacity;
+          overlay.setOpacity(gcpPriorOpacity);
+          if (opacitySlider) opacitySlider.value = Math.round(gcpPriorOpacity * 100);
+          if (opacityLabel) opacityLabel.textContent = `${Math.round(gcpPriorOpacity * 100)}%`;
+        }
+
         if (gcpStatusBadge) {
           gcpStatusBadge.textContent = 'تمت المعايرة بنجاح';
           gcpStatusBadge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold';
@@ -2445,7 +2571,7 @@ document.addEventListener('DOMContentLoaded', () => {
           `;
         }
 
-        // Clean up visual GCP markers after 5 seconds
+        // Clean up visual GCP markers after 8 seconds
         setTimeout(() => {
           clearGcpMarkers();
           if (gcpInstructionsText) gcpInstructionsText.classList.add('hidden');
@@ -2453,7 +2579,7 @@ document.addEventListener('DOMContentLoaded', () => {
             gcpStatusBadge.textContent = 'غير نشط';
             gcpStatusBadge.className = 'text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-mono';
           }
-        }, 5000);
+        }, 8000);
       }
     }
 
@@ -3215,6 +3341,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (cancelGcpMatchBtn) {
       cancelGcpMatchBtn.addEventListener('click', () => {
+        cancelGcpMatching();
+        showToast('تم إلغاء وضع المعايرة بنقاط الضبط', 'info');
+      });
+    }
+
+    if (floatCancelGcpBtn) {
+      floatCancelGcpBtn.addEventListener('click', () => {
         cancelGcpMatching();
         showToast('تم إلغاء وضع المعايرة بنقاط الضبط', 'info');
       });
@@ -4345,6 +4478,7 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
 
     // Remove Overlay
     function removeOverlay() {
+      cancelGcpMatching();
       toggleSwipeMode(false);
       toggleSpyglassMode(false);
       if (overlay) {
