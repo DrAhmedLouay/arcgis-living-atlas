@@ -300,6 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const floatOriginalEyeIcon = document.getElementById('floatOriginalEyeIcon');
     const floatOriginalStatusText = document.getElementById('floatOriginalStatusText');
     const floatBlinkBtn = document.getElementById('floatBlinkBtn');
+    const floatFlyToOverlayBtn = document.getElementById('floatFlyToOverlayBtn');
 
     const toggleImportedMapBtn = document.getElementById('toggleImportedMapBtn');
     const importedMapEyeIcon = document.getElementById('importedMapEyeIcon');
@@ -308,6 +309,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const originalMapEyeIcon = document.getElementById('originalMapEyeIcon');
     const originalMapStatusBadge = document.getElementById('originalMapStatusBadge');
     const blinkCompareBtn = document.getElementById('blinkCompareBtn');
+    const zoomToOverlayBtn = document.getElementById('zoomToOverlayBtn');
 
     // AI Spatial Alignment & Landmark Matching Studio Elements
     const aiAutoScanHeaderBtn = document.getElementById('aiAutoScanHeaderBtn');
@@ -1068,6 +1070,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 originY: maxY,
                 cellIncrementX: resX,
                 cellIncrementY: -resY,
+                bbox: bbox,
                 projection: proj,
                 utmZone: utmZone,
                 datum: 'WGS84',
@@ -1092,6 +1095,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 originY: originY,
                 cellIncrementX: resX,
                 cellIncrementY: -resY,
+                bbox: bbox,
                 projection: proj,
                 utmZone: utmZone,
                 datum: 'WGS84',
@@ -1600,8 +1604,41 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!meta) meta = {};
       let north, south, east, west;
 
-      // Case A: Coordinates are in UTM meters or Web Mercator
-      if (meta.originX && meta.originY && (Math.abs(meta.originX) > 10000 || Math.abs(meta.originY) > 100000)) {
+      // Case 0: High-Precision Direct Bounding Box matching (from GeoTIFF ModelTiepoint/ModelPixelScale)
+      if (meta.bbox && Array.isArray(meta.bbox) && meta.bbox.length >= 4) {
+        const minX = meta.bbox[0];
+        const minY = meta.bbox[1];
+        const maxX = meta.bbox[2];
+        const maxY = meta.bbox[3];
+
+        if (Math.abs(minX) > 900000 || (meta.projection && meta.projection.includes('3857'))) {
+          // Web Mercator
+          const p1 = mercatorToLatLng(minX, maxY);
+          const p2 = mercatorToLatLng(maxX, minY);
+          north = Math.max(p1.lat, p2.lat);
+          south = Math.min(p1.lat, p2.lat);
+          west = Math.min(p1.lng, p2.lng);
+          east = Math.max(p1.lng, p2.lng);
+        } else if (Math.abs(minX) > 10000 || Math.abs(maxY) > 100000) {
+          // Standard UTM (Zone 38N / 37N / 39N)
+          const zone = meta.utmZone || 38;
+          const tl = utmToLatLng(minX, maxY, zone, true);
+          const br = utmToLatLng(maxX, minY, zone, true);
+          north = Math.max(tl.lat, br.lat);
+          south = Math.min(tl.lat, br.lat);
+          west = Math.min(tl.lng, br.lng);
+          east = Math.max(tl.lng, br.lng);
+        } else if (minX >= -180 && maxX <= 180 && minY >= -90 && maxY <= 90) {
+          // WGS84 Geodetic
+          north = maxY;
+          south = minY;
+          west = minX;
+          east = maxX;
+        }
+      }
+
+      // Case A: Coordinates are in UTM meters or Web Mercator (from Origin + Resolution)
+      if ((north === undefined || south === undefined) && meta.originX && meta.originY && (Math.abs(meta.originX) > 10000 || Math.abs(meta.originY) > 100000)) {
         if (Math.abs(meta.originX) > 900000 || (meta.projection && meta.projection.includes('3857'))) {
           // Web Mercator (EPSG:3857)
           const widthMeters = (meta.width || 8000) * Math.abs(meta.cellIncrementX || 1.0);
@@ -2291,13 +2328,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           }
 
-          const isSvgPlaceholder = decoded.pngDataUrl && decoded.pngDataUrl.startsWith('data:image/svg+xml');
-          if (isSvgPlaceholder) {
-            showToast(`تم استيراد نطاق وإحداثيات الخارطة بنجاح (${(geoMeta.width || 0).toLocaleString('ar-IQ')} × ${(geoMeta.height || 0).toLocaleString('ar-IQ')} بكسل)`, 'success');
-          } else if (geoMeta.originX) {
-            showToast(`تم استيراد وعرض خارطة GeoTIFF الفضائية بنجاح: ${geoMeta.detectionSource}`, 'success');
-          } else {
-            showToast(`تم استيراد وعرض صورة TIFF بنجاح للمعايرة`, 'success');
+          if (geoMeta.detectionSource) {
+            showToast(`🎯 مطابقة الإحداثيات: ${geoMeta.detectionSource}`, 'info');
           }
           return;
         }
@@ -2699,6 +2731,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (floatBlinkBtn) {
       floatBlinkBtn.addEventListener('click', () => blinkCompare());
+    }
+
+    const flyToCurrentOverlay = () => {
+      if (bounds && bounds.isValid && bounds.isValid()) {
+        map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 18, duration: 1.3 });
+        setTimeout(() => {
+          if (map) map.invalidateSize();
+        }, 500);
+        showToast('🎯 تم الانتقال إلى موقع الخارطة المستوردة وتوسيطها على خارطة الأساس', 'success');
+      } else {
+        showToast('يرجى استيراد خارطة أولاً لتحديد موقعها على الخارطة الأصلية', 'warning');
+      }
+    };
+
+    if (floatFlyToOverlayBtn) {
+      floatFlyToOverlayBtn.addEventListener('click', flyToCurrentOverlay);
+    }
+    if (zoomToOverlayBtn) {
+      zoomToOverlayBtn.addEventListener('click', flyToCurrentOverlay);
     }
 
     // ==========================================
@@ -3378,8 +3429,20 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
         statusLabel.className = 'text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-medium';
       }
 
-      // Fly to image
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+      // Fly directly to image matching coordinates with original basemap
+      if (bounds && bounds.isValid && bounds.isValid()) {
+        map.flyToBounds(bounds, {
+          padding: [40, 40],
+          maxZoom: 18,
+          duration: 1.4
+        });
+        setTimeout(() => {
+          if (map) {
+            map.invalidateSize();
+            map.fitBounds(bounds, { padding: [40, 40], maxZoom: 18 });
+          }
+        }, 500);
+      }
 
       // Create boundary outline & corner handles
       createHandles();
@@ -3393,7 +3456,7 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       renderActiveLayersTab();
       switchToCalibrateTab();
 
-      showToast(`تم تحميل الخريطة الفضائية! يمكنك الآن معايرتها وتصحيحها.`, 'success');
+      showToast(`🎯 تم مطابقة إحداثيات الخارطة المستوردة بنجاح مع خارطة الأساس والانتقال إليها!`, 'success');
     }
 
     /**

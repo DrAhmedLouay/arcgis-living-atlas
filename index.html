@@ -27,7 +27,7 @@
   <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 
   <!-- Custom Styling -->
-  <link rel="stylesheet" href="css/styles.css?v=20260927_14">
+  <link rel="stylesheet" href="css/styles.css?v=20260927_15">
 </head>
 <body class="bg-slate-950 text-slate-100 h-screen w-screen flex flex-col overflow-hidden select-none">
 
@@ -130,6 +130,12 @@
         <button type="button" id="floatBlinkBtn" class="px-2 py-1.5 rounded-lg text-xs font-medium text-amber-300 hover:text-white bg-slate-800 hover:bg-amber-600/30 border border-slate-700 transition-all flex items-center gap-1 shadow-sm" title="مقارنة سريعة بوميض قبل وبعد">
           <i class="fa-solid fa-code-compare text-amber-400"></i>
           <span>مقارنة</span>
+        </button>
+
+        <!-- Fly Directly to Imported Map -->
+        <button type="button" id="floatFlyToOverlayBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-amber-300 hover:text-white bg-amber-500/20 hover:bg-amber-500/40 border border-amber-500/50 transition-all flex items-center gap-1.5 shadow-sm" title="الذهاب مباشرة إلى موقع الخريطة المستوردة وتوسيطها على الشاشة">
+          <i class="fa-solid fa-location-crosshairs text-amber-400"></i>
+          <span>اذهب إلى الخارطة</span>
         </button>
 
         <!-- AI Reality Alignment Studio Trigger -->
@@ -798,6 +804,12 @@
                 <i class="fa-solid fa-code-compare text-amber-400"></i>
                 <span>مقارنة سريعة (وميض الخارطة المستوردة والأصلية)</span>
               </button>
+
+              <!-- Quick Zoom to Overlay Button -->
+              <button type="button" id="zoomToOverlayBtn" class="w-full py-1.5 px-3 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors">
+                <i class="fa-solid fa-location-crosshairs text-amber-400"></i>
+                <span>الذهاب لموقع الخارطة وتوسيطها على خارطة الأساس</span>
+              </button>
             </div>
 
             <div class="bg-slate-900/90 border border-slate-700/80 rounded-xl p-3.5 space-y-3">
@@ -1270,13 +1282,13 @@
        Scripts
        ========================================================================= -->
   <!-- Curated Catalog Data -->
-  <script src="js/catalog-data.js?v=20260927_14"></script>
+  <script src="js/catalog-data.js?v=20260927_15"></script>
 
   <!-- Curated Official Archaeological Sites of Iraq -->
-  <script src="js/archaeology-data.js?v=20260927_14"></script>
+  <script src="js/archaeology-data.js?v=20260927_15"></script>
 
   <!-- Living Atlas Engine Entry -->
-  <script src="js/atlas-core.js?v=20260927_14"></script>
+  <script src="js/atlas-core.js?v=20260927_15"></script>
 
 </body>
 </html>
