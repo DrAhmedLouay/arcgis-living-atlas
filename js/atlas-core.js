@@ -974,37 +974,44 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
           let tiff = null;
 
-          // Priority 1: If source is Blob/File <= 800MB, read as ArrayBuffer for fast, reliable in-memory decoding
-          if (source instanceof Blob && source.size <= 800 * 1024 * 1024) {
-            try {
-              const buf = await new Promise((resolve, reject) => {
-                const r = new FileReader();
-                r.onload = () => resolve(r.target.result);
-                r.onerror = (err) => reject(err);
-                r.readAsArrayBuffer(source);
-              });
-              if (buf) {
-                tiff = await withTimeout(GeoTIFF.fromArrayBuffer(buf), 6000, 'GeoTIFF.fromArrayBuffer');
+          // Engine 1: In-Memory ArrayBuffer (Fastest, zero-I/O bottleneck, battle-tested)
+          try {
+            let buf = null;
+            if (source instanceof ArrayBuffer) {
+              buf = source;
+            } else if (source instanceof Blob) {
+              try {
+                buf = await source.arrayBuffer();
+              } catch (abErr) {
+                buf = await new Promise((resolve, reject) => {
+                  const r = new FileReader();
+                  r.onload = () => resolve(r.target.result);
+                  r.onerror = (err) => reject(err);
+                  r.readAsArrayBuffer(source);
+                });
               }
-            } catch (bufErr) {
-              console.warn('ArrayBuffer read failed, falling back to fromBlob:', bufErr);
             }
+            if (buf && typeof GeoTIFF !== 'undefined') {
+              tiff = await GeoTIFF.fromArrayBuffer(buf);
+            }
+          } catch (arrErr) {
+            console.warn('ArrayBuffer read failed, trying fromBlob:', arrErr);
           }
 
-          // Priority 2: fromBlob for giant files (> 800MB) or fallback
-          if (!tiff && source instanceof Blob) {
+          // Engine 2: fromBlob streaming fallback (for ultra-massive multi-gigabyte files where ArrayBuffer might OOM)
+          if (!tiff && source instanceof Blob && typeof GeoTIFF !== 'undefined') {
             try {
-              tiff = await withTimeout(GeoTIFF.fromBlob(source), 6000, 'GeoTIFF.fromBlob');
+              tiff = await GeoTIFF.fromBlob(source);
             } catch (blobErr) {
               console.warn('GeoTIFF.fromBlob failed:', blobErr);
             }
-          } else if (!tiff && source instanceof ArrayBuffer) {
-            tiff = await withTimeout(GeoTIFF.fromArrayBuffer(source), 6000, 'GeoTIFF.fromArrayBuffer');
+          } else if (!tiff && source instanceof ArrayBuffer && typeof GeoTIFF !== 'undefined') {
+            tiff = await GeoTIFF.fromArrayBuffer(source);
           }
 
           if (tiff) {
-            const imageCount = typeof tiff.getImageCount === 'function' ? await withTimeout(tiff.getImageCount(), 3000, 'getImageCount') : 1;
-            const mainImage = await withTimeout(tiff.getImage(0), 4000, 'getImage(0)');
+            const imageCount = typeof tiff.getImageCount === 'function' ? await tiff.getImageCount() : 1;
+            const mainImage = await tiff.getImage(0);
             width = mainImage.getWidth();
             height = mainImage.getHeight();
 
@@ -1103,24 +1110,22 @@ document.addEventListener('DOMContentLoaded', () => {
               };
             }
 
-            // Overview Selection: Pick highest resolution overview with size <= 16MP (ideal UHD ~ 2560-3840px)
-            const targetUHD = 2560;
+            // Overview Selection: Pick highest resolution overview closest to UHD 3840
+            const targetUHD = 3840;
             let renderImage = mainImage;
             if (imageCount > 1 && (width > targetUHD || height > targetUHD)) {
               let bestOverview = null;
               let bestDiff = Infinity;
               for (let idx = 1; idx < imageCount; idx++) {
                 try {
-                  const ov = await withTimeout(tiff.getImage(idx), 2000, `getImage(${idx})`);
+                  const ov = await tiff.getImage(idx);
                   const ow = ov.getWidth();
                   const oh = ov.getHeight();
-                  if (ow * oh <= 16777216) {
-                    const maxO = Math.max(ow, oh);
-                    const diff = Math.abs(maxO - targetUHD);
-                    if (diff < bestDiff) {
-                      bestDiff = diff;
-                      bestOverview = ov;
-                    }
+                  const maxO = Math.max(ow, oh);
+                  const diff = Math.abs(maxO - targetUHD);
+                  if (diff < bestDiff) {
+                    bestDiff = diff;
+                    bestOverview = ov;
                   }
                 } catch (ove) {}
               }
@@ -1132,39 +1137,85 @@ document.addEventListener('DOMContentLoaded', () => {
             const rw = renderImage.getWidth();
             const rh = renderImage.getHeight();
 
-            // ONLY decode pixels if reasonably sized (<= 16MP) so we NEVER block or crash the browser!
-            if (rw * rh <= 16777216) {
-              // Engine 1: readRGB() directly on renderImage (Native GeoTIFF.js fast path)
-              try {
-                const rgb = await withTimeout(renderImage.readRGB(), 5000, 'renderImage.readRGB');
-                if (rgb && rgb.length >= rw * rh * 3) {
+            // Strategy A: readRGB directly on renderImage (Proven fast and high quality)
+            try {
+              const rgb = await renderImage.readRGB();
+              if (rgb && rgb.length >= rw * rh * 3) {
+                const is8Bit = (rgb instanceof Uint8Array || rgb instanceof Uint8ClampedArray);
+                if (is8Bit) {
+                  const srcCanvas = document.createElement('canvas');
+                  srcCanvas.width = rw;
+                  srcCanvas.height = rh;
+                  const ctx = srcCanvas.getContext('2d');
+                  const imgData = ctx.createImageData(rw, rh);
+                  const data = imgData.data;
+
+                  // Direct fast 8-bit copy (zero overhead)
+                  for (let i = 0, j = 0; i < rgb.length && j < rw * rh * 4; i += 3, j += 4) {
+                    data[j]     = rgb[i];
+                    data[j + 1] = rgb[i + 1];
+                    data[j + 2] = rgb[i + 2];
+                    data[j + 3] = 255;
+                  }
+                  ctx.putImageData(imgData, 0, 0);
+
+                  const maxDim = 3840;
+                  if (rw > maxDim || rh > maxDim) {
+                    const sc = Math.min(maxDim / rw, maxDim / rh);
+                    const tw = Math.round(rw * sc);
+                    const th = Math.round(rh * sc);
+                    const destCanvas = document.createElement('canvas');
+                    destCanvas.width = tw;
+                    destCanvas.height = th;
+                    destCanvas.getContext('2d').drawImage(srcCanvas, 0, 0, tw, th);
+                    pngDataUrl = destCanvas.toDataURL('image/jpeg', 0.94);
+                  } else {
+                    pngDataUrl = srcCanvas.toDataURL('image/jpeg', 0.94);
+                  }
+                } else {
                   pngDataUrl = rasterToDataUrl(rgb, rw, rh);
                 }
-              } catch (rgbE) {
-                console.warn('renderImage.readRGB failed, trying readRasters:', rgbE);
               }
+            } catch (rgbE) {
+              console.warn('readRGB on renderImage failed, trying readRasters:', rgbE);
+            }
 
-              // Engine 2: readRasters() on renderImage (for multi-band / scientific rasters)
-              if (!pngDataUrl) {
-                try {
-                  const rasters = await withTimeout(renderImage.readRasters(), 6000, 'renderImage.readRasters');
-                  if (rasters && rasters.length > 0 && rasters[0]) {
-                    pngDataUrl = rasterToDataUrl(rasters, rw, rh);
-                  }
-                } catch (rastE) {
-                  console.warn('renderImage.readRasters failed:', rastE);
+            // Strategy B: readRasters on renderImage (for multi-band / scientific rasters)
+            if (!pngDataUrl) {
+              try {
+                const rasters = await renderImage.readRasters();
+                if (rasters && rasters.length > 0 && rasters[0]) {
+                  pngDataUrl = rasterToDataUrl(rasters, rw, rh);
                 }
+              } catch (rastE) {
+                console.warn('readRasters on renderImage failed:', rastE);
               }
             }
 
-            // Strategy C: If renderImage was an overview and failed, try mainImage if mainImage <= 16MP
-            if (!pngDataUrl && renderImage !== mainImage && width * height <= 16777216) {
+            // Strategy C: If renderImage was an overview and failed, try mainImage if <= 25MP
+            if (!pngDataUrl && renderImage !== mainImage && width * height <= 25000000) {
               try {
-                const rgb = await withTimeout(mainImage.readRGB(), 5000, 'mainImage.readRGB');
+                const rgb = await mainImage.readRGB();
                 if (rgb && rgb.length >= width * height * 3) {
                   pngDataUrl = rasterToDataUrl(rgb, width, height);
                 }
               } catch (mainE) {}
+            }
+
+            // Strategy D: If single image (no overview) and giant, downsample readRGB/readRasters
+            if (!pngDataUrl && rw * rh > 25000000) {
+              try {
+                const maxDim = 2560;
+                const sc = Math.min(maxDim / rw, maxDim / rh);
+                const tw = Math.max(32, Math.round(rw * sc));
+                const th = Math.max(32, Math.round(rh * sc));
+                const rgb = await renderImage.readRGB({ width: tw, height: th });
+                if (rgb) {
+                  pngDataUrl = rasterToDataUrl(rgb, tw, th);
+                }
+              } catch (dsErr) {
+                console.warn('Downsampled readRGB failed:', dsErr);
+              }
             }
           }
         } catch (gtErr) {
