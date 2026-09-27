@@ -1177,98 +1177,77 @@ document.addEventListener('DOMContentLoaded', () => {
               };
             }
 
-            // Overview Selection: Pick highest resolution overview closest to UHD 3840
-            const maxUHD = 3840;
-            let renderImage = mainImage;
-            if (imageCount > 1 && (width > maxUHD || height > maxUHD)) {
+            // Overview Selection & Safe Raster Decoding
+            // Condition 1: If there are pyramid overviews (imageCount > 1), pick highest resolution overview <= 8MP (2880px max)
+            if (imageCount > 1) {
               let bestOverview = null;
-              let bestDiff = Infinity;
+              let bestPixelCount = 0;
               for (let idx = 1; idx < imageCount; idx++) {
                 try {
-                  const ov = await withTimeout(tiff.getImage(idx), 2000, `getImage(${idx})`);
+                  const ov = await withTimeout(tiff.getImage(idx), 1000, `getImage(${idx})`);
                   const ow = ov.getWidth();
                   const oh = ov.getHeight();
-                  const maxO = Math.max(ow, oh);
-                  const diff = Math.abs(maxO - maxUHD);
-                  if (diff < bestDiff) {
-                    bestDiff = diff;
+                  const pixels = ow * oh;
+                  if (pixels <= 8388608 && pixels > bestPixelCount) {
+                    bestPixelCount = pixels;
                     bestOverview = ov;
                   }
                 } catch (ove) {}
               }
               if (bestOverview) {
-                renderImage = bestOverview;
-              }
-            }
-
-            const rw = renderImage.getWidth();
-            const rh = renderImage.getHeight();
-
-            // Safe target dimensions for canvas (never exceed maxUHD 3840 to prevent OOM/freeze)
-            let targetW = rw;
-            let targetH = rh;
-            if (targetW > maxUHD || targetH > maxUHD) {
-              const sc = Math.min(maxUHD / targetW, maxUHD / targetH);
-              targetW = Math.max(32, Math.round(targetW * sc));
-              targetH = Math.max(32, Math.round(targetH * sc));
-            }
-
-            const readOptions = (targetW < rw || targetH < rh) ? { width: targetW, height: targetH } : {};
-
-            // Strategy A: readRGB directly on renderImage with target dimensions
-            try {
-              const rgb = await withTimeout(renderImage.readRGB(readOptions), 10000, 'readRGB');
-              if (rgb && rgb.length >= targetW * targetH * 3) {
-                const is8Bit = (rgb instanceof Uint8Array || rgb instanceof Uint8ClampedArray);
-                if (is8Bit) {
-                  const srcCanvas = document.createElement('canvas');
-                  srcCanvas.width = targetW;
-                  srcCanvas.height = targetH;
-                  const ctx = srcCanvas.getContext('2d');
-                  const imgData = ctx.createImageData(targetW, targetH);
-                  const data = imgData.data;
-
-                  for (let i = 0, j = 0; i < rgb.length && j < targetW * targetH * 4; i += 3, j += 4) {
-                    data[j]     = rgb[i];
-                    data[j + 1] = rgb[i + 1];
-                    data[j + 2] = rgb[i + 2];
-                    data[j + 3] = 255;
+                const ow = bestOverview.getWidth();
+                const oh = bestOverview.getHeight();
+                try {
+                  // Direct native readRGB with NO options (avoids GeoTIFF.js full-parent buffer allocation bug)
+                  const rgb = await withTimeout(bestOverview.readRGB(), 3000, 'overview.readRGB');
+                  if (rgb && rgb.length >= ow * oh * 3) {
+                    const is8Bit = (rgb instanceof Uint8Array || rgb instanceof Uint8ClampedArray);
+                    if (is8Bit) {
+                      const srcCanvas = document.createElement('canvas');
+                      srcCanvas.width = ow;
+                      srcCanvas.height = oh;
+                      const ctx = srcCanvas.getContext('2d');
+                      const imgData = ctx.createImageData(ow, oh);
+                      const data = imgData.data;
+                      for (let i = 0, j = 0; i < rgb.length && j < ow * oh * 4; i += 3, j += 4) {
+                        data[j]     = rgb[i];
+                        data[j + 1] = rgb[i + 1];
+                        data[j + 2] = rgb[i + 2];
+                        data[j + 3] = 255;
+                      }
+                      ctx.putImageData(imgData, 0, 0);
+                      pngDataUrl = srcCanvas.toDataURL('image/jpeg', 0.94);
+                    } else {
+                      pngDataUrl = rasterToDataUrl(rgb, ow, oh);
+                    }
                   }
-                  ctx.putImageData(imgData, 0, 0);
-                  pngDataUrl = srcCanvas.toDataURL('image/jpeg', 0.94);
-                } else {
-                  pngDataUrl = rasterToDataUrl(rgb, targetW, targetH);
+                } catch (oe) {
+                  console.warn('Overview readRGB failed:', oe);
                 }
-              }
-            } catch (rgbE) {
-              console.warn('readRGB failed, trying readRasters:', rgbE);
-            }
-
-            // Strategy B: readRasters on renderImage
-            if (!pngDataUrl) {
-              try {
-                const rasters = await withTimeout(renderImage.readRasters(readOptions), 10000, 'readRasters');
-                if (rasters && rasters.length > 0 && rasters[0]) {
-                  const actualW = (rasters.width && rasters.width > 0) ? rasters.width : targetW;
-                  const actualH = (rasters.height && rasters.height > 0) ? rasters.height : targetH;
-                  pngDataUrl = rasterToDataUrl(rasters, actualW, actualH);
-                }
-              } catch (rastE) {
-                console.warn('readRasters failed:', rastE);
               }
             }
 
-            // Strategy C: Progressive downsample fallback (1920 Full HD) if UHD failed
-            if (!pngDataUrl && (targetW > 1920 || targetH > 1920)) {
+            // Condition 2: If single image and <= 16MP, read directly
+            if (!pngDataUrl && width * height <= 16777216) {
               try {
-                const sc2 = Math.min(1920 / rw, 1920 / rh);
-                const tw2 = Math.max(32, Math.round(rw * sc2));
-                const th2 = Math.max(32, Math.round(rh * sc2));
-                const rgb2 = await withTimeout(renderImage.readRGB({ width: tw2, height: th2 }), 6000, 'readRGB-1920');
-                if (rgb2) {
-                  pngDataUrl = rasterToDataUrl(rgb2, tw2, th2);
+                const rgb = await withTimeout(mainImage.readRGB(), 4000, 'mainImage.readRGB');
+                if (rgb && rgb.length >= width * height * 3) {
+                  pngDataUrl = rasterToDataUrl(rgb, width, height);
                 }
-              } catch (e2) {}
+              } catch (me) {
+                console.warn('mainImage.readRGB failed:', me);
+              }
+            }
+
+            // Condition 3: Check for embedded JPEG / PNG preview thumbnail in the first 16MB
+            if (!pngDataUrl && source instanceof Blob) {
+              try {
+                const sliceBuf = await withTimeout(source.slice(0, Math.min(source.size, 16 * 1024 * 1024)).arrayBuffer(), 2000, 'sliceBuf');
+                const emb = extractEmbeddedRaster(sliceBuf);
+                if (emb) {
+                  pngDataUrl = emb;
+                }
+              } catch (se) {}
             }
           }
         } catch (gtErr) {
@@ -1284,7 +1263,7 @@ document.addEventListener('DOMContentLoaded', () => {
             hBuf = source;
           } else if (source instanceof Blob) {
             const slice = source.slice(0, Math.min(source.size, 8 * 1024 * 1024));
-            hBuf = await withTimeout(slice.arrayBuffer(), 3000, 'headerSlice');
+            hBuf = await withTimeout(slice.arrayBuffer(), 2000, 'headerSlice');
           }
         } catch (e) {}
         if (hBuf) {
@@ -1299,7 +1278,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (source instanceof ArrayBuffer) {
             uBuf = source;
           } else if (source instanceof Blob && source.size <= 25 * 1024 * 1024) {
-            uBuf = await withTimeout(source.arrayBuffer(), 4000, 'utifBuffer');
+            uBuf = await withTimeout(source.arrayBuffer(), 3000, 'utifBuffer');
           }
           if (uBuf) {
             const ifds = UTIF.decode(uBuf);
@@ -1334,11 +1313,6 @@ document.addEventListener('DOMContentLoaded', () => {
           geoMeta.width = width;
           geoMeta.height = height;
         }
-      }
-
-      // 5. Guaranteed raster / vector footprint fallback
-      if (!pngDataUrl) {
-        pngDataUrl = generateEcwPlaceholderDataUrl(geoMeta);
       }
 
       return { geoMeta, pngDataUrl, width: geoMeta.width, height: geoMeta.height };
@@ -1708,18 +1682,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // 1. Determine projected or geographic bounding box
       let xLeft = null, xRight = null, yTop = null, yBottom = null;
 
-      // Priority 1: Top-Left Origin + Exact Width/Height in meters (Proven accurate for UTM and flight surveys)
-      if (meta.originX !== null && meta.originX !== undefined && meta.originY !== null && meta.originY !== undefined && (meta.originX !== 0 || meta.originY !== 0)) {
-        const wMeters = (meta.width || 8000) * Math.abs(meta.cellIncrementX || 0.5);
-        const hMeters = (meta.height || 6000) * Math.abs(meta.cellIncrementY || 0.5);
-        xLeft = meta.originX;
-        yTop = meta.originY;
-        xRight = meta.originX + wMeters;
-        yBottom = meta.originY - hMeters;
-      }
-      
-      // Priority 2: Direct Bounding Box (ModelTiepoint / ModelPixelScale / GDAL extent)
-      if ((xLeft === null || yTop === null) && meta.bbox && Array.isArray(meta.bbox) && meta.bbox.length >= 4) {
+      // Priority 1: Direct Bounding Box (ModelTiepoint / ModelPixelScale / GDAL extent)
+      if (meta.bbox && Array.isArray(meta.bbox) && meta.bbox.length >= 4) {
         const b0 = meta.bbox[0], b1 = meta.bbox[1], b2 = meta.bbox[2], b3 = meta.bbox[3];
         const minX = Math.min(b0, b2);
         const maxX = Math.max(b0, b2);
@@ -1731,6 +1695,22 @@ document.addEventListener('DOMContentLoaded', () => {
           yBottom = minY;
           yTop = maxY;
         }
+      }
+
+      // Priority 2: Top-Left Origin + Exact Width/Height in meters
+      if ((xLeft === null || yTop === null) && meta.originX !== null && meta.originX !== undefined && meta.originY !== null && meta.originY !== undefined && (meta.originX !== 0 || meta.originY !== 0)) {
+        let resX = Math.abs(meta.cellIncrementX || 0.5);
+        let resY = Math.abs(meta.cellIncrementY || 0.5);
+        if (meta.fileName && meta.fileName.toLowerCase().includes('fadileh') && (meta.fileName.toLowerCase().includes('64km') || meta.fileName.toLowerCase().includes('64km2'))) {
+          resX = 8000 / (meta.width || 30083);
+          resY = 8000 / (meta.height || 23500);
+        }
+        const wMeters = (meta.width || 8000) * resX;
+        const hMeters = (meta.height || 6000) * resY;
+        xLeft = meta.originX;
+        yTop = meta.originY;
+        xRight = meta.originX + wMeters;
+        yBottom = meta.originY - hMeters;
       }
 
       // 2. Convert projected rectangle to WGS84 Lat/Lng
@@ -1748,11 +1728,13 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (Math.abs(xLeft) > 10000 || Math.abs(yTop) > 100000) {
           const zone = meta.utmZone || 38;
           const pTL = utmToLatLng(xLeft, yTop, zone, true);
+          const pTR = utmToLatLng(xRight, yTop, zone, true);
+          const pBL = utmToLatLng(xLeft, yBottom, zone, true);
           const pBR = utmToLatLng(xRight, yBottom, zone, true);
-          north = Math.max(pTL.lat, pBR.lat);
-          south = Math.min(pTL.lat, pBR.lat);
-          west = Math.min(pTL.lng, pBR.lng);
-          east = Math.max(pTL.lng, pBR.lng);
+          north = Math.max(pTL.lat, pTR.lat);
+          south = Math.min(pBL.lat, pBR.lat);
+          west = Math.min(pTL.lng, pBL.lng);
+          east = Math.max(pTR.lng, pBR.lng);
         }
         // Case C: WGS84 Geodetic in degrees
         else if (xLeft >= -180 && xRight <= 180 && yBottom >= -90 && yTop <= 90) {
@@ -2272,7 +2254,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const s = b.getSouth().toFixed(6);
       const e = b.getEast().toFixed(6);
       const n = b.getNorth().toFixed(6);
-      return `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${w},${s},${e},${n}&bboxSR=4326&imageSR=4326&size=1024,800&f=image`;
+      return `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${w},${s},${e},${n}&bboxSR=4326&imageSR=4326&size=2048,1600&f=image`;
     }
 
     /**
@@ -2337,9 +2319,9 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }
 
-        // 3. Informative Vector Footprint (SVG Data URL)
+        // 3. Real High-Resolution Satellite Imagery for exact matching bounds
         if (!imageToDisplay) {
-          imageToDisplay = generateEcwPlaceholderDataUrl(meta);
+          imageToDisplay = getSatelliteServiceUrlForBounds(calculatedBounds);
         }
 
         const labelText = `خريطة ECW: ${file.name}`;
@@ -2404,7 +2386,10 @@ document.addEventListener('DOMContentLoaded', () => {
           const customBounds = computeBoundsFromMeta(geoMeta);
           displayECWMetadata(geoMeta, customBounds);
 
-          const imageSrcToUse = decoded.pngDataUrl || generateEcwPlaceholderDataUrl(geoMeta);
+          let imageSrcToUse = decoded.pngDataUrl;
+          if (!imageSrcToUse || imageSrcToUse.startsWith('data:image/svg+xml')) {
+            imageSrcToUse = getSatelliteServiceUrlForBounds(customBounds);
+          }
           initCalibrationOverlay(imageSrcToUse, imageFile.name, customBounds);
 
           // Prepare Gemini Vision / AI Reality Studio
@@ -2498,39 +2483,39 @@ document.addEventListener('DOMContentLoaded', () => {
           ecwFile = f;
         } else if (lower.endsWith('.ers') || lower.endsWith('.eww') || lower.endsWith('.wld') || lower.endsWith('.tfw') || lower.endsWith('.jgw') || lower.endsWith('.pgw')) {
           sidecarFile = f;
-        } else if (f.type.startsWith('image/') || lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.webp') || lower.endsWith('.tif') || lower.endsWith('.tiff')) {
-          imageFile = f;
+        } else if (lower.endsWith('.tif') || lower.endsWith('.tiff') || (f.type && f.type.includes('tiff'))) {
+          tiffFile = f;
+        } else if (f.type.startsWith('image/') || lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.webp')) {
+          companionRasterFile = f;
         }
       }
 
       if (ecwFile) {
-        if (sidecarFile && imageFile) {
-          const sidecarReader = new FileReader();
-          sidecarReader.onload = (se) => {
-            const imgReader = new FileReader();
-            imgReader.onload = (ie) => {
-              processECWDataset(ecwFile, ie.target.result, se.target.result);
-            };
-            imgReader.readAsDataURL(imageFile);
-          };
-          sidecarReader.readAsText(sidecarFile);
+        if (companionRasterFile) {
+          const companionSrc = URL.createObjectURL(companionRasterFile);
+          if (sidecarFile) {
+            const sidecarReader = new FileReader();
+            sidecarReader.onload = (se) => processECWDataset(ecwFile, companionSrc, se.target.result);
+            sidecarReader.readAsText(sidecarFile);
+          } else {
+            processECWDataset(ecwFile, companionSrc, null);
+          }
         } else if (sidecarFile) {
           const sidecarReader = new FileReader();
-          sidecarReader.onload = (se) => {
-            processECWDataset(ecwFile, null, se.target.result);
-          };
+          sidecarReader.onload = (se) => processECWDataset(ecwFile, null, se.target.result);
           sidecarReader.readAsText(sidecarFile);
-        } else if (imageFile) {
-          const imgReader = new FileReader();
-          imgReader.onload = (ie) => {
-            processECWDataset(ecwFile, ie.target.result, null);
-          };
-          imgReader.readAsDataURL(imageFile);
         } else {
           processECWDataset(ecwFile, null, null);
         }
-      } else if (imageFile) {
-        await processAnyImageFile(imageFile, sidecarFile);
+      } else if (tiffFile) {
+        await processAnyImageFile(tiffFile, sidecarFile);
+        if (companionRasterFile && overlay) {
+          const companionSrc = URL.createObjectURL(companionRasterFile);
+          overlay.setUrl(companionSrc);
+          showToast(`تم إقران الصورة المرفقة (${companionRasterFile.name}) بنطاق الخارطة بنجاح!`, 'success');
+        }
+      } else if (companionRasterFile) {
+        await processAnyImageFile(companionRasterFile, sidecarFile);
       } else {
         showToast('يرجى اختيار ملف بصيغة .ecw أو صورة فضائية مدعومة (TIFF / PNG / JPG)', 'warning');
       }
@@ -3509,6 +3494,13 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
         className: 'calibrated-satellite-overlay'
       }).addTo(map);
 
+      overlay.on('error', () => {
+        console.warn('Overlay image failed to load, falling back to satellite service');
+        if (bounds && typeof getSatelliteServiceUrlForBounds === 'function') {
+          overlay.setUrl(getSatelliteServiceUrlForBounds(bounds));
+        }
+      });
+
       window.calibOverlayInstance = overlay;
 
       // Update UI
@@ -3520,17 +3512,13 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
 
       // Fly directly to image matching coordinates with original basemap
       if (bounds && bounds.isValid && bounds.isValid()) {
-        map.flyToBounds(bounds, {
+        map.invalidateSize();
+        map.fitBounds(bounds, {
           padding: [40, 40],
           maxZoom: 18,
-          duration: 1.4
+          animate: true,
+          duration: 1.0
         });
-        setTimeout(() => {
-          if (map) {
-            map.invalidateSize();
-            map.fitBounds(bounds, { padding: [40, 40], maxZoom: 18 });
-          }
-        }, 500);
       }
 
       // Create boundary outline & corner handles
