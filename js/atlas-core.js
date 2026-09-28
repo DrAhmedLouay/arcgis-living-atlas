@@ -2539,6 +2539,438 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
+    // =========================================================================
+    // Target Region of Interest (ROI Box) Guided Alignment Engine
+    // =========================================================================
+    const floatRoiBoxBtn = document.getElementById('floatRoiBoxBtn');
+    const floatingRoiBar = document.getElementById('floatingRoiBar');
+    const roiDimsBadge = document.getElementById('roiDimsBadge');
+    const roiHintText = document.getElementById('roiHintText');
+    const roiSnapFitBtn = document.getElementById('roiSnapFitBtn');
+    const roiAiMatchBtn = document.getElementById('roiAiMatchBtn');
+    const roiRedrawBtn = document.getElementById('roiRedrawBtn');
+    const roiCancelBtn = document.getElementById('roiCancelBtn');
+
+    const aiModalDrawRoiBtn = document.getElementById('aiModalDrawRoiBtn');
+    const aiModalUseViewportBtn = document.getElementById('aiModalUseViewportBtn');
+    const aiModalRoiStatusCard = document.getElementById('aiModalRoiStatusCard');
+    const aiModalRoiDimsText = document.getElementById('aiModalRoiDimsText');
+    const aiModalRoiCoordsReadout = document.getElementById('aiModalRoiCoordsReadout');
+    const aiModalRoiSnapFitBtn = document.getElementById('aiModalRoiSnapFitBtn');
+    const aiModalRoiDualMatchBtn = document.getElementById('aiModalRoiDualMatchBtn');
+
+    let isRoiSelecting = false;
+    let roiStartLatLng = null;
+    let targetRoiBox = null;
+    let targetRoiBounds = null;
+
+    function startRoiSelection() {
+      if (isGcpMatchingActive) cancelGcpMatching();
+      if (typeof closeAiAlignmentModal === 'function') closeAiAlignmentModal();
+
+      isRoiSelecting = true;
+      roiStartLatLng = null;
+
+      map.getContainer().classList.add('roi-selection-active');
+      if (floatingRoiBar) floatingRoiBar.classList.remove('hidden');
+      if (roiDimsBadge) {
+        roiDimsBadge.textContent = 'جاهز للرسم';
+        roiDimsBadge.className = 'text-[9px] bg-cyan-950 text-cyan-300 border border-cyan-500/40 px-1.5 py-0.2 rounded font-mono font-bold';
+      }
+      if (roiHintText) roiHintText.textContent = 'انقر واسحب بالماوس فوق الخارطة لتحديد المستطيل';
+
+      if (roiSnapFitBtn) roiSnapFitBtn.classList.add('hidden');
+      if (roiAiMatchBtn) roiAiMatchBtn.classList.add('hidden');
+
+      showToast('🎯 وضع تحديد منطقة الهدف مفعل: انقر واسحب بالماوس فوق خارطة الأساس لتحديد المستطيل', 'info');
+    }
+
+    function cancelRoiSelection() {
+      isRoiSelecting = false;
+      roiStartLatLng = null;
+      map.getContainer().classList.remove('roi-selection-active');
+      map.dragging.enable();
+
+      if (targetRoiBox && map.hasLayer(targetRoiBox)) {
+        map.removeLayer(targetRoiBox);
+        targetRoiBox = null;
+      }
+      targetRoiBounds = null;
+
+      if (floatingRoiBar) floatingRoiBar.classList.add('hidden');
+      if (aiModalRoiStatusCard) aiModalRoiStatusCard.classList.add('hidden');
+    }
+
+    function setTargetRoiBounds(b) {
+      if (!b) return;
+      targetRoiBounds = b;
+
+      if (targetRoiBox && map.hasLayer(targetRoiBox)) {
+        targetRoiBox.setBounds(targetRoiBounds);
+      } else {
+        targetRoiBox = L.rectangle(targetRoiBounds, {
+          className: 'roi-target-rectangle',
+          color: '#06b6d4',
+          weight: 2.5,
+          dashArray: '6, 6',
+          fillColor: '#0891b2',
+          fillOpacity: 0.15,
+          interactive: false
+        }).addTo(map);
+      }
+
+      // Calculate approximate dimensions in km
+      const latDistKm = Math.abs(b.getNorth() - b.getSouth()) * 111.32;
+      const midLat = (b.getNorth() + b.getSouth()) / 2;
+      const lngDistKm = Math.abs(b.getEast() - b.getWest()) * (111.32 * Math.cos(midLat * Math.PI / 180));
+      const dimsStr = `${lngDistKm.toFixed(1)} كم × ${latDistKm.toFixed(1)} كم`;
+
+      // Update Floating Bar UI
+      if (floatingRoiBar) floatingRoiBar.classList.remove('hidden');
+      if (roiDimsBadge) {
+        roiDimsBadge.textContent = dimsStr;
+        roiDimsBadge.className = 'text-[9px] bg-cyan-900/80 text-cyan-200 border border-cyan-400/60 px-1.5 py-0.2 rounded font-mono font-bold shadow-sm';
+      }
+      if (roiHintText) {
+        roiHintText.textContent = 'تم تحديد المنطقة! اختر "تسكين فوري" أو "مطابقة ثنائية بالذكاء الاصطناعي"';
+      }
+      if (roiSnapFitBtn) roiSnapFitBtn.classList.remove('hidden');
+      if (roiAiMatchBtn) roiAiMatchBtn.classList.remove('hidden');
+
+      // Update Modal UI
+      if (aiModalRoiStatusCard) aiModalRoiStatusCard.classList.remove('hidden');
+      if (aiModalRoiDimsText) aiModalRoiDimsText.textContent = dimsStr;
+      if (aiModalRoiCoordsReadout) {
+        aiModalRoiCoordsReadout.textContent = `N: ${b.getNorth().toFixed(4)}° | S: ${b.getSouth().toFixed(4)}° | E: ${b.getEast().toFixed(4)}° | W: ${b.getWest().toFixed(4)}°`;
+      }
+    }
+
+    // Map Mouse Events for Drawing ROI Rectangle
+    map.on('mousedown', (e) => {
+      if (!isRoiSelecting) return;
+      if (e.originalEvent && e.originalEvent.target.closest('#floatingRoiBar, #appHeader, #appSidebar, .leaflet-control, button, a')) return;
+
+      map.dragging.disable();
+      roiStartLatLng = e.latlng;
+      if (targetRoiBox && map.hasLayer(targetRoiBox)) {
+        map.removeLayer(targetRoiBox);
+        targetRoiBox = null;
+      }
+    });
+
+    map.on('mousemove', (e) => {
+      if (!isRoiSelecting || !roiStartLatLng) return;
+      const curBounds = L.latLngBounds(roiStartLatLng, e.latlng);
+      if (targetRoiBox && map.hasLayer(targetRoiBox)) {
+        targetRoiBox.setBounds(curBounds);
+      } else {
+        targetRoiBox = L.rectangle(curBounds, {
+          className: 'roi-target-rectangle',
+          color: '#06b6d4',
+          weight: 2,
+          dashArray: '6, 6',
+          fillColor: '#0891b2',
+          fillOpacity: 0.15,
+          interactive: false
+        }).addTo(map);
+      }
+    });
+
+    map.on('mouseup', (e) => {
+      if (!isRoiSelecting || !roiStartLatLng) return;
+      map.dragging.enable();
+      isRoiSelecting = false;
+      map.getContainer().classList.remove('roi-selection-active');
+
+      const endLatLng = e.latlng;
+      const b = L.latLngBounds(roiStartLatLng, endLatLng);
+
+      if (Math.abs(b.getNorth() - b.getSouth()) > 0.001 && Math.abs(b.getEast() - b.getWest()) > 0.001) {
+        setTargetRoiBounds(b);
+        showToast('✅ تم تحديد مستطيل منطقة الهدف بنجاح!', 'success');
+      } else {
+        cancelRoiSelection();
+        showToast('المستطيل المحدد صغير جداً، يرجى سحب مساحة واضحة للمنطقة', 'warning');
+      }
+      roiStartLatLng = null;
+    });
+
+    // Instant Fit & Snap Overlay to ROI Box
+    function fitOverlayToTargetRoi() {
+      if (!overlay) {
+        showToast('يرجى استيراد خارطة أولاً قبل التسكين', 'warning');
+        return;
+      }
+      if (!targetRoiBounds) {
+        showToast('يرجى تحديد مستطيل منطقة الهدف أولاً', 'warning');
+        return;
+      }
+
+      pushCalibHistory('تسكين ومطابقة داخل منطقة الهدف المحددة');
+      rotationDeg = 0;
+      scalePercent = 100;
+      if (rotationSlider) rotationSlider.value = 0;
+      if (rotationLabel) rotationLabel.textContent = '0°';
+      if (boundRot) boundRot.textContent = '0°';
+      if (scaleSlider) scaleSlider.value = 100;
+      if (scaleLabel) scaleLabel.textContent = '100%';
+
+      applyNewOverlayBounds(targetRoiBounds, 'تسكين ومطابقة داخل منطقة الهدف');
+      showToast('🎯 تم تسكين ومطابقة الخارطة المستوردة بنجاح داخل المستطيل الجغرافي المحدد!', 'success');
+
+      setTimeout(() => { blinkCompare(); }, 700);
+      if (typeof closeAiAlignmentModal === 'function') closeAiAlignmentModal();
+    }
+
+    // Capture visible basemap tiles from Leaflet canvas
+    async function captureBasemapPatchBase64(bounds) {
+      const mapContainer = map.getContainer();
+      const nw = map.latLngToContainerPoint(bounds.getNorthWest());
+      const se = map.latLngToContainerPoint(bounds.getSouthEast());
+      const rawW = Math.abs(se.x - nw.x);
+      const rawH = Math.abs(se.y - nw.y);
+      const w = Math.max(128, Math.min(1024, Math.round(rawW)));
+      const h = Math.max(128, Math.min(1024, Math.round(rawH)));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(0, 0, w, h);
+
+      const curOpacity = overlay ? overlay.options.opacity : 1.0;
+      if (overlay) overlay.setOpacity(0);
+
+      const minX = Math.min(nw.x, se.x);
+      const minY = Math.min(nw.y, se.y);
+
+      const tiles = mapContainer.querySelectorAll('.leaflet-tile-pane img');
+      tiles.forEach(tile => {
+        try {
+          if (tile.complete && tile.naturalWidth > 0) {
+            const tileRect = tile.getBoundingClientRect();
+            const contRect = mapContainer.getBoundingClientRect();
+            const tileX = tileRect.left - contRect.left;
+            const tileY = tileRect.top - contRect.top;
+
+            const destX = (tileX - minX) * (w / rawW);
+            const destY = (tileY - minY) * (h / rawH);
+            const destW = tileRect.width * (w / rawW);
+            const destH = tileRect.height * (h / rawH);
+
+            ctx.drawImage(tile, destX, destY, destW, destH);
+          }
+        } catch (e) {
+          // ignore tainted tile
+        }
+      });
+
+      if (overlay) overlay.setOpacity(curOpacity);
+
+      try {
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        return dataUrl.split(',')[1];
+      } catch (err) {
+        console.warn('Canvas export fallback:', err);
+        return null;
+      }
+    }
+
+    function getImportedOverlayBase64() {
+      if (geminiSelectedImageBase64) {
+        return { base64: geminiSelectedImageBase64, mime: geminiSelectedImageMime };
+      }
+      if (overlay && overlay.getElement()) {
+        const img = overlay.getElement();
+        if (img.src && img.src.startsWith('data:image/')) {
+          const parts = img.src.split(',');
+          const mimeMatch = parts[0].match(/data:(image\/[^;]+);/);
+          return { base64: parts[1], mime: mimeMatch ? mimeMatch[1] : 'image/jpeg' };
+        }
+        try {
+          const c = document.createElement('canvas');
+          c.width = img.naturalWidth || img.width || 800;
+          c.height = img.naturalHeight || img.height || 600;
+          const ctx = c.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          const dataUrl = c.toDataURL('image/jpeg', 0.85);
+          return { base64: dataUrl.split(',')[1], mime: 'image/jpeg' };
+        } catch (e) {
+          console.warn('Could not extract overlay base64:', e);
+        }
+      }
+      return null;
+    }
+
+    async function callGeminiDualVision(apiKey, importedBase64, importedMime, basemapBase64, basemapMime, roiBounds) {
+      const modelSelect = document.getElementById('geminiModelSelect');
+      const chosen = (modelSelect?.value || '').trim() || 'gemini-2.5-flash';
+
+      const prompt = `You are a world-class GIS and Computer Vision specialist performing visual image co-registration and georeferencing.
+You are provided with TWO images:
+- IMAGE 1: An imported raster map / satellite image of an area in Iraq that needs geometric alignment.
+- IMAGE 2: The actual satellite ground-truth reference patch of the user-selected candidate target area in Iraq with bounding box:
+  North: ${roiBounds.getNorth().toFixed(5)}°, South: ${roiBounds.getSouth().toFixed(5)}°, East: ${roiBounds.getEast().toFixed(5)}°, West: ${roiBounds.getWest().toFixed(5)}°.
+
+YOUR TASK:
+1. Compare visual features in IMAGE 1 and IMAGE 2 (rivers, canals, roads, highway intersections, agricultural boundaries, urban street grids).
+2. Determine if IMAGE 1 matches all or part of IMAGE 2.
+3. Compute the refined bounding box (north, south, east, west) of IMAGE 1 mapped to the ground coordinates of IMAGE 2.
+4. Estimate the delta rotation angle in degrees (0 to 360) to align IMAGE 1 with true north in IMAGE 2.
+5. Provide confidence and observations.
+
+Respond ONLY in this exact JSON format (no markdown, no other text):
+{
+  "match_found": true,
+  "confidence": "high|medium|low",
+  "location_name": "area or district name",
+  "bbox": {
+    "north": ${roiBounds.getNorth().toFixed(4)},
+    "south": ${roiBounds.getSouth().toFixed(4)},
+    "east": ${roiBounds.getEast().toFixed(4)},
+    "west": ${roiBounds.getWest().toFixed(4)}
+  },
+  "rotation_degrees": 0,
+  "notes": "key matching features observed"
+}`;
+
+      const body = JSON.stringify({
+        contents: [{
+          parts: [
+            { text: prompt },
+            { inlineData: { mimeType: importedMime || 'image/jpeg', data: importedBase64 } },
+            { inlineData: { mimeType: basemapMime || 'image/jpeg', data: basemapBase64 } }
+          ]
+        }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 512 }
+      });
+
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${chosen}:generateContent?key=${apiKey}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }
+      );
+
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(errText);
+      }
+
+      const data = await resp.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const cleanJson = rawText.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+      return JSON.parse(cleanJson);
+    }
+
+    async function runDualVisionAiMatch() {
+      const apiKey = (geminiApiKeyInput?.value || '').trim() || localStorage.getItem('atlas_gemini_api_key') || '';
+      if (!apiKey) {
+        showToast('يرجى حفظ مفتاح Gemini API أولاً في لوحة المعايرة بالذكاء الاصطناعي', 'warning');
+        openAiAlignmentModal();
+        return;
+      }
+
+      if (!targetRoiBounds) {
+        showToast('يرجى تحديد مستطيل منطقة الهدف على الخارطة أولاً', 'warning');
+        return;
+      }
+
+      const imported = getImportedOverlayBase64();
+      if (!imported) {
+        showToast('يرجى اختيار أو استيراد صورة الخارطة أولاً', 'warning');
+        return;
+      }
+
+      showToast('🤖 جاري التقاط صورة الأساس المرجعية وإجراء المطابقة الثنائية بالذكاء الاصطناعي...', 'info');
+      if (roiHintText) roiHintText.innerHTML = '<span class="text-purple-300 font-bold animate-pulse">⏳ جاري المقارنة البصرية الثنائية واستخراج نقاط التطابق...</span>';
+      if (roiAiMatchBtn) roiAiMatchBtn.disabled = true;
+
+      try {
+        map.fitBounds(targetRoiBounds, { padding: [20, 20] });
+        await new Promise(r => setTimeout(r, 600));
+
+        const basemapBase64 = await captureBasemapPatchBase64(targetRoiBounds);
+        if (!basemapBase64) {
+          throw new Error('تعذر التقاط صورة الأساس المرجعية، يمكنك استخدام زر "تسكين فوري" بدلاً منها');
+        }
+
+        const result = await callGeminiDualVision(
+          apiKey,
+          imported.base64,
+          imported.mime,
+          basemapBase64,
+          'image/jpeg',
+          targetRoiBounds
+        );
+
+        if (result && result.match_found && result.bbox) {
+          const b = result.bbox;
+          if (b.north > b.south && b.east > b.west) {
+            pushCalibHistory('مطابقة ثنائية بالذكاء الاصطناعي (AI Dual-Match)');
+            const newBounds = L.latLngBounds([b.south, b.west], [b.north, b.east]);
+            applyNewOverlayBounds(newBounds, 'مطابقة ثنائية بالذكاء الاصطناعي');
+
+            if (typeof result.rotation_degrees === 'number') {
+              rotationDeg = Math.round(result.rotation_degrees % 360);
+              if (rotationSlider) rotationSlider.value = rotationDeg;
+              if (rotationLabel) rotationLabel.textContent = `${rotationDeg}°`;
+              if (boundRot) boundRot.textContent = `${rotationDeg}°`;
+              applyRotation();
+            }
+
+            showToast(`✅ تمت المطابقة الثنائية بنجاح! الموقع: ${result.location_name || 'معالم متطابقة'} (ثقة: ${result.confidence || 'عالية'})`, 'success');
+            setTimeout(() => { blinkCompare(); }, 800);
+            if (roiHintText) roiHintText.textContent = `✅ مطابقة ناجحة: ${result.notes || result.location_name || 'تم توفيق المعالم'}`;
+          } else {
+            throw new Error('لم تكن الإحداثيات المستخرجة صحيحة هندسياً');
+          }
+        } else {
+          showToast('الذكاء الاصطناعي لم يجد تطابقاً مؤكداً بنسبة 100%، تم تطبيق التسكين المباشر', 'warning');
+          fitOverlayToTargetRoi();
+        }
+      } catch (err) {
+        console.error('Dual vision error:', err);
+        showToast('تنبيه المطابقة الثنائية: ' + (err.message || 'حدث خطأ').substring(0, 80), 'warning');
+        fitOverlayToTargetRoi();
+      } finally {
+        if (roiAiMatchBtn) roiAiMatchBtn.disabled = false;
+      }
+    }
+
+    // Connect ROI Button Listeners
+    if (floatRoiBoxBtn) floatRoiBoxBtn.addEventListener('click', () => startRoiSelection());
+    if (roiRedrawBtn) roiRedrawBtn.addEventListener('click', () => startRoiSelection());
+    if (roiCancelBtn) roiCancelBtn.addEventListener('click', () => cancelRoiSelection());
+    if (roiSnapFitBtn) roiSnapFitBtn.addEventListener('click', () => fitOverlayToTargetRoi());
+    if (roiAiMatchBtn) roiAiMatchBtn.addEventListener('click', () => runDualVisionAiMatch());
+
+    if (aiModalDrawRoiBtn) {
+      aiModalDrawRoiBtn.addEventListener('click', () => {
+        closeAiAlignmentModal();
+        startRoiSelection();
+      });
+    }
+
+    if (aiModalUseViewportBtn) {
+      aiModalUseViewportBtn.addEventListener('click', () => {
+        const curBounds = map.getBounds().pad(-0.1);
+        setTargetRoiBounds(curBounds);
+        showToast('✅ تم تعيين نطاق الشاشة الحالي كمنطقة هدف بنجاح', 'success');
+      });
+    }
+
+    if (aiModalRoiSnapFitBtn) {
+      aiModalRoiSnapFitBtn.addEventListener('click', () => fitOverlayToTargetRoi());
+    }
+
+    if (aiModalRoiDualMatchBtn) {
+      aiModalRoiDualMatchBtn.addEventListener('click', () => {
+        closeAiAlignmentModal();
+        runDualVisionAiMatch();
+      });
+    }
+
     /**
      * Multi-Point Ground Control Points (Multi-GCP) Interactive Calibration Engine
      * Allows placing 2, 3, 4, 5+ pairs of ground control points with Least Squares Affine solution

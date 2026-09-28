@@ -27,7 +27,7 @@
   <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 
   <!-- Custom Styling -->
-  <link rel="stylesheet" href="css/styles.css?v=20260928_06">
+  <link rel="stylesheet" href="css/styles.css?v=20260928_07">
 </head>
 <body class="bg-slate-950 text-slate-100 h-screen w-screen flex flex-col overflow-hidden select-none">
 
@@ -155,6 +155,12 @@
           <span>مطابقة تلقائية</span>
         </button>
 
+        <!-- Target ROI Region Selector Tool -->
+        <button type="button" id="floatRoiBoxBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-bold text-cyan-200 hover:text-white bg-slate-800 hover:bg-cyan-950/70 border border-slate-700 hover:border-cyan-500/60 shadow transition-all flex items-center gap-1.5" title="رسم وتحديد مستطيل منطقة المطابقة المستهدفة على الخارطة الأصلية">
+          <i class="fa-solid fa-vector-square text-cyan-400"></i>
+          <span>تحديد منطقة الهدف</span>
+        </button>
+
         <!-- History Undo / Redo Buttons -->
         <div class="flex items-center gap-1 bg-slate-950/80 p-0.5 rounded-lg border border-slate-700/80">
           <button type="button" id="floatUndoBtn" disabled class="px-2 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1 shadow-sm disabled:opacity-35 disabled:hover:bg-slate-800 disabled:cursor-not-allowed" title="تراجع عن آخر تعديل للمعايرة (Ctrl+Z / Cmd+Z)">
@@ -208,6 +214,48 @@
           <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i>
           <span>استوديو المطابقة</span>
         </button>
+      </div>
+
+      <!-- Floating Target ROI Region Action Bar on Map -->
+      <div id="floatingRoiBar" class="hidden absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2.5 px-3.5 py-2 bg-slate-900/95 backdrop-blur-md border border-cyan-500/70 rounded-2xl shadow-2xl transition-all flex-wrap justify-center">
+        <div class="flex items-center gap-2">
+          <span class="w-7 h-7 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center justify-center text-xs shadow-sm">
+            <i class="fa-solid fa-vector-square"></i>
+          </span>
+          <div class="text-right">
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs font-bold text-cyan-200">منطقة المطابقة المستهدفة (Target ROI)</span>
+              <span id="roiDimsBadge" class="text-[9px] bg-cyan-950 text-cyan-300 border border-cyan-500/40 px-1.5 py-0.2 rounded font-mono font-bold">جاهز للرسم</span>
+            </div>
+            <div id="roiHintText" class="text-[10px] text-amber-300 font-medium leading-tight mt-0.5">انقر واسحب بالماوس فوق الخارطة لتحديد المستطيل</div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-1.5">
+          <!-- 1. Instant Fit & Snap -->
+          <button type="button" id="roiSnapFitBtn" class="hidden px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-lg text-xs shadow transition-all flex items-center gap-1.5" title="تسكين ومطابقة الخريطة المستوردة فوراً داخل هذا المستطيل المحدد">
+            <i class="fa-solid fa-expand text-[10px]"></i>
+            <span>تسكين فوري هنا</span>
+          </button>
+
+          <!-- 2. Dual-Vision AI Match -->
+          <button type="button" id="roiAiMatchBtn" class="hidden px-3 py-1 bg-gradient-to-r from-indigo-600 via-purple-600 to-amber-600 hover:from-indigo-500 hover:to-amber-500 text-white font-bold rounded-lg text-xs shadow transition-all flex items-center gap-1.5" title="مقارنة الصورة المستوردة مع لقطة خارطة الأساس الحقيقية لنفس المنطقة بالذكاء الاصطناعي">
+            <i class="fa-solid fa-wand-magic-sparkles text-amber-300 text-[10px]"></i>
+            <span>مطابقة ثنائية (AI Dual-Match)</span>
+          </button>
+
+          <!-- 3. Redraw -->
+          <button type="button" id="roiRedrawBtn" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg text-xs transition-colors flex items-center gap-1" title="إعادة رسم المستطيل">
+            <i class="fa-solid fa-rotate-left text-[10px]"></i>
+            <span>إعادة رسم</span>
+          </button>
+
+          <!-- 4. Cancel -->
+          <button type="button" id="roiCancelBtn" class="px-2 py-1 bg-slate-800 hover:bg-rose-900/60 text-slate-300 hover:text-rose-200 border border-slate-700 rounded-lg text-xs transition-colors flex items-center gap-1" title="إلغاء وضع منطقة الهدف">
+            <i class="fa-solid fa-xmark text-xs"></i>
+            <span>إلغاء</span>
+          </button>
+        </div>
       </div>
 
       <!-- Floating GCP Calibration Status Bar on Map -->
@@ -1389,12 +1437,61 @@
           </button>
         </div>
 
-        <!-- Section 2: AI Landmark & Real-World Feature Snapping -->
+        <!-- Section 2: Target ROI Guided Alignment (User-Defined Bounding Box) -->
+        <div class="bg-gradient-to-br from-cyan-950/60 via-slate-900 to-slate-900 border border-cyan-500/50 rounded-xl p-3.5 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2 text-xs font-bold text-cyan-200">
+              <i class="fa-solid fa-vector-square text-cyan-400"></i>
+              <span>2. المطابقة الموجهة بتحديد منطقة الهدف على الخارطة (Target ROI Guided Match)</span>
+            </div>
+            <span class="text-[10px] bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full font-mono font-bold">الحل الهندسي الأدق</span>
+          </div>
+          <p class="text-[11px] text-slate-300 leading-relaxed">
+            بدلاً من ترك الذكاء الاصطناعي يخمن عشوائياً في عموم العراق، حدد المنطقة التي تعرف أن الخريطة تقع فيها، ليقوم النظام باقتطاع لقطة فضائية مرجعية حقيقية من خارطة الأساس، ومقارنة الصورتين معاً جنباً إلى جنب لاستخراج نقاط التطابق وتصحيح المقياس والتدوير:
+          </p>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+            <button type="button" id="aiModalDrawRoiBtn" class="py-2.5 px-3 bg-gradient-to-r from-cyan-700 to-blue-700 hover:from-cyan-600 hover:to-blue-600 text-white font-bold rounded-xl shadow flex items-center justify-center gap-2 text-xs transition-all border border-cyan-400/40">
+              <i class="fa-solid fa-draw-polygon text-cyan-300"></i>
+              <span>رسم مستطيل المنطقة على الخارطة بالماوس</span>
+            </button>
+            <button type="button" id="aiModalUseViewportBtn" class="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-cyan-300 hover:text-white border border-slate-700 hover:border-cyan-500/50 font-semibold rounded-xl shadow flex items-center justify-center gap-2 text-xs transition-all">
+              <i class="fa-solid fa-crop-simple"></i>
+              <span>استخدام نطاق الشاشة الحالي كمنطقة هدف</span>
+            </button>
+          </div>
+
+          <!-- Active ROI Status Card within Modal -->
+          <div id="aiModalRoiStatusCard" class="hidden bg-slate-950/90 border border-cyan-500/40 rounded-lg p-2.5 space-y-2">
+            <div class="flex items-center justify-between text-[11px]">
+              <span class="text-cyan-300 font-bold flex items-center gap-1.5">
+                <i class="fa-solid fa-check-circle text-emerald-400"></i>
+                <span>تم تحديد منطقة الهدف:</span>
+              </span>
+              <span id="aiModalRoiDimsText" class="font-mono text-slate-300 text-[10px]">-- كم</span>
+            </div>
+            <div id="aiModalRoiCoordsReadout" class="font-mono text-[9px] text-slate-400 bg-slate-900 p-1.5 rounded border border-slate-800 break-all select-all">
+              N:-- S:-- E:-- W:--
+            </div>
+            <div class="grid grid-cols-2 gap-2 pt-1">
+              <button type="button" id="aiModalRoiSnapFitBtn" class="py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center gap-1 shadow">
+                <i class="fa-solid fa-expand text-[10px]"></i>
+                <span>تسكين فوري داخل المنطقة</span>
+              </button>
+              <button type="button" id="aiModalRoiDualMatchBtn" class="py-1.5 px-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-lg text-[11px] transition-all flex items-center justify-center gap-1 shadow">
+                <i class="fa-solid fa-wand-magic-sparkles text-amber-300 text-[10px]"></i>
+                <span>مطابقة ثنائية بالذكاء الاصطناعي</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 3: AI Landmark & Real-World Feature Snapping -->
         <div class="bg-slate-900/90 border border-emerald-500/40 rounded-xl p-3.5 space-y-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2 text-xs font-bold text-emerald-300">
               <i class="fa-solid fa-earth-americas text-emerald-400"></i>
-              <span>2. مطابقة شكل الخارطة مع ما يماثلها في الواقع (Landmark Snapping)</span>
+              <span>3. مطابقة شكل الخارطة مع ما يماثلها في الواقع (Landmark Snapping)</span>
             </div>
             <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-mono font-bold">21 معلماً جغرافياً</span>
           </div>
@@ -1424,7 +1521,7 @@
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2 text-xs font-bold text-indigo-200">
               <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i>
-              <span>3. المطابقة التلقائية الذكية وأدوات الفحص السلس (Smart Alignment)</span>
+              <span>4. المطابقة التلقائية الذكية وأدوات الفحص السلس (Smart Alignment)</span>
             </div>
             <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-mono font-bold">بديل سلس وفوري لـ GCP</span>
           </div>
@@ -1488,13 +1585,13 @@
        Scripts
        ========================================================================= -->
   <!-- Curated Catalog Data -->
-  <script src="js/catalog-data.js?v=20260928_06"></script>
+  <script src="js/catalog-data.js?v=20260928_07"></script>
 
   <!-- Curated Official Archaeological Sites of Iraq -->
-  <script src="js/archaeology-data.js?v=20260928_06"></script>
+  <script src="js/archaeology-data.js?v=20260928_07"></script>
 
   <!-- Living Atlas Engine Entry -->
-  <script src="js/atlas-core.js?v=20260928_06"></script>
+  <script src="js/atlas-core.js?v=20260928_07"></script>
 
 </body>
 </html>

@@ -427,5 +427,30 @@ body.zen-mode-active #mainWorkspaceWrapper {
   }
 }
 
+/* ==========================================================================
+   Target Region of Interest (ROI Box)
+   ========================================================================== */
+.roi-selection-active,
+.roi-selection-active .leaflet-container,
+.roi-selection-active .leaflet-grab,
+.roi-selection-active .leaflet-pane {
+  cursor: crosshair !important;
+}
+
+.roi-target-rectangle {
+  animation: roiPulse 2s infinite ease-in-out;
+}
+
+@keyframes roiPulse {
+  0%, 100% {
+    stroke-opacity: 0.85;
+    fill-opacity: 0.12;
+  }
+  50% {
+    stroke-opacity: 1;
+    fill-opacity: 0.25;
+  }
+}
+
 
 
