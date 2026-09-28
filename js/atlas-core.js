@@ -218,6 +218,74 @@ document.addEventListener('DOMContentLoaded', () => {
         switchBasemap(btn.getAttribute('data-bm'));
       });
     });
+
+    // =========================================================================
+    // Floating Quick Basemap Bar Hide / Show Toggle Engine
+    // =========================================================================
+    const floatingQuickBasemapBar = document.getElementById('floatingQuickBasemapBar');
+    const hideQuickBasemapBtn = document.getElementById('hideQuickBasemapBtn');
+    const showQuickBasemapBtn = document.getElementById('showQuickBasemapBtn');
+    const headerToggleBasemapBarBtn = document.getElementById('headerToggleBasemapBarBtn');
+
+    function setQuickBasemapBarVisibility(visible) {
+      if (!floatingQuickBasemapBar) return;
+      if (visible) {
+        floatingQuickBasemapBar.classList.remove('hidden');
+        floatingQuickBasemapBar.classList.add('md:flex');
+        if (showQuickBasemapBtn) showQuickBasemapBtn.classList.add('hidden');
+        if (headerToggleBasemapBarBtn) {
+          headerToggleBasemapBarBtn.classList.add('bg-slate-700', 'text-white', 'border-sky-500/50');
+          headerToggleBasemapBarBtn.classList.remove('text-slate-300');
+        }
+        localStorage.setItem('atlas_quick_basemap_hidden', 'false');
+      } else {
+        floatingQuickBasemapBar.classList.add('hidden');
+        floatingQuickBasemapBar.classList.remove('md:flex');
+        if (showQuickBasemapBtn) showQuickBasemapBtn.classList.remove('hidden');
+        if (headerToggleBasemapBarBtn) {
+          headerToggleBasemapBarBtn.classList.remove('bg-slate-700', 'text-white', 'border-sky-500/50');
+          headerToggleBasemapBarBtn.classList.add('text-slate-300');
+        }
+        localStorage.setItem('atlas_quick_basemap_hidden', 'true');
+      }
+    }
+
+    function toggleQuickBasemapBar() {
+      if (!floatingQuickBasemapBar) return;
+      const isHidden = floatingQuickBasemapBar.classList.contains('hidden');
+      setQuickBasemapBarVisibility(isHidden);
+      showToast(isHidden ? 'تم إظهار شريط خرائط الأساس' : 'تم إخفاء شريط خرائط الأساس (اضغط B لإظهاره)', 'info');
+    }
+
+    if (hideQuickBasemapBtn) {
+      hideQuickBasemapBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setQuickBasemapBarVisibility(false);
+        showToast('تم إخفاء شريط خرائط الأساس (يمكنك إعادته بالزر العائم أو الضغط على مفتاح B)', 'info');
+      });
+    }
+
+    if (showQuickBasemapBtn) {
+      showQuickBasemapBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setQuickBasemapBarVisibility(true);
+        showToast('تم إظهار شريط خرائط الأساس', 'info');
+      });
+    }
+
+    if (headerToggleBasemapBarBtn) {
+      headerToggleBasemapBarBtn.addEventListener('click', () => {
+        toggleQuickBasemapBar();
+      });
+    }
+
+    window.toggleQuickBasemapBar = toggleQuickBasemapBar;
+    window.setQuickBasemapBarVisibility = setQuickBasemapBarVisibility;
+
+    // Check saved state (if user previously preferred it hidden)
+    if (localStorage.getItem('atlas_quick_basemap_hidden') === 'true') {
+      setQuickBasemapBarVisibility(false);
+    }
   }
 
   /**
@@ -327,6 +395,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const floatOriginalStatusText = document.getElementById('floatOriginalStatusText');
     const floatBlinkBtn = document.getElementById('floatBlinkBtn');
     const floatFlyToOverlayBtn = document.getElementById('floatFlyToOverlayBtn');
+    const floatHideVisibilityBarBtn = document.getElementById('floatHideVisibilityBarBtn');
+    const floatRestoreVisibilityBarBtn = document.getElementById('floatRestoreVisibilityBarBtn');
 
     const toggleImportedMapBtn = document.getElementById('toggleImportedMapBtn');
     const importedMapEyeIcon = document.getElementById('importedMapEyeIcon');
@@ -3237,7 +3307,7 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       if (!isGcpMatchingActive) return;
 
       // Ignore clicks on UI controls, sidebars, modals, floating bars, or buttons
-      if (e.target.closest('#appSidebar, #aiAlignmentModal, #floatingVisibilityBar, #floatingMeasureBar, #floatingGcpBar, .leaflet-control, button, input, select, textarea, a')) {
+      if (e.target.closest('#appSidebar, #aiAlignmentModal, #floatingVisibilityBar, #floatRestoreVisibilityBarBtn, #floatingQuickBasemapBar, #showQuickBasemapBtn, #floatingRoiBar, #floatingMeasureBar, #floatingGcpBar, .leaflet-control, button, input, select, textarea, a')) {
         return;
       }
 
@@ -4150,6 +4220,23 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
     }
     if (zoomToOverlayBtn) {
       zoomToOverlayBtn.addEventListener('click', flyToCurrentOverlay);
+    }
+
+    if (floatHideVisibilityBarBtn) {
+      floatHideVisibilityBarBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (floatingVisibilityBar) floatingVisibilityBar.classList.add('hidden');
+        if (floatRestoreVisibilityBarBtn) floatRestoreVisibilityBarBtn.classList.remove('hidden');
+        showToast('تم تصغير شريط أدوات المعايرة والمقارنة (انقر على الزر الصغير لاستعادته)', 'info');
+      });
+    }
+
+    if (floatRestoreVisibilityBarBtn) {
+      floatRestoreVisibilityBarBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (floatingVisibilityBar) floatingVisibilityBar.classList.remove('hidden');
+        if (floatRestoreVisibilityBarBtn) floatRestoreVisibilityBarBtn.classList.add('hidden');
+      });
     }
 
     // ==========================================
@@ -5459,6 +5546,7 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       if (scaleLabel) scaleLabel.textContent = '100%';
       isOverlayVisible = false;
       if (floatingVisibilityBar) floatingVisibilityBar.classList.add('hidden');
+      if (floatRestoreVisibilityBarBtn) floatRestoreVisibilityBarBtn.classList.add('hidden');
       if (controlsContainer) controlsContainer.classList.add('hidden');
       if (statusLabel) {
         statusLabel.textContent = 'لم يتم اختيار ملف';
@@ -7393,6 +7481,15 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       if (!isEditable && (e.key === 'z' || e.key === 'Z') && !e.ctrlKey && !e.metaKey && !e.altKey) {
         toggleZenMode();
         return;
+      }
+
+      // Single 'b' or 'B' (or Arabic 'لا') to toggle Quick Basemap Bar
+      if (!isEditable && (e.key === 'b' || e.key === 'B' || e.code === 'KeyB') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (typeof window.toggleQuickBasemapBar === 'function') {
+          e.preventDefault();
+          window.toggleQuickBasemapBar();
+          return;
+        }
       }
 
       // Undo: Ctrl+Z / Cmd+Z (without shift)

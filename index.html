@@ -27,14 +27,14 @@
   <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 
   <!-- Custom Styling -->
-  <link rel="stylesheet" href="css/styles.css?v=20260928_07">
+  <link rel="stylesheet" href="css/styles.css?v=20260928_08">
 </head>
 <body class="bg-slate-950 text-slate-100 h-screen w-screen flex flex-col overflow-hidden select-none">
 
   <!-- =========================================================================
        Top Application Header
        ========================================================================= -->
-  <header class="h-14 glass-header z-30 px-4 flex items-center justify-between gap-4 shrink-0 shadow-md">
+  <header id="appHeader" class="h-14 glass-header z-30 px-4 flex items-center justify-between gap-4 shrink-0 shadow-md">
     <!-- Brand / Title -->
     <div class="flex items-center gap-3">
       <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-700 to-sky-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/25">
@@ -87,6 +87,12 @@
       <button id="screenshotBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700/80 text-xs font-medium text-slate-200 flex items-center gap-1.5 transition-colors" title="تصدير لقطة للخريطة">
         <i class="fa-solid fa-camera text-amber-400"></i>
         <span class="hidden sm:inline">تصدير</span>
+      </button>
+
+      <!-- Toggle Quick Basemap Bar -->
+      <button id="headerToggleBasemapBarBtn" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700/80 text-xs font-medium text-slate-300 hover:text-white flex items-center gap-1.5 transition-colors" title="إظهار / إخفاء شريط خرائط الأساس السريع على الخارطة (اختصار B)">
+        <i class="fa-solid fa-layer-group text-sky-400"></i>
+        <span class="hidden xl:inline">خرائط الأساس</span>
       </button>
 
       <!-- Toggle Zen / Fullscreen Mode (Hide Top Bars & Menus) -->
@@ -214,7 +220,18 @@
           <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i>
           <span>استوديو المطابقة</span>
         </button>
+
+        <!-- Minimize Floating Bar -->
+        <button type="button" id="floatHideVisibilityBarBtn" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-xs transition-colors flex items-center justify-center cursor-pointer border border-slate-700/60" title="تصغير شريط أدوات المعايرة">
+          <i class="fa-solid fa-chevron-up text-[10px]"></i>
+        </button>
       </div>
+
+      <!-- Compact Restore Button for Visibility Bar -->
+      <button type="button" id="floatRestoreVisibilityBarBtn" class="hidden absolute top-3 left-3 z-20 h-8 px-2.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700/80 shadow-2xl text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1.5 transition-all text-xs cursor-pointer group" title="إظهار أدوات المعايرة والمقارنة">
+        <i class="fa-solid fa-sliders text-emerald-400 group-hover:scale-110 transition-transform"></i>
+        <span class="text-[11px] font-medium text-slate-300 group-hover:text-white">أدوات المعايرة</span>
+      </button>
 
       <!-- Floating Target ROI Region Action Bar on Map -->
       <div id="floatingRoiBar" class="hidden absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2.5 px-3.5 py-2 bg-slate-900/95 backdrop-blur-md border border-cyan-500/70 rounded-2xl shadow-2xl transition-all flex-wrap justify-center">
@@ -324,7 +341,7 @@
       </div>
 
       <!-- Floating Quick Basemap Selector Bar on Map -->
-      <div class="absolute top-3 right-3 z-20 hidden md:flex items-center gap-1 p-1 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl shadow-2xl">
+      <div id="floatingQuickBasemapBar" class="absolute top-3 right-3 z-20 hidden md:flex items-center gap-1 p-1 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl shadow-2xl transition-all duration-200">
         <button class="quick-basemap-btn px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-1.5" data-bm="dark-gray">
           <i class="fa-solid fa-moon text-blue-300"></i>
           <span>داكنة</span>
@@ -345,7 +362,20 @@
           <i class="fa-solid fa-mountain text-purple-400"></i>
           <span>طبوغرافية</span>
         </button>
+
+        <!-- Divider & Close/Hide Button -->
+        <div class="h-4 w-px bg-slate-700/70 mx-0.5"></div>
+        <button type="button" id="hideQuickBasemapBtn" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-300 hover:bg-slate-800 text-xs transition-colors flex items-center justify-center cursor-pointer" title="إخفاء شريط خرائط الأساس السريع (أو اضغط زر B)">
+          <i class="fa-solid fa-eye-slash text-[11px]"></i>
+        </button>
       </div>
+
+      <!-- Compact Floating Show/Expand Button (Visible when the quick bar is hidden) -->
+      <button type="button" id="showQuickBasemapBtn" class="hidden absolute top-3 right-3 z-20 h-8 px-2.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700/80 shadow-2xl text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1.5 transition-all text-xs cursor-pointer group" title="إظهار شريط خرائط الأساس السريع (اختصار B)">
+        <i class="fa-solid fa-layer-group text-sky-400 group-hover:scale-110 transition-transform"></i>
+        <span class="text-[11px] font-medium text-slate-300 group-hover:text-white">خرائط الأساس</span>
+        <i class="fa-solid fa-chevron-down text-[9px] text-slate-400 group-hover:translate-y-0.5 transition-transform"></i>
+      </button>
 
       <!-- Bottom Status Bar -->
       <div class="absolute bottom-2 left-2 z-20 pointer-events-none hidden md:flex items-center gap-3 px-3 py-1.5 rounded-lg bg-slate-900/85 backdrop-blur border border-slate-800 text-[11px] text-slate-400 font-mono shadow-lg">
@@ -1585,13 +1615,13 @@
        Scripts
        ========================================================================= -->
   <!-- Curated Catalog Data -->
-  <script src="js/catalog-data.js?v=20260928_07"></script>
+  <script src="js/catalog-data.js?v=20260928_08"></script>
 
   <!-- Curated Official Archaeological Sites of Iraq -->
-  <script src="js/archaeology-data.js?v=20260928_07"></script>
+  <script src="js/archaeology-data.js?v=20260928_08"></script>
 
   <!-- Living Atlas Engine Entry -->
-  <script src="js/atlas-core.js?v=20260928_07"></script>
+  <script src="js/atlas-core.js?v=20260928_08"></script>
 
 </body>
 </html>

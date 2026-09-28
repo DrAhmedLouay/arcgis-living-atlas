@@ -404,7 +404,8 @@ html, body {
 /* ==========================================================================
    Zen Mode / Fullscreen Viewport Mode (Hiding Top Bars & Menus)
    ========================================================================== */
-body.zen-mode-active #appHeader {
+body.zen-mode-active #appHeader,
+body.zen-mode-active header {
   display: none !important;
 }
 
@@ -413,9 +414,24 @@ body.zen-mode-active #mainWorkspaceWrapper {
   max-height: 100vh !important;
 }
 
+body.zen-mode-active #floatingQuickBasemapBar {
+  opacity: 0.15;
+  transition: opacity 0.25s ease-in-out;
+}
+body.zen-mode-active #floatingQuickBasemapBar:hover {
+  opacity: 1;
+}
+
 /* Subtle glow and pulse for restore zen mode button */
 #restoreZenModeBtn {
   animation: restoreBtnPulse 2.5s infinite ease-in-out;
+}
+
+/* Smooth transitions for floating map bars */
+#floatingQuickBasemapBar,
+#showQuickBasemapBtn,
+#floatingVisibilityBar {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes restoreBtnPulse {
