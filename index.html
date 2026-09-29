@@ -27,7 +27,7 @@
   <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 
   <!-- Custom Styling -->
-  <link rel="stylesheet" href="css/styles.css?v=20260928_08">
+  <link rel="stylesheet" href="css/styles.css?v=20260929_01">
 </head>
 <body class="bg-slate-950 text-slate-100 h-screen w-screen flex flex-col overflow-hidden select-none">
 
@@ -179,6 +179,12 @@
           </button>
         </div>
 
+        <!-- Reset Rotation to True North 0° -->
+        <button type="button" id="floatResetRotationBtn" class="px-2 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1 shadow-sm" title="تصفير التدوير وضبط اتجاه الشمال 0° (إلغاء أي انحراف مشوه)">
+          <i class="fa-solid fa-compass text-sky-400 text-[11px]"></i>
+          <span>شمال 0°</span>
+        </button>
+
         <!-- 2. Interactive Swipe Tool -->
         <button type="button" id="floatSwipeBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-sky-200 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1.5 shadow-sm" title="تفعيل شريط المسح والمقارنة التفاعلي">
           <i class="fa-solid fa-arrows-left-right text-sky-400"></i>
@@ -261,7 +267,13 @@
             <span>مطابقة ثنائية (AI Dual-Match)</span>
           </button>
 
-          <!-- 3. Redraw -->
+          <!-- 3. Photogrammetric Pixel NCC Match -->
+          <button type="button" id="roiPhotogrammetryBtn" class="hidden px-3 py-1 bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-600 hover:to-emerald-600 text-white font-bold rounded-lg text-xs shadow transition-all flex items-center gap-1.5" title="مطابقة فوتوغرامترية مباشرة بتشابه مصفوفات البكسلات وتدرجات المعالم (Normalized Cross-Correlation NCC) بدون ذكاء اصطناعي وباتجاه الشمال 0°">
+            <i class="fa-solid fa-shapes text-emerald-300 text-[10px]"></i>
+            <span>مطابقة فوتوغرامترية (NCC)</span>
+          </button>
+
+          <!-- 4. Redraw -->
           <button type="button" id="roiRedrawBtn" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg text-xs transition-colors flex items-center gap-1" title="إعادة رسم المستطيل">
             <i class="fa-solid fa-rotate-left text-[10px]"></i>
             <span>إعادة رسم</span>
@@ -1503,14 +1515,18 @@
             <div id="aiModalRoiCoordsReadout" class="font-mono text-[9px] text-slate-400 bg-slate-900 p-1.5 rounded border border-slate-800 break-all select-all">
               N:-- S:-- E:-- W:--
             </div>
-            <div class="grid grid-cols-2 gap-2 pt-1">
-              <button type="button" id="aiModalRoiSnapFitBtn" class="py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center gap-1 shadow">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+              <button type="button" id="aiModalRoiSnapFitBtn" class="py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center gap-1 shadow" title="تسكين مباشر بنسبة 100% داخل المستطيل">
                 <i class="fa-solid fa-expand text-[10px]"></i>
-                <span>تسكين فوري داخل المنطقة</span>
+                <span>تسكين فوري</span>
               </button>
-              <button type="button" id="aiModalRoiDualMatchBtn" class="py-1.5 px-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-lg text-[11px] transition-all flex items-center justify-center gap-1 shadow">
+              <button type="button" id="aiModalRoiPhotogrammetryBtn" class="py-1.5 px-2 bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-600 hover:to-emerald-600 text-white font-bold rounded-lg text-[11px] transition-all flex items-center justify-center gap-1 shadow" title="مطابقة فوتوغرامترية مباشرة عبر تشابه مصفوفات البكسلات وتدرجات المعالم (NCC) باتجاه الشمال 0°">
+                <i class="fa-solid fa-shapes text-emerald-300 text-[10px]"></i>
+                <span>فوتوغرامتري (NCC)</span>
+              </button>
+              <button type="button" id="aiModalRoiDualMatchBtn" class="py-1.5 px-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-lg text-[11px] transition-all flex items-center justify-center gap-1 shadow" title="مطابقة بصرية ثنائية بالذكاء الاصطناعي مع لقطة الأساس">
                 <i class="fa-solid fa-wand-magic-sparkles text-amber-300 text-[10px]"></i>
-                <span>مطابقة ثنائية بالذكاء الاصطناعي</span>
+                <span>مطابقة (Gemini)</span>
               </button>
             </div>
           </div>
@@ -1615,13 +1631,13 @@
        Scripts
        ========================================================================= -->
   <!-- Curated Catalog Data -->
-  <script src="js/catalog-data.js?v=20260928_08"></script>
+  <script src="js/catalog-data.js?v=20260929_01"></script>
 
   <!-- Curated Official Archaeological Sites of Iraq -->
-  <script src="js/archaeology-data.js?v=20260928_08"></script>
+  <script src="js/archaeology-data.js?v=20260929_01"></script>
 
   <!-- Living Atlas Engine Entry -->
-  <script src="js/atlas-core.js?v=20260928_08"></script>
+  <script src="js/atlas-core.js?v=20260929_01"></script>
 
 </body>
 </html>

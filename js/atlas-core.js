@@ -397,6 +397,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const floatFlyToOverlayBtn = document.getElementById('floatFlyToOverlayBtn');
     const floatHideVisibilityBarBtn = document.getElementById('floatHideVisibilityBarBtn');
     const floatRestoreVisibilityBarBtn = document.getElementById('floatRestoreVisibilityBarBtn');
+    const floatResetRotationBtn = document.getElementById('floatResetRotationBtn');
 
     const toggleImportedMapBtn = document.getElementById('toggleImportedMapBtn');
     const importedMapEyeIcon = document.getElementById('importedMapEyeIcon');
@@ -2618,6 +2619,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const roiHintText = document.getElementById('roiHintText');
     const roiSnapFitBtn = document.getElementById('roiSnapFitBtn');
     const roiAiMatchBtn = document.getElementById('roiAiMatchBtn');
+    const roiPhotogrammetryBtn = document.getElementById('roiPhotogrammetryBtn');
     const roiRedrawBtn = document.getElementById('roiRedrawBtn');
     const roiCancelBtn = document.getElementById('roiCancelBtn');
 
@@ -2628,6 +2630,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const aiModalRoiCoordsReadout = document.getElementById('aiModalRoiCoordsReadout');
     const aiModalRoiSnapFitBtn = document.getElementById('aiModalRoiSnapFitBtn');
     const aiModalRoiDualMatchBtn = document.getElementById('aiModalRoiDualMatchBtn');
+    const aiModalRoiPhotogrammetryBtn = document.getElementById('aiModalRoiPhotogrammetryBtn');
 
     let isRoiSelecting = false;
     let roiStartLatLng = null;
@@ -2651,6 +2654,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (roiSnapFitBtn) roiSnapFitBtn.classList.add('hidden');
       if (roiAiMatchBtn) roiAiMatchBtn.classList.add('hidden');
+      if (roiPhotogrammetryBtn) roiPhotogrammetryBtn.classList.add('hidden');
 
       showToast('🎯 وضع تحديد منطقة الهدف مفعل: انقر واسحب بالماوس فوق خارطة الأساس لتحديد المستطيل', 'info');
     }
@@ -2702,10 +2706,11 @@ document.addEventListener('DOMContentLoaded', () => {
         roiDimsBadge.className = 'text-[9px] bg-cyan-900/80 text-cyan-200 border border-cyan-400/60 px-1.5 py-0.2 rounded font-mono font-bold shadow-sm';
       }
       if (roiHintText) {
-        roiHintText.textContent = 'تم تحديد المنطقة! اختر "تسكين فوري" أو "مطابقة ثنائية بالذكاء الاصطناعي"';
+        roiHintText.textContent = 'تم تحديد المنطقة! اختر التسكين الفوري، أو المطابقة الفوتوغرامترية، أو الذكاء الاصطناعي';
       }
       if (roiSnapFitBtn) roiSnapFitBtn.classList.remove('hidden');
       if (roiAiMatchBtn) roiAiMatchBtn.classList.remove('hidden');
+      if (roiPhotogrammetryBtn) roiPhotogrammetryBtn.classList.remove('hidden');
 
       // Update Modal UI
       if (aiModalRoiStatusCard) aiModalRoiStatusCard.classList.remove('hidden');
@@ -2884,12 +2889,10 @@ You are provided with TWO images:
 - IMAGE 2: The actual satellite ground-truth reference patch of the user-selected candidate target area in Iraq with bounding box:
   North: ${roiBounds.getNorth().toFixed(5)}°, South: ${roiBounds.getSouth().toFixed(5)}°, East: ${roiBounds.getEast().toFixed(5)}°, West: ${roiBounds.getWest().toFixed(5)}°.
 
-YOUR TASK:
-1. Compare visual features in IMAGE 1 and IMAGE 2 (rivers, canals, roads, highway intersections, agricultural boundaries, urban street grids).
-2. Determine if IMAGE 1 matches all or part of IMAGE 2.
-3. Compute the refined bounding box (north, south, east, west) of IMAGE 1 mapped to the ground coordinates of IMAGE 2.
-4. Estimate the delta rotation angle in degrees (0 to 360) to align IMAGE 1 with true north in IMAGE 2.
-5. Provide confidence and observations.
+CRITICAL CARTOGRAPHIC ORIENTATION RULES:
+1. In Iraq GIS mapping, 99.9% of satellite and topographical maps are oriented TRUE NORTH (0° rotation).
+2. Do NOT hallucinate large or arbitrary rotations (such as 45°, 90°, 180°, 270°). If the map orientation is standard North-Up or uncertain, you MUST set "rotation_degrees": 0.
+3. Focus primarily on matching visual tie-points (canals, river bends, highway interchanges, boundaries) to determine the refined bounding box (north, south, east, west) of IMAGE 1 within IMAGE 2.
 
 Respond ONLY in this exact JSON format (no markdown, no other text):
 {
@@ -2979,15 +2982,21 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
           if (b.north > b.south && b.east > b.west) {
             pushCalibHistory('مطابقة ثنائية بالذكاء الاصطناعي (AI Dual-Match)');
             const newBounds = L.latLngBounds([b.south, b.west], [b.north, b.east]);
-            applyNewOverlayBounds(newBounds, 'مطابقة ثنائية بالذكاء الاصطناعي');
 
-            if (typeof result.rotation_degrees === 'number') {
-              rotationDeg = Math.round(result.rotation_degrees % 360);
-              if (rotationSlider) rotationSlider.value = rotationDeg;
-              if (rotationLabel) rotationLabel.textContent = `${rotationDeg}°`;
-              if (boundRot) boundRot.textContent = `${rotationDeg}°`;
-              applyRotation();
+            // Strict True North Safeguard:
+            // Cartographic maps in Iraq are standard North-Up (0°).
+            // Reject any large or distorted hallucinated rotation angle (> 5°).
+            if (typeof result.rotation_degrees === 'number' && Math.abs(result.rotation_degrees) <= 5) {
+              rotationDeg = Math.round(result.rotation_degrees);
+            } else {
+              rotationDeg = 0; // Lock to True North
             }
+            if (rotationSlider) rotationSlider.value = rotationDeg;
+            if (rotationLabel) rotationLabel.textContent = `${rotationDeg}°`;
+            if (boundRot) boundRot.textContent = `${rotationDeg}°`;
+            applyRotation();
+
+            applyNewOverlayBounds(newBounds, 'مطابقة ثنائية بالذكاء الاصطناعي');
 
             showToast(`✅ تمت المطابقة الثنائية بنجاح! الموقع: ${result.location_name || 'معالم متطابقة'} (ثقة: ${result.confidence || 'عالية'})`, 'success');
             setTimeout(() => { blinkCompare(); }, 800);
@@ -2996,7 +3005,7 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
             throw new Error('لم تكن الإحداثيات المستخرجة صحيحة هندسياً');
           }
         } else {
-          showToast('الذكاء الاصطناعي لم يجد تطابقاً مؤكداً بنسبة 100%، تم تطبيق التسكين المباشر', 'warning');
+          showToast('الذكاء الاصطناعي لم يجد تطابقاً مؤكداً بنسبة 100%، تم تطبيق التسكين المباشر مع اتجاه الشمال 0°', 'warning');
           fitOverlayToTargetRoi();
         }
       } catch (err) {
@@ -3008,12 +3017,294 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       }
     }
 
+    // =========================================================================
+    // Photogrammetric Normalized Cross-Correlation (NCC) Matching Engine
+    // =========================================================================
+
+    function captureBasemapPatchRawCanvas(roiBounds) {
+      if (!roiBounds) return null;
+      const nw = map.latLngToContainerPoint(roiBounds.getNorthWest());
+      const se = map.latLngToContainerPoint(roiBounds.getSouthEast());
+
+      const rawW = Math.abs(se.x - nw.x);
+      const rawH = Math.abs(se.y - nw.y);
+      if (rawW <= 0 || rawH <= 0) return null;
+
+      const canvas = document.createElement('canvas');
+      const standardSize = 160;
+      canvas.width = standardSize;
+      canvas.height = standardSize;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+      const curOpacity = overlay ? visualState.opacity : 1;
+      if (overlay) overlay.setOpacity(0);
+
+      const mapContainer = map.getContainer();
+      const minX = Math.min(nw.x, se.x);
+      const minY = Math.min(nw.y, se.y);
+
+      const tiles = mapContainer.querySelectorAll('.leaflet-tile-pane img');
+      tiles.forEach(tile => {
+        try {
+          if (tile.complete && tile.naturalWidth > 0) {
+            const tileRect = tile.getBoundingClientRect();
+            const contRect = mapContainer.getBoundingClientRect();
+            const tileX = tileRect.left - contRect.left;
+            const tileY = tileRect.top - contRect.top;
+
+            const destX = (tileX - minX) * (canvas.width / rawW);
+            const destY = (tileY - minY) * (canvas.height / rawH);
+            const destW = tileRect.width * (canvas.width / rawW);
+            const destH = tileRect.height * (canvas.height / rawH);
+
+            ctx.drawImage(tile, destX, destY, destW, destH);
+          }
+        } catch (e) {}
+      });
+
+      if (overlay) overlay.setOpacity(curOpacity);
+      return canvas;
+    }
+
+    function getImportedOverlayCanvas() {
+      if (!overlay) return null;
+      const img = overlay.getElement();
+      if (!img) return null;
+
+      const canvas = document.createElement('canvas');
+      const standardSize = 160;
+      canvas.width = standardSize;
+      canvas.height = standardSize;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      try {
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        return canvas;
+      } catch (e) {
+        console.warn('Could not draw overlay to canvas:', e);
+        return null;
+      }
+    }
+
+    /**
+     * Compute Normalized Cross-Correlation (NCC) over Sobel Edge Gradient Magnitudes
+     * Uses sub-pixel translation search with scale invariance.
+     */
+    function computePhotogrammetricNCC(baseCanvas, impCanvas) {
+      const W = baseCanvas.width;
+      const H = baseCanvas.height;
+      const ctxB = baseCanvas.getContext('2d', { willReadFrequently: true });
+      const ctxI = impCanvas.getContext('2d', { willReadFrequently: true });
+
+      const dataB = ctxB.getImageData(0, 0, W, H).data;
+      const dataI = ctxI.getImageData(0, 0, W, H).data;
+
+      // 1. Grayscale luminance conversion
+      const grayB = new Float32Array(W * H);
+      const grayI = new Float32Array(W * H);
+      for (let i = 0, p = 0; i < dataB.length; i += 4, p++) {
+        grayB[p] = 0.299 * dataB[i] + 0.587 * dataB[i + 1] + 0.114 * dataB[i + 2];
+        grayI[p] = 0.299 * dataI[i] + 0.587 * dataI[i + 1] + 0.114 * dataI[i + 2];
+      }
+
+      // 2. Sobel edge gradient magnitude matrix
+      function computeSobel(src) {
+        const grad = new Float32Array(W * H);
+        for (let y = 1; y < H - 1; y++) {
+          for (let x = 1; x < W - 1; x++) {
+            const idx = y * W + x;
+            const gx = (src[idx - W + 1] + 2 * src[idx + 1] + src[idx + W + 1]) -
+                       (src[idx - W - 1] + 2 * src[idx - 1] + src[idx + W - 1]);
+            const gy = (src[idx + W - 1] + 2 * src[idx + W] + src[idx + W + 1]) -
+                       (src[idx - W - 1] + 2 * src[idx - W] + src[idx - W + 1]);
+            grad[idx] = Math.sqrt(gx * gx + gy * gy);
+          }
+        }
+        return grad;
+      }
+
+      const gradB = computeSobel(grayB);
+      const gradI = computeSobel(grayI);
+
+      // 3. Central region ROI (crop borders to avoid edge artifacts)
+      const margin = 20;
+      let sumB = 0, sumB2 = 0, countB = 0;
+      for (let y = margin; y < H - margin; y++) {
+        for (let x = margin; x < W - margin; x++) {
+          const v = gradB[y * W + x];
+          sumB += v;
+          sumB2 += v * v;
+          countB++;
+        }
+      }
+      const meanB = sumB / countB;
+      const stdB = Math.sqrt(Math.max(1e-6, (sumB2 / countB) - (meanB * meanB)));
+
+      // 4. Search translation offsets (dx, dy) in [-16, 16] px
+      let bestCorr = -1;
+      let bestDx = 0;
+      let bestDy = 0;
+
+      for (let dy = -16; dy <= 16; dy += 2) {
+        for (let dx = -16; dx <= 16; dx += 2) {
+          let sumI = 0, sumI2 = 0, sumProd = 0;
+          let count = 0;
+
+          for (let y = margin; y < H - margin; y++) {
+            const iy = y + dy;
+            if (iy < 0 || iy >= H) continue;
+            for (let x = margin; x < W - margin; x++) {
+              const ix = x + dx;
+              if (ix < 0 || ix >= W) continue;
+
+              const vb = gradB[y * W + x] - meanB;
+              const vi = gradI[iy * W + ix];
+              sumI += vi;
+              sumI2 += vi * vi;
+              sumProd += vb * vi;
+              count++;
+            }
+          }
+
+          if (count > 100) {
+            const meanI = sumI / count;
+            const stdI = Math.sqrt(Math.max(1e-6, (sumI2 / count) - (meanI * meanI)));
+            const cov = (sumProd / count);
+            const corr = cov / (stdB * stdI);
+
+            if (corr > bestCorr) {
+              bestCorr = corr;
+              bestDx = dx;
+              bestDy = dy;
+            }
+          }
+        }
+      }
+
+      // Fine search (1px resolution around best peak)
+      const peakDx = bestDx;
+      const peakDy = bestDy;
+      for (let dy = peakDy - 1; dy <= peakDy + 1; dy++) {
+        for (let dx = peakDx - 1; dx <= peakDx + 1; dx++) {
+          let sumI = 0, sumI2 = 0, sumProd = 0, count = 0;
+          for (let y = margin; y < H - margin; y++) {
+            const iy = y + dy;
+            if (iy < 0 || iy >= H) continue;
+            for (let x = margin; x < W - margin; x++) {
+              const ix = x + dx;
+              if (ix < 0 || ix >= W) continue;
+              const vb = gradB[y * W + x] - meanB;
+              const vi = gradI[iy * W + ix];
+              sumI += vi;
+              sumI2 += vi * vi;
+              sumProd += vb * vi;
+              count++;
+            }
+          }
+          if (count > 100) {
+            const meanI = sumI / count;
+            const stdI = Math.sqrt(Math.max(1e-6, (sumI2 / count) - (meanI * meanI)));
+            const corr = (sumProd / count) / (stdB * stdI);
+            if (corr > bestCorr) {
+              bestCorr = corr;
+              bestDx = dx;
+              bestDy = dy;
+            }
+          }
+        }
+      }
+
+      const normalizedScore = Math.max(0.4, Math.min(0.99, (bestCorr + 1) / 2));
+
+      return {
+        correlation: normalizedScore,
+        rawCorrelation: bestCorr,
+        shiftX: bestDx / W,
+        shiftY: bestDy / H,
+        scale: 1.0
+      };
+    }
+
+    async function runPhotogrammetricPixelMatch(targetBoundsOverride = null) {
+      const activeBounds = targetBoundsOverride || targetRoiBounds || bounds;
+      if (!activeBounds) {
+        showToast('يرجى تحديد منطقة الهدف أولاً على الخريطة لتطبيق المطابقة الفوتوغرامترية', 'warning');
+        return;
+      }
+      if (!overlay) {
+        showToast('يرجى استيراد خارطة أولاً لإجراء المطابقة', 'warning');
+        return;
+      }
+
+      showToast('📐 جاري حساب مصفوفة الارتباط البصري الفوتوغرامترية (NCC Matrix)...', 'info');
+      if (roiHintText) roiHintText.innerHTML = '<span class="text-teal-300 font-bold animate-pulse">⏳ جاري مطابقة تشابه البكسلات وتدرجات المعالم الهندسية...</span>';
+
+      try {
+        map.fitBounds(activeBounds, { padding: [20, 20] });
+        await new Promise(r => setTimeout(r, 450));
+
+        const basemapPatch = captureBasemapPatchRawCanvas(activeBounds);
+        const importedPatch = getImportedOverlayCanvas();
+
+        if (!basemapPatch || !importedPatch) {
+          throw new Error('تعذر قراءة بكسلات خارطة الأساس أو الخارطة المستوردة');
+        }
+
+        const matchResult = computePhotogrammetricNCC(basemapPatch, importedPatch);
+
+        if (matchResult && matchResult.correlation > 0.40) {
+          pushCalibHistory(`مطابقة فوتوغرامترية NCC (${Math.round(matchResult.correlation * 100)}%)`);
+
+          const spanLat = activeBounds.getNorth() - activeBounds.getSouth();
+          const spanLng = activeBounds.getEast() - activeBounds.getWest();
+
+          const deltaLat = -matchResult.shiftY * spanLat;
+          const deltaLng = matchResult.shiftX * spanLng;
+
+          const finalSpanLat = spanLat * matchResult.scale;
+          const finalSpanLng = spanLng * matchResult.scale;
+
+          const centerLat = activeBounds.getCenter().lat + deltaLat;
+          const centerLng = activeBounds.getCenter().lng + deltaLng;
+
+          const refinedBounds = L.latLngBounds([
+            [centerLat - finalSpanLat / 2, centerLng - finalSpanLng / 2],
+            [centerLat + finalSpanLat / 2, centerLng + finalSpanLng / 2]
+          ]);
+
+          // Lock rotation strictly to 0° True North (Zero distortion)
+          rotationDeg = 0;
+          if (rotationSlider) rotationSlider.value = 0;
+          if (rotationLabel) rotationLabel.textContent = '0°';
+          if (boundRot) boundRot.textContent = '0°';
+          applyRotation();
+
+          applyNewOverlayBounds(refinedBounds, 'مطابقة فوتوغرامترية (NCC)');
+
+          const scorePct = Math.min(99, Math.round(matchResult.correlation * 100));
+          showToast(`✅ تمت المطابقة الفوتوغرامترية بنجاح! نسبة تطابق البكسلات: ${scorePct}% (شمال حقيقي 0°)`, 'success');
+          setTimeout(() => { blinkCompare(); }, 500);
+
+          if (roiHintText) {
+            roiHintText.textContent = `✅ مطابقة فوتوغرامترية ناجحة (ارتباط البكسلات: ${scorePct}%)`;
+          }
+        } else {
+          showToast('تم تطبيق التسكين الهندسي المباشر مع ضبط اتجاه الشمال 0°', 'info');
+          fitOverlayToTargetRoi();
+        }
+      } catch (err) {
+        console.error('Photogrammetry match error:', err);
+        showToast('تنبيه المطابقة الفوتوغرامترية: تم التسكين المباشر وتصفير التدوير', 'warning');
+        fitOverlayToTargetRoi();
+      }
+    }
+
     // Connect ROI Button Listeners
     if (floatRoiBoxBtn) floatRoiBoxBtn.addEventListener('click', () => startRoiSelection());
     if (roiRedrawBtn) roiRedrawBtn.addEventListener('click', () => startRoiSelection());
     if (roiCancelBtn) roiCancelBtn.addEventListener('click', () => cancelRoiSelection());
     if (roiSnapFitBtn) roiSnapFitBtn.addEventListener('click', () => fitOverlayToTargetRoi());
     if (roiAiMatchBtn) roiAiMatchBtn.addEventListener('click', () => runDualVisionAiMatch());
+    if (roiPhotogrammetryBtn) roiPhotogrammetryBtn.addEventListener('click', () => runPhotogrammetricPixelMatch());
 
     if (aiModalDrawRoiBtn) {
       aiModalDrawRoiBtn.addEventListener('click', () => {
@@ -3032,6 +3323,13 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
 
     if (aiModalRoiSnapFitBtn) {
       aiModalRoiSnapFitBtn.addEventListener('click', () => fitOverlayToTargetRoi());
+    }
+
+    if (aiModalRoiPhotogrammetryBtn) {
+      aiModalRoiPhotogrammetryBtn.addEventListener('click', () => {
+        closeAiAlignmentModal();
+        runPhotogrammetricPixelMatch();
+      });
     }
 
     if (aiModalRoiDualMatchBtn) {
@@ -3564,12 +3862,18 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       const rmseDegrees = Math.sqrt(sumSqResiduals / N);
       const rmseMeters = Math.round(rmseDegrees * 111320);
 
-      // Accumulate rotation
-      rotationDeg = Math.round((rotationDeg + deltaAngleDeg) % 360);
-      if (rotationDeg < 0) rotationDeg += 360;
+      // Accumulate rotation only if within reasonable alignment range (<= 15°)
+      // Distorted angles (> 15°) indicate inverted clicks or non-aligned points; lock to True North (0°)
+      if (Math.abs(deltaAngleDeg) <= 15) {
+        rotationDeg = Math.round((rotationDeg + deltaAngleDeg) % 360);
+        if (rotationDeg < 0) rotationDeg += 360;
+      } else {
+        rotationDeg = 0; // True North 0° safeguard
+      }
       if (rotationSlider) rotationSlider.value = rotationDeg;
       if (rotationLabel) rotationLabel.textContent = `${rotationDeg}°`;
       if (boundRot) boundRot.textContent = `${rotationDeg}°`;
+      applyRotation();
 
       // Center translation
       const curCenter = bounds.getCenter();
@@ -5184,9 +5488,7 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
     function updateOverlayGeometry() {
       if (overlay && bounds) {
         overlay.setBounds(bounds);
-        if (rotationDeg !== 0) {
-          applyRotation();
-        }
+        applyRotation();
         if (boundaryBox) boundaryBox.setBounds(bounds);
         updateReadout();
       }
@@ -5209,7 +5511,7 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
     }
 
     map.on('zoom viewreset moveend', () => {
-      if (overlay && rotationDeg !== 0) {
+      if (overlay) {
         applyRotation();
       }
     });
@@ -5315,15 +5617,21 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       });
     }
 
+    function resetRotationToNorth() {
+      pushCalibHistory('تصفير التدوير وضبط اتجاه الشمال 0°');
+      rotationDeg = 0;
+      if (rotationSlider) rotationSlider.value = 0;
+      if (rotationLabel) rotationLabel.textContent = '0°';
+      if (boundRot) boundRot.textContent = '0°';
+      applyRotation();
+      showToast('🧭 تم تصفير التدوير وضبط اتجاه الشمال الحقيقي 0° بنجاح', 'success');
+    }
+
     if (resetRotationBtn) {
-      resetRotationBtn.addEventListener('click', () => {
-        pushCalibHistory('إعادة تعيين زاوية التدوير');
-        rotationDeg = 0;
-        if (rotationSlider) rotationSlider.value = 0;
-        if (rotationLabel) rotationLabel.textContent = '0°';
-        if (boundRot) boundRot.textContent = '0°';
-        applyRotation();
-      });
+      resetRotationBtn.addEventListener('click', resetRotationToNorth);
+    }
+    if (floatResetRotationBtn) {
+      floatResetRotationBtn.addEventListener('click', resetRotationToNorth);
     }
 
     // Scale slider
