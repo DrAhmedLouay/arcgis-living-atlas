@@ -418,6 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isOverlayDragging = false;
     let dragStartLatLng = null;
     let dragStartBounds = null;
+    let currentOverlayFileName = 'rectified_map';
 
     const toggleImportedMapBtn = document.getElementById('toggleImportedMapBtn');
     const importedMapEyeIcon = document.getElementById('importedMapEyeIcon');
@@ -5387,6 +5388,7 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
     function initCalibrationOverlay(imageSrc, label, customBounds = null) {
       // Clean up previous
       removeOverlay();
+      currentOverlayFileName = label || 'rectified_map';
 
       // Reset rotation and scale state for newly loaded image
       rotationDeg = 0;
@@ -6252,6 +6254,824 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
         showToast('تم تنزيل ملف الإسناد الجغرافي GeoJSON', 'success');
       });
     }
+
+    // =========================================================================
+    // ArcView GIS & GeoTIFF Export Studio Engine (Universal GIS Compatibility)
+    // =========================================================================
+    const gisExportModal = document.getElementById('gisExportModal');
+    const openGisExportModalBtn = document.getElementById('openGisExportModalBtn');
+    const floatGisExportBtn = document.getElementById('floatGisExportBtn');
+    const closeGisExportModalBtn = document.getElementById('closeGisExportModalBtn');
+    const closeGisExportBottomBtn = document.getElementById('closeGisExportBottomBtn');
+
+    const gisExportFileName = document.getElementById('gisExportFileName');
+    const gisExportStatusBadge = document.getElementById('gisExportStatusBadge');
+    const gisExportDims = document.getElementById('gisExportDims');
+    const gisExportRes = document.getElementById('gisExportRes');
+    const gisExportRot = document.getElementById('gisExportRot');
+    const gisExportDefaultCrs = document.getElementById('gisExportDefaultCrs');
+    const gisExportNorth = document.getElementById('gisExportNorth');
+    const gisExportSouth = document.getElementById('gisExportSouth');
+    const gisExportEast = document.getElementById('gisExportEast');
+    const gisExportWest = document.getElementById('gisExportWest');
+
+    const gisExportCrsSelect = document.getElementById('gisExportCrsSelect');
+    const gisExportAlignSelect = document.getElementById('gisExportAlignSelect');
+    const gisExportResSelect = document.getElementById('gisExportResSelect');
+    const gisExportVisualFilters = document.getElementById('gisExportVisualFilters');
+
+    const gisDownloadZipBtn = document.getElementById('gisDownloadZipBtn');
+    const gisDownloadTifBtn = document.getElementById('gisDownloadTifBtn');
+    const gisDownloadTfwBtn = document.getElementById('gisDownloadTfwBtn');
+    const gisDownloadPrjBtn = document.getElementById('gisDownloadPrjBtn');
+    const gisDownloadAuxBtn = document.getElementById('gisDownloadAuxBtn');
+    const gisDownloadPointsBtn = document.getElementById('gisDownloadPointsBtn');
+    const gisDownloadPngBtn = document.getElementById('gisDownloadPngBtn');
+
+    // CRC32 Lookup Table for Zero-Dependency ZIP Generation
+    const CRC32_TABLE = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+      let c = i;
+      for (let k = 0; k < 8; k++) {
+        c = ((c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1));
+      }
+      CRC32_TABLE[i] = c;
+    }
+
+    function calcCrc32(uint8) {
+      let crc = 0xFFFFFFFF;
+      for (let i = 0; i < uint8.length; i++) {
+        crc = CRC32_TABLE[(crc ^ uint8[i]) & 0xFF] ^ (crc >>> 8);
+      }
+      return (crc ^ 0xFFFFFFFF) >>> 0;
+    }
+
+    // Zero-Dependency Standard PKZIP File Generator
+    function createZipArchive(files) {
+      const localHeaders = [];
+      const centralHeaders = [];
+      let currentOffset = 0;
+
+      for (const file of files) {
+        const nameBytes = [];
+        for (let i = 0; i < file.name.length; i++) {
+          nameBytes.push(file.name.charCodeAt(i) & 0xFF);
+        }
+        const dataBytes = file.data instanceof Uint8Array ? file.data : new TextEncoder().encode(file.data);
+        const crc = calcCrc32(dataBytes);
+        const size = dataBytes.length;
+
+        // Local header: 30 bytes + name length + data length
+        const localHeader = new Uint8Array(30 + nameBytes.length + size);
+        const lv = new DataView(localHeader.buffer);
+        lv.setUint32(0, 0x04034B50, true);
+        lv.setUint16(4, 20, true);
+        lv.setUint16(6, 0, true);
+        lv.setUint16(8, 0, true);
+        lv.setUint16(10, 0x4800, true);
+        lv.setUint16(12, 0x5461, true);
+        lv.setUint32(14, crc, true);
+        lv.setUint32(18, size, true);
+        lv.setUint32(22, size, true);
+        lv.setUint16(26, nameBytes.length, true);
+        lv.setUint16(28, 0, true);
+        localHeader.set(nameBytes, 30);
+        localHeader.set(dataBytes, 30 + nameBytes.length);
+
+        localHeaders.push(localHeader);
+
+        // Central header: 46 bytes + name length
+        const centralHeader = new Uint8Array(46 + nameBytes.length);
+        const cv = new DataView(centralHeader.buffer);
+        cv.setUint32(0, 0x02014B50, true);
+        cv.setUint16(4, 20, true);
+        cv.setUint16(6, 20, true);
+        cv.setUint16(8, 0, true);
+        cv.setUint16(10, 0, true);
+        cv.setUint16(12, 0x4800, true);
+        cv.setUint16(14, 0x5461, true);
+        cv.setUint32(16, crc, true);
+        cv.setUint32(20, size, true);
+        cv.setUint32(24, size, true);
+        cv.setUint16(28, nameBytes.length, true);
+        cv.setUint16(30, 0, true);
+        cv.setUint16(32, 0, true);
+        cv.setUint16(34, 0, true);
+        cv.setUint16(36, 0, true);
+        cv.setUint32(38, 0, true);
+        cv.setUint32(42, currentOffset, true);
+        centralHeader.set(nameBytes, 46);
+
+        centralHeaders.push(centralHeader);
+        currentOffset += localHeader.length;
+      }
+
+      const centralDirOffset = currentOffset;
+      let centralDirSize = 0;
+      for (const ch of centralHeaders) centralDirSize += ch.length;
+
+      const eocd = new Uint8Array(22);
+      const ev = new DataView(eocd.buffer);
+      ev.setUint32(0, 0x06054B50, true);
+      ev.setUint16(4, 0, true);
+      ev.setUint16(6, 0, true);
+      ev.setUint16(8, files.length, true);
+      ev.setUint16(10, files.length, true);
+      ev.setUint32(12, centralDirSize, true);
+      ev.setUint32(16, centralDirOffset, true);
+      ev.setUint16(20, 0, true);
+
+      const totalZipSize = centralDirOffset + centralDirSize + 22;
+      const zipBuffer = new Uint8Array(totalZipSize);
+      let ptr = 0;
+      for (const lh of localHeaders) {
+        zipBuffer.set(lh, ptr);
+        ptr += lh.length;
+      }
+      for (const ch of centralHeaders) {
+        zipBuffer.set(ch, ptr);
+        ptr += ch.length;
+      }
+      zipBuffer.set(eocd, ptr);
+
+      return zipBuffer;
+    }
+
+    // Geodesic Transverse Mercator (WGS84 UTM) Forward Projection
+    function latLngToUtm(lat, lng, zone) {
+      const a = 6378137.0;
+      const f = 1 / 298.257223563;
+      const b = a * (1 - f);
+      const e2 = (a * a - b * b) / (a * a);
+      const ep2 = (a * a - b * b) / (b * b);
+      const k0 = 0.9996;
+
+      const latRad = (lat * Math.PI) / 180;
+      const lonRad = (lng * Math.PI) / 180;
+      const lon0 = ((zone * 6 - 183) * Math.PI) / 180;
+      const dLon = lonRad - lon0;
+
+      const sinLat = Math.sin(latRad);
+      const cosLat = Math.cos(latRad);
+      const tanLat = Math.tan(latRad);
+
+      const N = a / Math.sqrt(1 - e2 * sinLat * sinLat);
+      const T = tanLat * tanLat;
+      const C = ep2 * cosLat * cosLat;
+      const A = cosLat * dLon;
+
+      const M = a * (
+        (1 - e2 / 4 - 3 * e2 * e2 / 64 - 5 * e2 * e2 * e2 / 256) * latRad -
+        (3 * e2 / 8 + 3 * e2 * e2 / 32 + 45 * e2 * e2 * e2 / 1024) * Math.sin(2 * latRad) +
+        (15 * e2 * e2 / 256 + 45 * e2 * e2 * e2 / 1024) * Math.sin(4 * latRad) -
+        (35 * e2 * e2 / 3072) * Math.sin(6 * latRad)
+      );
+
+      const x = 500000 + k0 * N * (
+        A +
+        (1 - T + C) * Math.pow(A, 3) / 6 +
+        (5 - 18 * T + T * T + 72 * C - 58 * ep2) * Math.pow(A, 5) / 120
+      );
+
+      const y = k0 * (
+        M +
+        N * tanLat * (
+          A * A / 2 +
+          (5 - T + 9 * C + 4 * C * C) * Math.pow(A, 4) / 24 +
+          (61 - 58 * T + T * T + 600 * C - 330 * ep2) * Math.pow(A, 6) / 720
+        )
+      );
+
+      return { x: x, y: y, zone: zone };
+    }
+
+    // Binary GeoTIFF 1.0 Generator with Embedded Geodesic Directory Tags
+    function createGeoTiffBuffer(width, height, rgbBytes, geodata) {
+      const isProj = !!geodata.isProjected;
+      const epsg = geodata.epsgCode || (isProj ? 32638 : 4326);
+      const crsStr = (geodata.crsName || (isProj ? 'WGS 84 / UTM zone 38N' : 'WGS 84')) + '|';
+
+      const numGeoKeys = 4;
+      const geoKeys = [
+        1, 1, 0, numGeoKeys,
+        1024, 0, 1, isProj ? 1 : 2,
+        1025, 0, 1, 1,
+        1026, 34737, crsStr.length, 0,
+        isProj ? 3072 : 2048, 0, 1, epsg
+      ];
+
+      const numEntries = 14;
+      const headerSize = 8;
+      const ifdSize = 2 + numEntries * 12 + 4;
+      let offset = headerSize + ifdSize;
+
+      const bitsPerSampleOffset = offset;
+      offset += 6;
+      if (offset % 2 !== 0) offset++;
+
+      const modelPixelScaleOffset = offset;
+      offset += 3 * 8;
+
+      const modelTiepointOffset = offset;
+      offset += 6 * 8;
+
+      const geoKeyDirOffset = offset;
+      offset += geoKeys.length * 2;
+      if (offset % 2 !== 0) offset++;
+
+      const geoAsciiOffset = offset;
+      offset += crsStr.length;
+      if (offset % 4 !== 0) offset += (4 - (offset % 4));
+
+      const pixelDataOffset = offset;
+      const totalFileSize = pixelDataOffset + rgbBytes.length;
+
+      const buffer = new ArrayBuffer(totalFileSize);
+      const view = new DataView(buffer);
+      const uint8 = new Uint8Array(buffer);
+
+      view.setUint16(0, 0x4949, true);
+      view.setUint16(2, 42, true);
+      view.setUint32(4, 8, true);
+
+      let p = 8;
+      view.setUint16(p, numEntries, true);
+      p += 2;
+
+      function writeTag(tag, type, count, valOrOffset) {
+        view.setUint16(p, tag, true);
+        view.setUint16(p + 2, type, true);
+        view.setUint32(p + 4, count, true);
+        view.setUint32(p + 8, valOrOffset, true);
+        p += 12;
+      }
+
+      writeTag(256, 4, 1, width);
+      writeTag(257, 4, 1, height);
+      writeTag(258, 3, 3, bitsPerSampleOffset);
+      writeTag(259, 3, 1, 1);
+      writeTag(262, 3, 1, 2);
+      writeTag(273, 4, 1, pixelDataOffset);
+      writeTag(277, 3, 1, 3);
+      writeTag(278, 4, 1, height);
+      writeTag(279, 4, 1, rgbBytes.length);
+      writeTag(284, 3, 1, 1);
+      writeTag(33550, 12, 3, modelPixelScaleOffset);
+      writeTag(33922, 12, 6, modelTiepointOffset);
+      writeTag(34735, 3, geoKeys.length, geoKeyDirOffset);
+      writeTag(34737, 2, crsStr.length, geoAsciiOffset);
+
+      view.setUint32(p, 0, true);
+
+      view.setUint16(bitsPerSampleOffset, 8, true);
+      view.setUint16(bitsPerSampleOffset + 2, 8, true);
+      view.setUint16(bitsPerSampleOffset + 4, 8, true);
+
+      view.setFloat64(modelPixelScaleOffset, geodata.dx, true);
+      view.setFloat64(modelPixelScaleOffset + 8, geodata.dy, true);
+      view.setFloat64(modelPixelScaleOffset + 16, 0.0, true);
+
+      view.setFloat64(modelTiepointOffset, 0.0, true);
+      view.setFloat64(modelTiepointOffset + 8, 0.0, true);
+      view.setFloat64(modelTiepointOffset + 16, 0.0, true);
+      view.setFloat64(modelTiepointOffset + 24, geodata.xTopLeft, true);
+      view.setFloat64(modelTiepointOffset + 32, geodata.yTopLeft, true);
+      view.setFloat64(modelTiepointOffset + 40, 0.0, true);
+
+      for (let i = 0; i < geoKeys.length; i++) {
+        view.setUint16(geoKeyDirOffset + i * 2, geoKeys[i], true);
+      }
+
+      for (let i = 0; i < crsStr.length; i++) {
+        uint8[geoAsciiOffset + i] = crsStr.charCodeAt(i);
+      }
+
+      uint8.set(rgbBytes, pixelDataOffset);
+
+      return buffer;
+    }
+
+    // ArcView GIS 6-Line World File Formatter (.tfw / .pgw)
+    function generateWorldFileText(dx, rotY, rotX, dy, x0, y0, isProjected) {
+      const prec = isProjected ? 6 : 10;
+      const coordPrec = isProjected ? 4 : 8;
+      return [
+        dx.toFixed(prec),
+        rotY.toFixed(prec),
+        rotX.toFixed(prec),
+        (-dy).toFixed(prec),
+        x0.toFixed(coordPrec),
+        y0.toFixed(coordPrec)
+      ].join('\r\n') + '\r\n';
+    }
+
+    // ESRI WKT Projection String Generator (.prj)
+    function generatePrjText(epsgCode) {
+      if (epsgCode === 32638) {
+        return 'PROJCS["WGS_1984_UTM_Zone_38N",GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],PARAMETER["False_Easting",500000.0],PARAMETER["False_Northing",0.0],PARAMETER["Central_Meridian",45.0],PARAMETER["Scale_Factor",0.9996],PARAMETER["Latitude_Of_Origin",0.0],UNIT["Meter",1.0]]';
+      } else if (epsgCode === 32637) {
+        return 'PROJCS["WGS_1984_UTM_Zone_37N",GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],PARAMETER["False_Easting",500000.0],PARAMETER["False_Northing",0.0],PARAMETER["Central_Meridian",39.0],PARAMETER["Scale_Factor",0.9996],PARAMETER["Latitude_Of_Origin",0.0],UNIT["Meter",1.0]]';
+      } else if (epsgCode === 3857) {
+        return 'PROJCS["WGS_1984_Web_Mercator_Auxiliary_Sphere",GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Mercator_Auxiliary_Sphere"],PARAMETER["False_Easting",0.0],PARAMETER["False_Northing",0.0],PARAMETER["Central_Meridian",0.0],PARAMETER["Standard_Parallel_1",0.0],PARAMETER["Auxiliary_Sphere_Type",0.0],UNIT["Meter",1.0]]';
+      } else {
+        return 'GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]';
+      }
+    }
+
+    // ArcGIS Auxiliary XML PAMDataset Formatter (.tif.aux.xml)
+    function generateAuxXmlText(prjWkt, x0, dx, rotY, y0, rotX, dy) {
+      const minX = x0 - dx / 2;
+      const maxY = y0 + dy / 2;
+      return `<PAMDataset>
+  <SRS dataAxisToSRSAxisMapping="1,2">${prjWkt}</SRS>
+  <GeoTransform>${minX.toFixed(8)}, ${dx.toFixed(8)}, ${rotY.toFixed(8)}, ${maxY.toFixed(8)}, ${rotX.toFixed(8)}, ${(-dy).toFixed(8)}</GeoTransform>
+  <Metadata>
+    <MDI key="PyramidResamplingType">NEAREST</MDI>
+    <MDI key="AREA_OR_POINT">Area</MDI>
+    <MDI key="CALIBRATION_SOFTWARE">Iraq Living Atlas GIS Calibration Studio</MDI>
+  </Metadata>
+</PAMDataset>`;
+    }
+
+    // GCP Ground Control Points Table (.points)
+    function generateGcpPointsText(geodata) {
+      let txt = '# ArcGIS Georeferencing & QGIS GCP Table\r\n';
+      txt += '# Format: mapX\tmapY\tsourceX\tsourceY\tenable\r\n';
+      txt += `# Projection: ${geodata.crsName} (${geodata.epsgCode})\r\n`;
+
+      if (gcpPairs && gcpPairs.length > 0) {
+        gcpPairs.forEach((p) => {
+          let mx = p.basePt.lng;
+          let my = p.basePt.lat;
+          if (geodata.isProjected) {
+            const u = latLngToUtm(p.basePt.lat, p.basePt.lng, geodata.utmZone);
+            mx = u.x;
+            my = u.y;
+          }
+          const px = Math.round(((p.imgPt.lng - bounds.getWest()) / (bounds.getEast() - bounds.getWest())) * geodata.width);
+          const py = Math.round(((bounds.getNorth() - p.imgPt.lat) / (bounds.getNorth() - bounds.getSouth())) * geodata.height);
+          txt += `${mx.toFixed(4)}\t${my.toFixed(4)}\t${px}\t${py}\t1\r\n`;
+        });
+      } else {
+        const corners = [
+          { name: 'NW', x: geodata.xMin, y: geodata.yMax, px: 0, py: 0 },
+          { name: 'NE', x: geodata.xMax, y: geodata.yMax, px: geodata.width, py: 0 },
+          { name: 'SE', x: geodata.xMax, y: geodata.yMin, px: geodata.width, py: geodata.height },
+          { name: 'SW', x: geodata.xMin, y: geodata.yMin, px: 0, py: geodata.height }
+        ];
+        corners.forEach(c => {
+          txt += `${c.x.toFixed(4)}\t${c.y.toFixed(4)}\t${c.px}\t${c.py}\t1\t# ${c.name}\r\n`;
+        });
+      }
+      return txt;
+    }
+
+    // Readme Guide Text for ArcView GIS & ArcGIS Users
+    function generateArcViewReadmeText(baseName, crsName, isProjected, dims, res) {
+      return `========================================================================
+ArcView GIS & ArcGIS Rectified Dataset Package
+Generated by: Iraq Living Atlas Studio
+Date: ${new Date().toLocaleString('ar-IQ')} / ${new Date().toISOString()}
+========================================================================
+
+1. DATASET CONTENTS:
+   - ${baseName}.tif          : True GeoTIFF with internal georeferencing tags
+   - ${baseName}.tfw          : ArcView GIS World File (Standard 6-line affine matrix)
+   - ${baseName}.prj          : ESRI Projection definition file (${crsName})
+   - ${baseName}.tif.aux.xml  : ArcGIS Auxiliary Metadata (<PAMDataset>)
+   - ${baseName}.points       : Ground Control Points (ArcGIS / QGIS Georeferencer)
+   - ${baseName}.png          : High-resolution PNG image with transparent collar
+   - ${baseName}.pgw          : World file for the PNG image
+
+2. COORDINATE REFERENCE SYSTEM:
+   - Name : ${crsName}
+   - Type : ${isProjected ? 'Projected (Meters)' : 'Geographic (Degrees)'}
+   - Dims : ${dims} pixels
+   - Res  : ${res} per pixel
+
+3. HOW TO OPEN IN ARCVIEW GIS 3.x:
+   a. Extract all files into your project working directory.
+   b. Keep ${baseName}.tif and ${baseName}.tfw in the same folder with the same name.
+   c. In ArcView GIS 3.x, open a View window.
+   d. Go to menu: View -> Add Theme...
+   e. In the "Data Source Type" dropdown, select "Image Data Source".
+   f. Select "${baseName}.tif" and click OK.
+   g. The rectified map will instantly appear in its exact geographic location!
+
+4. HOW TO OPEN IN ARCGIS PRO / ARCMAP 10.x / QGIS:
+   a. Simply drag and drop ${baseName}.tif into the map canvas.
+   b. The internal GeoTIFF tags and .prj file ensure instantaneous auto-projection.
+========================================================================`;
+    }
+
+    // Render Rectified Raster onto an in-memory Canvas
+    async function renderRectifiedOverlayCanvas() {
+      if (!overlay || !bounds) {
+        throw new Error('لا توجد خارطة مستوردة نشطة للمعايرة والتصدير');
+      }
+
+      const el = overlay.getElement ? overlay.getElement() : overlay._image;
+      let sourceImg = el;
+      if (!sourceImg || !sourceImg.complete || !sourceImg.naturalWidth) {
+        sourceImg = await new Promise((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error('فشل تحميل بيانات صورة الخارطة للتصدير'));
+          img.src = overlay._url;
+        });
+      }
+
+      const naturalW = sourceImg.naturalWidth || 2048;
+      const naturalH = sourceImg.naturalHeight || 2048;
+
+      const crsVal = (gisExportCrsSelect ? gisExportCrsSelect.value : 'EPSG:32638');
+      const alignMode = (gisExportAlignSelect ? gisExportAlignSelect.value : 'north-up');
+      const northUpMode = (alignMode === 'north-up');
+      const resChoice = (gisExportResSelect ? gisExportResSelect.value : 'native');
+      const includeVisualFilters = (gisExportVisualFilters ? gisExportVisualFilters.checked : true);
+
+      let isProjected = true;
+      let utmZone = 38;
+      let epsgCode = 32638;
+      let crsName = 'WGS 84 / UTM zone 38N';
+
+      if (crsVal === 'EPSG:4326') {
+        isProjected = false;
+        epsgCode = 4326;
+        crsName = 'WGS 84';
+      } else if (crsVal === 'EPSG:32637') {
+        isProjected = true;
+        utmZone = 37;
+        epsgCode = 32637;
+        crsName = 'WGS 84 / UTM zone 37N';
+      } else if (crsVal === 'EPSG:3857') {
+        isProjected = true;
+        epsgCode = 3857;
+        crsName = 'WGS 84 / Pseudo-Mercator';
+      } else {
+        isProjected = true;
+        utmZone = 38;
+        epsgCode = 32638;
+        crsName = 'WGS 84 / UTM zone 38N';
+      }
+
+      function toCrs(lat, lng) {
+        if (!isProjected) {
+          return { x: lng, y: lat };
+        }
+        if (epsgCode === 3857) {
+          const x = (lng * 20037508.34) / 180;
+          let y = Math.log(Math.tan(((90 + lat) * Math.PI) / 360)) / (Math.PI / 180);
+          y = (y * 20037508.34) / 180;
+          return { x, y };
+        }
+        return latLngToUtm(lat, lng, utmZone);
+      }
+
+      const cCrs = toCrs(bounds.getCenter().lat, bounds.getCenter().lng);
+      const nwCrs = toCrs(bounds.getNorth(), bounds.getWest());
+      const neCrs = toCrs(bounds.getNorth(), bounds.getEast());
+      const seCrs = toCrs(bounds.getSouth(), bounds.getEast());
+      const swCrs = toCrs(bounds.getSouth(), bounds.getWest());
+
+      const rawSpanX = Math.abs(neCrs.x - nwCrs.x);
+      const rawSpanY = Math.abs(nwCrs.y - swCrs.y);
+
+      const rotRad = (rotationDeg * Math.PI) / 180;
+      const mathRotRad = -rotRad;
+
+      let xMin, xMax, yMin, yMax;
+      let outW, outH;
+      let dx, dy;
+      let xTopLeft, yTopLeft;
+      let rotX = 0, rotY = 0;
+
+      let targetMaxDim = 2048;
+      if (resChoice === 'native') {
+        targetMaxDim = Math.max(naturalW, naturalH);
+      } else if (resChoice === '1024') {
+        targetMaxDim = 1024;
+      } else {
+        targetMaxDim = 2048;
+      }
+
+      if (northUpMode && rotationDeg !== 0) {
+        const corners = [nwCrs, neCrs, seCrs, swCrs];
+        const rotatedCorners = corners.map(pt => {
+          const rx = pt.x - cCrs.x;
+          const ry = pt.y - cCrs.y;
+          return {
+            x: cCrs.x + rx * Math.cos(mathRotRad) - ry * Math.sin(mathRotRad),
+            y: cCrs.y + rx * Math.sin(mathRotRad) + ry * Math.cos(mathRotRad)
+          };
+        });
+
+        xMin = Math.min(...rotatedCorners.map(p => p.x));
+        xMax = Math.max(...rotatedCorners.map(p => p.x));
+        yMin = Math.min(...rotatedCorners.map(p => p.y));
+        yMax = Math.max(...rotatedCorners.map(p => p.y));
+
+        const spanX = xMax - xMin;
+        const spanY = yMax - yMin;
+        const aspect = spanX / spanY;
+
+        if (spanX >= spanY) {
+          outW = targetMaxDim;
+          outH = Math.max(16, Math.round(targetMaxDim / aspect));
+        } else {
+          outH = targetMaxDim;
+          outW = Math.max(16, Math.round(targetMaxDim * aspect));
+        }
+
+        dx = spanX / outW;
+        dy = spanY / outH;
+        xTopLeft = xMin + dx / 2;
+        yTopLeft = yMax - dy / 2;
+        rotX = 0;
+        rotY = 0;
+      } else {
+        xMin = Math.min(nwCrs.x, swCrs.x);
+        xMax = Math.max(neCrs.x, seCrs.x);
+        yMin = Math.min(swCrs.y, seCrs.y);
+        yMax = Math.max(nwCrs.y, neCrs.y);
+
+        const spanX = xMax - xMin;
+        const spanY = yMax - yMin;
+        const aspect = spanX / spanY;
+
+        if (spanX >= spanY) {
+          outW = targetMaxDim;
+          outH = Math.max(16, Math.round(targetMaxDim / aspect));
+        } else {
+          outH = targetMaxDim;
+          outW = Math.max(16, Math.round(targetMaxDim * aspect));
+        }
+
+        dx = spanX / outW;
+        dy = spanY / outH;
+
+        if (!northUpMode && rotationDeg !== 0) {
+          const cosA = Math.cos(mathRotRad);
+          const sinA = Math.sin(mathRotRad);
+          const rx = (nwCrs.x - cCrs.x);
+          const ry = (nwCrs.y - cCrs.y);
+          xTopLeft = cCrs.x + rx * cosA - ry * sinA;
+          yTopLeft = cCrs.y + rx * sinA + ry * cosA;
+          rotY = dx * sinA;
+          rotX = dy * sinA;
+        } else {
+          xTopLeft = xMin + dx / 2;
+          yTopLeft = yMax - dy / 2;
+          rotX = 0;
+          rotY = 0;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = outW;
+      canvas.height = outH;
+      const ctx = canvas.getContext('2d');
+
+      let filterStr = '';
+      if (includeVisualFilters && visualState) {
+        filterStr = `brightness(${visualState.brightness}%) contrast(${visualState.contrast}%) saturate(${visualState.saturation}%)`;
+        if (visualState.invert) filterStr += ' invert(100%)';
+      }
+
+      if (northUpMode && rotationDeg !== 0) {
+        ctx.save();
+        ctx.translate(outW / 2, outH / 2);
+        ctx.rotate(rotRad);
+        if (filterStr) ctx.filter = filterStr;
+
+        const imgPixelW = rawSpanX / dx;
+        const imgPixelH = rawSpanY / dy;
+        ctx.drawImage(sourceImg, -imgPixelW / 2, -imgPixelH / 2, imgPixelW, imgPixelH);
+        ctx.restore();
+      } else {
+        if (filterStr) ctx.filter = filterStr;
+        ctx.drawImage(sourceImg, 0, 0, outW, outH);
+      }
+
+      return {
+        canvas,
+        width: outW,
+        height: outH,
+        dx,
+        dy,
+        rotX,
+        rotY,
+        xTopLeft,
+        yTopLeft,
+        xMin,
+        xMax,
+        yMin,
+        yMax,
+        isProjected,
+        utmZone,
+        epsgCode,
+        crsName,
+        northUpMode,
+        rotationDeg
+      };
+    }
+
+    // Modal Control & Metadata Population
+    function openGisExportModal() {
+      if (!overlay || !bounds) {
+        showToast('يرجى استيراد خارطة ومعايرتها أولاً لتتمكن من تصديرها', 'warning');
+        return;
+      }
+
+      if (gisExportFileName) {
+        gisExportFileName.textContent = (currentOverlayFileName || 'خارطة مصححة (Rectified Map)');
+      }
+      if (gisExportDims) {
+        const el = overlay.getElement ? overlay.getElement() : overlay._image;
+        const w = (el && el.naturalWidth) ? el.naturalWidth : 2048;
+        const h = (el && el.naturalHeight) ? el.naturalHeight : 2048;
+        gisExportDims.textContent = `${w} × ${h} بكسل`;
+      }
+      if (gisExportRot) {
+        gisExportRot.textContent = `${rotationDeg}°`;
+      }
+      if (gisExportNorth) gisExportNorth.textContent = bounds.getNorth().toFixed(5) + '° N';
+      if (gisExportSouth) gisExportSouth.textContent = bounds.getSouth().toFixed(5) + '° S';
+      if (gisExportEast)  gisExportEast.textContent  = bounds.getEast().toFixed(5) + '° E';
+      if (gisExportWest)  gisExportWest.textContent  = bounds.getWest().toFixed(5) + '° W';
+
+      // Estimate pixel resolution in meters
+      const midLat = bounds.getCenter().lat;
+      const metersPerDeg = 111320 * Math.cos((midLat * Math.PI) / 180);
+      const spanLngMeters = (bounds.getEast() - bounds.getWest()) * metersPerDeg;
+      const estRes = (spanLngMeters / 2048).toFixed(2);
+      if (gisExportRes) gisExportRes.textContent = `~${estRes} م / بكسل`;
+
+      if (gisExportModal) {
+        gisExportModal.classList.remove('hidden');
+      }
+    }
+
+    function closeGisExportModal() {
+      if (gisExportModal) {
+        gisExportModal.classList.add('hidden');
+      }
+    }
+
+    // Download Helper
+    function triggerDownload(blobOrBuffer, filename, mimeType = 'application/octet-stream') {
+      const blob = blobOrBuffer instanceof Blob ? blobOrBuffer : new Blob([blobOrBuffer], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 1500);
+    }
+
+    // Main GIS Export Execution Dispatcher
+    async function executeGisExport(targetType) {
+      if (!overlay || !bounds) {
+        showToast('يرجى استيراد خارطة ومعايرتها أولاً للتصدير', 'warning');
+        return;
+      }
+
+      showToast('⏳ جاري تصحيح الخارطة وبناء ملفات الإسناد المكاني...', 'info');
+
+      try {
+        const geodata = await renderRectifiedOverlayCanvas();
+        const baseName = (currentOverlayFileName || 'rectified_map')
+          .replace(/\.[^/.]+$/, '')
+          .replace(/[^a-zA-Z0-9_\u0600-\u06FF-]/g, '_') || 'rectified_map';
+
+        const prjText = generatePrjText(geodata.epsgCode);
+        const tfwText = generateWorldFileText(geodata.dx, geodata.rotY, geodata.rotX, geodata.dy, geodata.xTopLeft, geodata.yTopLeft, geodata.isProjected);
+        const auxXmlText = generateAuxXmlText(prjText, geodata.xTopLeft, geodata.dx, geodata.rotY, geodata.yTopLeft, geodata.rotX, geodata.dy);
+        const pointsText = generateGcpPointsText(geodata);
+
+        if (targetType === 'tfw') {
+          triggerDownload(tfwText, `${baseName}.tfw`, 'text/plain');
+          showToast(`✅ تم تنزيل ملف الإسناد ArcView World File (.TFW)`, 'success');
+          return;
+        }
+
+        if (targetType === 'prj') {
+          triggerDownload(prjText, `${baseName}.prj`, 'text/plain');
+          showToast(`✅ تم تنزيل ملف الإسقاط (.PRJ) لـ ${geodata.crsName}`, 'success');
+          return;
+        }
+
+        if (targetType === 'aux') {
+          triggerDownload(auxXmlText, `${baseName}.tif.aux.xml`, 'application/xml');
+          showToast(`✅ تم تنزيل ميتاداتا ArcGIS (.AUX.XML)`, 'success');
+          return;
+        }
+
+        if (targetType === 'points') {
+          triggerDownload(pointsText, `${baseName}.points`, 'text/plain');
+          showToast(`✅ تم تنزيل جدول نقاط الضبط (.POINTS) لـ ArcGIS و QGIS`, 'success');
+          return;
+        }
+
+        if (targetType === 'png') {
+          geodata.canvas.toBlob((pngBlob) => {
+            if (pngBlob) {
+              triggerDownload(pngBlob, `${baseName}.png`, 'image/png');
+              triggerDownload(tfwText, `${baseName}.pgw`, 'text/plain');
+              triggerDownload(prjText, `${baseName}.prj`, 'text/plain');
+              showToast(`✅ تم تنزيل صورة PNG عالية الدقة مع ملفات الإسناد (.PGW و .PRJ)`, 'success');
+            }
+          }, 'image/png');
+          return;
+        }
+
+        // For GeoTIFF and ZIP: Extract RGB Pixel Data
+        const ctx = geodata.canvas.getContext('2d');
+        const imgData = ctx.getImageData(0, 0, geodata.width, geodata.height);
+        const numPixels = geodata.width * geodata.height;
+        const rgbBytes = new Uint8Array(numPixels * 3);
+        const rawData = imgData.data;
+
+        for (let i = 0, j = 0; i < rawData.length; i += 4, j += 3) {
+          rgbBytes[j]     = rawData[i];     // Red
+          rgbBytes[j + 1] = rawData[i + 1]; // Green
+          rgbBytes[j + 2] = rawData[i + 2]; // Blue
+        }
+
+        const geoTiffBuf = createGeoTiffBuffer(geodata.width, geodata.height, rgbBytes, geodata);
+
+        if (targetType === 'tif') {
+          triggerDownload(geoTiffBuf, `${baseName}.tif`, 'image/tiff');
+          // Also automatically supply .tfw and .prj alongside .tif for 100% legacy ArcView 3.x compatibility
+          setTimeout(() => triggerDownload(tfwText, `${baseName}.tfw`, 'text/plain'), 400);
+          setTimeout(() => triggerDownload(prjText, `${baseName}.prj`, 'text/plain'), 800);
+          showToast(`✅ تم تنزيل ملف GeoTIFF (.TIF) وملفات الإسناد (.TFW و .PRJ)`, 'success');
+          return;
+        }
+
+        if (targetType === 'zip') {
+          const pngDataUrl = geodata.canvas.toDataURL('image/png');
+          const pngBase64 = pngDataUrl.split(',')[1];
+          const pngBinary = atob(pngBase64);
+          const pngBytes = new Uint8Array(pngBinary.length);
+          for (let i = 0; i < pngBinary.length; i++) {
+            pngBytes[i] = pngBinary.charCodeAt(i);
+          }
+
+          const resString = `${geodata.dx.toFixed(2)} ${geodata.isProjected ? 'meters' : 'degrees'}`;
+          const dimsString = `${geodata.width} x ${geodata.height}`;
+          const readmeText = generateArcViewReadmeText(baseName, geodata.crsName, geodata.isProjected, dimsString, resString);
+
+          const zipFiles = [
+            { name: `${baseName}.tif`, data: new Uint8Array(geoTiffBuf) },
+            { name: `${baseName}.tfw`, data: tfwText },
+            { name: `${baseName}.prj`, data: prjText },
+            { name: `${baseName}.tif.aux.xml`, data: auxXmlText },
+            { name: `${baseName}.points`, data: pointsText },
+            { name: `${baseName}.png`, data: pngBytes },
+            { name: `${baseName}.pgw`, data: tfwText },
+            { name: 'README_ArcView_GIS.txt', data: readmeText }
+          ];
+
+          const zipUint8 = createZipArchive(zipFiles);
+          triggerDownload(zipUint8, `${baseName}_ArcView_GIS_Bundle.zip`, 'application/zip');
+          showToast(`🎉 تم تنزيل حزمة ArcView GIS المتكاملة (.ZIP) بنجاح!`, 'success');
+        }
+
+      } catch (err) {
+        console.error('Error during GIS export:', err);
+        showToast(`خطأ في تصدير الخارطة: ${err.message || err}`, 'error');
+      }
+    }
+
+    // Attach Event Handlers
+    if (gisDownloadZipBtn) gisDownloadZipBtn.addEventListener('click', () => executeGisExport('zip'));
+    if (gisDownloadTifBtn) gisDownloadTifBtn.addEventListener('click', () => executeGisExport('tif'));
+    if (gisDownloadTfwBtn) gisDownloadTfwBtn.addEventListener('click', () => executeGisExport('tfw'));
+    if (gisDownloadPrjBtn) gisDownloadPrjBtn.addEventListener('click', () => executeGisExport('prj'));
+    if (gisDownloadAuxBtn) gisDownloadAuxBtn.addEventListener('click', () => executeGisExport('aux'));
+    if (gisDownloadPointsBtn) gisDownloadPointsBtn.addEventListener('click', () => executeGisExport('points'));
+    if (gisDownloadPngBtn) gisDownloadPngBtn.addEventListener('click', () => executeGisExport('png'));
+
+    if (openGisExportModalBtn) openGisExportModalBtn.addEventListener('click', openGisExportModal);
+    if (floatGisExportBtn) floatGisExportBtn.addEventListener('click', openGisExportModal);
+    if (closeGisExportModalBtn) closeGisExportModalBtn.addEventListener('click', closeGisExportModal);
+    if (closeGisExportBottomBtn) closeGisExportBottomBtn.addEventListener('click', closeGisExportModal);
+
+    if (gisExportModal) {
+      gisExportModal.addEventListener('click', (e) => {
+        if (e.target === gisExportModal) closeGisExportModal();
+      });
+    }
+
+    window.openGisExportModal = openGisExportModal;
+    window.closeGisExportModal = closeGisExportModal;
+    window.executeGisExport = executeGisExport;
 
     // Remove Overlay
     function removeOverlay() {

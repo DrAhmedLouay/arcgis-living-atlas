@@ -240,6 +240,12 @@
           <span>استوديو المطابقة</span>
         </button>
 
+        <!-- GIS & ArcView Export Studio Trigger -->
+        <button type="button" id="floatGisExportBtn" onclick="window.openGisExportModal && window.openGisExportModal()" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-amber-200 hover:text-white bg-amber-950/80 hover:bg-amber-900 border border-amber-500/50 transition-all flex items-center gap-1.5 shadow-sm" title="خزن وتصدير الخارطة المصححة بصيغة GeoTIFF و ArcView GIS">
+          <i class="fa-solid fa-file-export text-amber-400"></i>
+          <span>تصدير GIS</span>
+        </button>
+
         <!-- Minimize Floating Bar -->
         <button type="button" id="floatHideVisibilityBarBtn" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-xs transition-colors flex items-center justify-center cursor-pointer border border-slate-700/60" title="تصغير شريط أدوات المعايرة">
           <i class="fa-solid fa-chevron-up text-[10px]"></i>
@@ -1311,6 +1317,12 @@
                 <div>زاوية التدوير: <span id="boundRotVal" class="text-purple-300">0°</span></div>
               </div>
 
+              <!-- ArcView & GeoTIFF Export Studio Trigger -->
+              <button type="button" id="openGisExportModalBtn" class="w-full py-2.5 px-3 bg-gradient-to-r from-amber-600 via-emerald-600 to-teal-600 hover:from-amber-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 text-xs transition-all border border-amber-400/40 cursor-pointer active:scale-95 shadow-emerald-950/50">
+                <i class="fa-solid fa-file-export text-sm text-amber-200"></i>
+                <span>خزن وتصدير الخارطة المصححة (GeoTIFF / ArcView GIS)</span>
+              </button>
+
               <div class="grid grid-cols-2 gap-2 pt-1">
                 <button type="button" id="copyCalibJsonBtn" class="py-2 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-200 flex items-center justify-center gap-1.5 transition-colors">
                   <i class="fa-solid fa-copy text-[11px]"></i>
@@ -1695,6 +1707,221 @@
       <div class="p-3 border-t border-slate-800 bg-slate-950 flex items-center justify-between text-[11px]">
         <span class="text-slate-400">يمكنك أيضاً استخدام أسهم الإزاحة والتدوير من الشريط الجانبي للمعايرة اليدوية الدقيقة.</span>
         <button type="button" id="aiModalCloseBottomBtn" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors">إغلاق</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       ArcView GIS & GeoTIFF Export Studio Modal
+       ========================================================================= -->
+  <div id="gisExportModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="glass-panel rounded-2xl w-full max-w-2xl border border-amber-500/60 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden my-auto animate-fadeIn">
+      
+      <!-- Modal Header -->
+      <div class="p-4 border-b border-amber-950/80 bg-gradient-to-r from-slate-900 via-amber-950/70 to-slate-900 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <span class="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center justify-center text-base shadow-sm">
+            <i class="fa-solid fa-map-location-dot text-amber-400"></i>
+          </span>
+          <div>
+            <h3 class="font-bold text-sm text-white flex items-center gap-2">
+              <span>خزن وتصدير الخارطة المصححة (GeoTIFF / ArcView GIS Studio)</span>
+              <span class="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-mono">ArcGIS & ArcView 3.x Ready</span>
+            </h3>
+            <p class="text-[11px] text-slate-400 mt-0.5">تصدير الخارطة المصححة جيوديسياً مع ملفات الإسناد المكاني المتوافقة مع كافة برامج GIS</p>
+          </div>
+        </div>
+        <button id="closeGisExportModalBtn" class="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Scrollable Modal Body -->
+      <div class="p-4 overflow-y-auto space-y-4 text-xs">
+
+        <!-- Status & Extent Card -->
+        <div class="bg-slate-950/80 rounded-xl p-3 border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-slate-300 font-semibold flex items-center gap-1.5">
+              <i class="fa-solid fa-circle-check text-emerald-400 text-xs"></i>
+              <span id="gisExportFileName">الخارطة المصححة الحالية</span>
+            </span>
+            <span id="gisExportStatusBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono">مصححة ومعايرة</span>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-mono text-slate-300 bg-slate-900/90 p-2 rounded-lg border border-slate-800">
+            <div>الأبعاد: <strong id="gisExportDims" class="text-white block mt-0.5">--</strong></div>
+            <div>الدقة المكانية: <strong id="gisExportRes" class="text-emerald-300 block mt-0.5">--</strong></div>
+            <div>زاوية التدوير: <strong id="gisExportRot" class="text-purple-300 block mt-0.5">0°</strong></div>
+            <div>النظام المقترح: <strong id="gisExportDefaultCrs" class="text-amber-300 block mt-0.5">UTM Zone 38N</strong></div>
+          </div>
+
+          <!-- Bounding Coordinates Grid -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[9px] font-mono bg-slate-900/60 p-2 rounded border border-slate-800 text-slate-400">
+            <div>شمال: <span id="gisExportNorth" class="text-sky-300 font-bold">--</span></div>
+            <div>جنوب: <span id="gisExportSouth" class="text-sky-300 font-bold">--</span></div>
+            <div>شرق: <span id="gisExportEast" class="text-sky-300 font-bold">--</span></div>
+            <div>غرب: <span id="gisExportWest" class="text-sky-300 font-bold">--</span></div>
+          </div>
+        </div>
+
+        <!-- Export Configuration Options -->
+        <div class="bg-slate-900/70 rounded-xl p-3 border border-slate-800 space-y-3">
+          <h4 class="text-slate-200 font-bold text-xs flex items-center gap-1.5">
+            <i class="fa-solid fa-sliders text-amber-400"></i>
+            <span>إعدادات الإسناد الجغرافي والتصحيح:</span>
+          </h4>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <!-- CRS Selector -->
+            <div class="space-y-1">
+              <label class="text-[11px] text-slate-300 font-medium">نظام الإحداثيات والمرجع (Spatial Reference):</label>
+              <select id="gisExportCrsSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500">
+                <option value="EPSG:32638" selected>WGS 84 / UTM Zone 38N (أمتار - العراق بالكامل - الموصى به)</option>
+                <option value="EPSG:4326">WGS 84 (درجات جغرافية عشرية Lat/Lng)</option>
+                <option value="EPSG:32637">WGS 84 / UTM Zone 37N (أمتار - غرب العراق / الأنبار)</option>
+                <option value="EPSG:3857">Web Mercator (EPSG:3857 / أمتار كروية)</option>
+              </select>
+            </div>
+
+            <!-- Rectification Mode -->
+            <div class="space-y-1">
+              <label class="text-[11px] text-slate-300 font-medium">توجيه التصحيح الهندسي (Rectification):</label>
+              <select id="gisExportAlignSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500">
+                <option value="north-up" selected>توجيه عمودي نحو الشمال الحقيقي 0° True North (Orthorectified)</option>
+                <option value="raw-rotate">الحفاظ على زاوية التدوير مع مصفوفة التحويل التآلفي (Affine World File)</option>
+              </select>
+            </div>
+
+            <!-- Resolution Quality -->
+            <div class="space-y-1">
+              <label class="text-[11px] text-slate-300 font-medium">دقة الاستخراج وجودة الصورة:</label>
+              <select id="gisExportResSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500">
+                <option value="native" selected>دقة كاملة فائقة (Full Native 100%)</option>
+                <option value="2048">دقة عالية جداً (2048 × 2048 بكسل)</option>
+                <option value="1024">دقة قياسية متوازنة (1024 × 1024 بكسل)</option>
+              </select>
+            </div>
+
+            <!-- Visual Filters Inclusion -->
+            <div class="space-y-1 flex flex-col justify-end">
+              <label class="flex items-center gap-2 cursor-pointer bg-slate-950 p-2 rounded-lg border border-slate-800 hover:border-slate-700 transition-colors">
+                <input type="checkbox" id="gisExportVisualFilters" checked class="rounded border-slate-700 text-amber-500 focus:ring-0">
+                <span class="text-[11px] text-slate-300 select-none">تضمين تحسينات الإضاءة والتباين والتشبع البصري</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Primary All-in-One Package Download (ZIP) -->
+        <div class="bg-gradient-to-r from-amber-950/40 via-emerald-950/40 to-teal-950/40 border-2 border-emerald-500/50 rounded-xl p-3.5 space-y-2 text-center shadow-lg">
+          <div class="flex items-center justify-center gap-2 text-emerald-300 font-bold text-xs">
+            <i class="fa-solid fa-box-archive text-amber-400 text-sm"></i>
+            <span>الحزمة المتكاملة لبرامج ArcView GIS & ArcGIS</span>
+          </div>
+          <p class="text-[11px] text-slate-300">
+            تنزيل ملف مضغوط (.ZIP) جاهز يحتوي على الخارطة بصيغة GeoTIFF بالإضافة إلى ملف الإسناد (.TFW) وملف الإسقاط (.PRJ) وميتاداتا ArcGIS (.AUX.XML) ونقاط المعايرة (.POINTS).
+          </p>
+          <button type="button" id="gisDownloadZipBtn" class="w-full py-2.5 px-4 bg-gradient-to-r from-emerald-600 via-teal-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 text-xs transition-all cursor-pointer active:scale-95 shadow-emerald-950/60">
+            <i class="fa-solid fa-download text-sm"></i>
+            <span>📦 تنزيل حزمة ArcView GIS المتكاملة (.ZIP) الآن</span>
+          </button>
+        </div>
+
+        <!-- Individual Formats Grid -->
+        <div class="space-y-2">
+          <h4 class="text-slate-300 font-semibold text-xs flex items-center justify-between">
+            <span class="flex items-center gap-1.5">
+              <i class="fa-solid fa-download text-sky-400"></i>
+              <span>أو تنزيل الملفات بصيغ منفردة:</span>
+            </span>
+            <span class="text-[10px] text-slate-400 font-mono">Individual Formats</span>
+          </h4>
+
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <!-- 1. GeoTIFF (.TIF) -->
+            <button type="button" id="gisDownloadTifBtn" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-amber-500/60 text-right space-y-1 transition-all group cursor-pointer">
+              <div class="flex items-center justify-between text-amber-400">
+                <i class="fa-solid fa-file-image text-sm"></i>
+                <span class="text-[9px] bg-amber-500/20 text-amber-300 px-1 rounded font-mono">GeoTIFF</span>
+              </div>
+              <div class="font-bold text-white text-[11px]">ملف GeoTIFF (.TIF)</div>
+              <div class="text-[9px] text-slate-400 leading-tight">مدمج به الإسناد الجيوديسي الداخلي بالكامل</div>
+            </button>
+
+            <!-- 2. ArcView World File (.TFW) -->
+            <button type="button" id="gisDownloadTfwBtn" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-blue-500/60 text-right space-y-1 transition-all group cursor-pointer">
+              <div class="flex items-center justify-between text-blue-400">
+                <i class="fa-solid fa-file-lines text-sm"></i>
+                <span class="text-[9px] bg-blue-500/20 text-blue-300 px-1 rounded font-mono">World File</span>
+              </div>
+              <div class="font-bold text-white text-[11px]">ملف إسناد (.TFW)</div>
+              <div class="text-[9px] text-slate-400 leading-tight">ملف الـ 6 أسطر القياسي لـ ArcView GIS 3.x</div>
+            </button>
+
+            <!-- 3. Projection File (.PRJ) -->
+            <button type="button" id="gisDownloadPrjBtn" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-emerald-500/60 text-right space-y-1 transition-all group cursor-pointer">
+              <div class="flex items-center justify-between text-emerald-400">
+                <i class="fa-solid fa-globe text-sm"></i>
+                <span class="text-[9px] bg-emerald-500/20 text-emerald-300 px-1 rounded font-mono">ESRI WKT</span>
+              </div>
+              <div class="font-bold text-white text-[11px]">ملف الإسقاط (.PRJ)</div>
+              <div class="text-[9px] text-slate-400 leading-tight">تعريف مسقط WGS84 أو UTM 38N لـ ArcGIS</div>
+            </button>
+
+            <!-- 4. Auxiliary XML (.AUX.XML) -->
+            <button type="button" id="gisDownloadAuxBtn" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-purple-500/60 text-right space-y-1 transition-all group cursor-pointer">
+              <div class="flex items-center justify-between text-purple-400">
+                <i class="fa-solid fa-code text-sm"></i>
+                <span class="text-[9px] bg-purple-500/20 text-purple-300 px-1 rounded font-mono">ArcGIS XML</span>
+              </div>
+              <div class="font-bold text-white text-[11px]">ميتاداتا (.AUX.XML)</div>
+              <div class="text-[9px] text-slate-400 leading-tight">ملف ميتاداتا الإسناد المساعد الخاص بـ Esri</div>
+            </button>
+
+            <!-- 5. GCP Points File (.POINTS) -->
+            <button type="button" id="gisDownloadPointsBtn" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-rose-500/60 text-right space-y-1 transition-all group cursor-pointer">
+              <div class="flex items-center justify-between text-rose-400">
+                <i class="fa-solid fa-location-dot text-sm"></i>
+                <span class="text-[9px] bg-rose-500/20 text-rose-300 px-1 rounded font-mono">GCP Points</span>
+              </div>
+              <div class="font-bold text-white text-[11px]">نقاط الضبط (.POINTS)</div>
+              <div class="text-[9px] text-slate-400 leading-tight">لإعادة الفتح في ArcGIS Georeferencer / QGIS</div>
+            </button>
+
+            <!-- 6. High-Res PNG + PGW -->
+            <button type="button" id="gisDownloadPngBtn" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-cyan-500/60 text-right space-y-1 transition-all group cursor-pointer">
+              <div class="flex items-center justify-between text-cyan-400">
+                <i class="fa-solid fa-image text-sm"></i>
+                <span class="text-[9px] bg-cyan-500/20 text-cyan-300 px-1 rounded font-mono">PNG + PGW</span>
+              </div>
+              <div class="font-bold text-white text-[11px]">صورة PNG + ملف .PGW</div>
+              <div class="text-[9px] text-slate-400 leading-tight">صورة عالية الدقة مع شفافية الزوايا الخارجية</div>
+            </button>
+          </div>
+        </div>
+
+        <!-- ArcView GIS Instructions Guide -->
+        <div class="bg-slate-950 rounded-xl p-3 border border-slate-800/80 text-[10px] space-y-1.5 text-slate-300">
+          <div class="font-bold text-amber-300 flex items-center gap-1.5">
+            <i class="fa-solid fa-circle-info"></i>
+            <span>دليل فتح الخارطة المصححة في برنامج ArcView GIS 3.x / ArcGIS:</span>
+          </div>
+          <ol class="list-decimal list-inside space-y-1 text-slate-400 pr-1 leading-relaxed">
+            <li>قم بفك ضغط ملف الـ <strong class="text-white">.ZIP</strong> المُنزل في مجلد العمل الخاص بمشروعك (تأكد من بقاء ملفي <code class="text-amber-300">.tif</code> و <code class="text-amber-300">.tfw</code> في نفس المجلد وبنفس الاسم).</li>
+            <li>في برنامج <strong>ArcView GIS 3.x</strong>: افتح نافذة العرض (View) واضغط على قائمة <strong class="text-white">View -> Add Theme</strong>.</li>
+            <li>من القائمة المنسدلة <em>Data Source Type</em> اختر <strong class="text-emerald-300">Image Data Source</strong>.</li>
+            <li>اختر ملف <code class="text-amber-300">.tif</code> واضغط <strong>OK</strong>؛ ستنزل الخارطة في موقعها الجغرافي والإسقاطي الدقيق تماماً فوق بقية طبقات المشروع.</li>
+          </ol>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-3 border-t border-slate-800 bg-slate-950 flex items-center justify-between text-[11px]">
+        <span class="text-slate-400 font-mono">ESRI ArcView GIS 3.x / ArcGIS Pro / QGIS Compatible</span>
+        <button type="button" id="closeGisExportBottomBtn" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors cursor-pointer">إغلاق</button>
       </div>
 
     </div>
