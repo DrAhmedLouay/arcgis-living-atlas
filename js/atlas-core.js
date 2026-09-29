@@ -1104,6 +1104,10 @@ document.addEventListener('DOMContentLoaded', () => {
       let tiepoints = null;
       let modelTransform = null;
       let epsgCode = null;
+      let stripOffset = null;
+      let stripByteCounts = null;
+      let compression = 1;
+      let samplesPerPixel = 3;
       
       for (let e = 0; e < numEntries; e++) {
         if (entryOffset + entrySize > buffer.byteLength) break;
@@ -1118,6 +1122,14 @@ document.addEventListener('DOMContentLoaded', () => {
           width = (type === 3) ? view.getUint16(valFieldOffset, isLE) : view.getUint32(valFieldOffset, isLE);
         } else if (tag === 257) {
           height = (type === 3) ? view.getUint16(valFieldOffset, isLE) : view.getUint32(valFieldOffset, isLE);
+        } else if (tag === 259) {
+          compression = (type === 3) ? view.getUint16(valFieldOffset, isLE) : view.getUint32(valFieldOffset, isLE);
+        } else if (tag === 273) {
+          stripOffset = (type === 3) ? view.getUint16(valFieldOffset, isLE) : view.getUint32(valFieldOffset, isLE);
+        } else if (tag === 277) {
+          samplesPerPixel = (type === 3) ? view.getUint16(valFieldOffset, isLE) : view.getUint32(valFieldOffset, isLE);
+        } else if (tag === 279) {
+          stripByteCounts = (type === 3) ? view.getUint16(valFieldOffset, isLE) : view.getUint32(valFieldOffset, isLE);
         } else if (tag === 33550 && count >= 2) {
           const valOffset = view.getUint32(valFieldOffset, isLE);
           if (valOffset + 16 <= buffer.byteLength) {
@@ -1206,8 +1218,11 @@ document.addEventListener('DOMContentLoaded', () => {
           isECW: false,
           width,
           height,
-          bands: 3,
-          compression: 1,
+          bands: samplesPerPixel || 3,
+          compression: compression || 1,
+          samplesPerPixel: samplesPerPixel || 3,
+          stripOffset: stripOffset,
+          stripByteCounts: stripByteCounts,
           originX,
           originY,
           cellIncrementX: scaleX,
@@ -1576,10 +1591,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 const ow = bestOverview.getWidth();
                 const oh = bestOverview.getHeight();
                 try {
-                  const rgb = await withTimeout(bestOverview.readRGB(), 2500, 'overview.readRGB');
-                  if (rgb && rgb.length >= ow * oh * 3) {
+                  let rgb = null;
+                  try {
+                    rgb = await withTimeout(bestOverview.readRGB({ interleave: true }), 2500, 'overview.readRGB(interleave)');
+                  } catch (ie) {
+                    rgb = await withTimeout(bestOverview.readRGB(), 2500, 'overview.readRGB');
+                  }
+                  const isValid = rgb && (
+                    rgb.length >= ow * oh * 3 ||
+                    (Array.isArray(rgb) && rgb.length >= 3 && rgb[0] && rgb[0].length >= ow * oh)
+                  );
+                  if (isValid) {
                     const is8Bit = (rgb instanceof Uint8Array || rgb instanceof Uint8ClampedArray);
-                    if (is8Bit) {
+                    if (is8Bit && rgb.length >= ow * oh * 3) {
                       const srcCanvas = document.createElement('canvas');
                       srcCanvas.width = ow;
                       srcCanvas.height = oh;
@@ -1607,8 +1631,17 @@ document.addEventListener('DOMContentLoaded', () => {
             // Condition 2: If single image and <= 8MP, read directly
             if (!pngDataUrl && width > 0 && height > 0 && width * height <= 8388608) {
               try {
-                const rgb = await withTimeout(mainImage.readRGB(), 3000, 'mainImage.readRGB');
-                if (rgb && rgb.length >= width * height * 3) {
+                let rgb = null;
+                try {
+                  rgb = await withTimeout(mainImage.readRGB({ interleave: true }), 3500, 'mainImage.readRGB(interleave)');
+                } catch (ie) {
+                  rgb = await withTimeout(mainImage.readRGB(), 3500, 'mainImage.readRGB');
+                }
+                const isValid = rgb && (
+                  rgb.length >= width * height * 3 ||
+                  (Array.isArray(rgb) && rgb.length >= 3 && rgb[0] && rgb[0].length >= width * height)
+                );
+                if (isValid) {
                   pngDataUrl = rasterToDataUrl(rgb, width, height);
                 }
               } catch (me) {
@@ -1621,19 +1654,53 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      // 2. Fallback to binary header if geoMeta not populated
-      if (!geoMeta) {
-        let hBuf = null;
+      // 2. Binary header scan & instant uncompressed raster extraction
+      let hBuf = null;
+      try {
+        if (source instanceof ArrayBuffer) {
+          hBuf = source;
+        } else if (source instanceof Blob) {
+          const slice = source.slice(0, Math.min(source.size, 100 * 1024 * 1024));
+          hBuf = await withTimeout(slice.arrayBuffer(), 2500, 'headerSlice');
+        }
+      } catch (e) {}
+
+      if (!geoMeta && hBuf) {
+        geoMeta = parseTIFFGeoHeader(hBuf, fileName);
+      }
+
+      // Instant direct extraction for uncompressed RGB TIFFs (e.g. exported GeoTIFFs or standard uncompressed TIFFs)
+      if (!pngDataUrl && geoMeta && geoMeta.stripOffset && (geoMeta.compression === 1 || !geoMeta.compression) && geoMeta.width && geoMeta.height && hBuf) {
         try {
-          if (source instanceof ArrayBuffer) {
-            hBuf = source;
-          } else if (source instanceof Blob) {
-            const slice = source.slice(0, Math.min(source.size, 8 * 1024 * 1024));
-            hBuf = await withTimeout(slice.arrayBuffer(), 2000, 'headerSlice');
+          const w = geoMeta.width;
+          const h = geoMeta.height;
+          const off = geoMeta.stripOffset;
+          const spp = geoMeta.samplesPerPixel || geoMeta.bands || 3;
+          const neededBytes = w * h * spp;
+          if (hBuf.byteLength >= off + neededBytes) {
+            const rawBytes = new Uint8Array(hBuf, off, neededBytes);
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            const imgData = ctx.createImageData(w, h);
+            const data = imgData.data;
+            if (spp === 3) {
+              for (let i = 0, j = 0; i < neededBytes && j < data.length; i += 3, j += 4) {
+                data[j]     = rawBytes[i];
+                data[j + 1] = rawBytes[i + 1];
+                data[j + 2] = rawBytes[i + 2];
+                data[j + 3] = 255;
+              }
+            } else if (spp >= 4) {
+              data.set(rawBytes.subarray(0, data.length));
+            }
+            ctx.putImageData(imgData, 0, 0);
+            pngDataUrl = canvas.toDataURL('image/jpeg', 0.94);
+            console.log('Instant uncompressed GeoTIFF decoded directly from buffer:', w, h);
           }
-        } catch (e) {}
-        if (hBuf) {
-          geoMeta = parseTIFFGeoHeader(hBuf, fileName);
+        } catch (dirErr) {
+          console.warn('Direct uncompressed TIFF extraction failed:', dirErr);
         }
       }
 
@@ -1977,32 +2044,63 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function parseSidecarMetadata(text, meta) {
       if (!text) return meta;
+      if (!meta) meta = {};
 
-      // 1. Check 6-line World File format (.tfw, .jgw, .pgw, .wld)
+      // 1. Check PRJ projection text (ESRI WKT or OGC WKT)
+      if (text.includes('PROJCS') || text.includes('GEOGCS')) {
+        const t = text.toUpperCase();
+        if (t.includes('UTM_ZONE_38N') || t.includes('UTM ZONE 38N') || t.includes('32638') || (t.includes('TRANSVERSE_MERCATOR') && t.includes('45.0'))) {
+          meta.projection = 'UTM Zone 38N (EPSG:32638)';
+          meta.utmZone = 38;
+        } else if (t.includes('UTM_ZONE_37N') || t.includes('UTM ZONE 37N') || t.includes('32637') || (t.includes('TRANSVERSE_MERCATOR') && t.includes('39.0'))) {
+          meta.projection = 'UTM Zone 37N (EPSG:32637)';
+          meta.utmZone = 37;
+        } else if (t.includes('UTM_ZONE_39N') || t.includes('UTM ZONE 39N') || t.includes('32639') || (t.includes('TRANSVERSE_MERCATOR') && t.includes('51.0'))) {
+          meta.projection = 'UTM Zone 39N (EPSG:32639)';
+          meta.utmZone = 39;
+        } else if (t.includes('MERCATOR') || t.includes('3857') || t.includes('900913') || t.includes('102100')) {
+          meta.projection = 'WGS 84 / Pseudo-Mercator (EPSG:3857)';
+        } else if (t.includes('WGS_1984') && !t.includes('PROJCS')) {
+          meta.projection = 'WGS84 Geodetic (EPSG:4326)';
+          meta.cellSizeUnits = 'DEGREES';
+        }
+        meta.datum = 'WGS84';
+        meta.detectionSource = (meta.detectionSource ? meta.detectionSource + ' + ' : '') + 'ملف إسقاط (.PRJ ESRI WKT)';
+        return meta;
+      }
+
+      // 2. Check 6-line World File format (.tfw, .jgw, .pgw, .wld)
       const lines = text.trim().split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
       if (lines.length >= 6 && !isNaN(parseFloat(lines[0])) && !isNaN(parseFloat(lines[4])) && !isNaN(parseFloat(lines[5]))) {
-        const xRes = parseFloat(lines[0]);
-        const yRes = parseFloat(lines[3]);
+        const xRes = Math.abs(parseFloat(lines[0]));
+        const yRes = Math.abs(parseFloat(lines[3]));
         const origX = parseFloat(lines[4]);
         const origY = parseFloat(lines[5]);
         if (isFinite(origX) && isFinite(origY)) {
           meta.cellIncrementX = xRes;
-          meta.cellIncrementY = yRes;
-          meta.originX = origX;
-          meta.originY = origY;
-          meta.detectionSource = 'ملف إسناد مكاني عالمي (.TFW / .WLD World File)';
-          if (origX > 100000 && origX < 900000 && origY > 1000000) {
-            meta.projection = 'UTM Zone 38N (EPSG:32638)';
-            meta.utmZone = 38;
-          } else if (origX >= -180 && origX <= 180 && origY >= -90 && origY <= 90) {
-            meta.projection = 'WGS84 Geodetic (EPSG:4326)';
-            meta.cellSizeUnits = 'DEGREES';
+          meta.cellIncrementY = -yRes;
+          // In ESRI World Files, (origX, origY) is the center of the top-left pixel:
+          // The true outer top-left corner of the raster is (origX - xRes / 2, origY + yRes / 2)
+          meta.originX = origX - xRes / 2;
+          meta.originY = origY + yRes / 2;
+          meta.centerOriginX = origX;
+          meta.centerOriginY = origY;
+          meta.isWorldFile = true;
+          meta.detectionSource = 'ملف إسناد مكاني عالمي (.TFW / .PGW / .WLD World File)';
+          if (!meta.projection) {
+            if (origX > 100000 && origX < 900000 && origY > 1000000) {
+              meta.projection = 'UTM Zone 38N (EPSG:32638)';
+              meta.utmZone = 38;
+            } else if (origX >= -180 && origX <= 180 && origY >= -90 && origY <= 90) {
+              meta.projection = 'WGS84 Geodetic (EPSG:4326)';
+              meta.cellSizeUnits = 'DEGREES';
+            }
           }
           return meta;
         }
       }
 
-      // 2. ER Mapper / XML / Text format (.ers, .eww)
+      // 3. ER Mapper / XML / Text format (.ers, .eww)
       const oxMatch = text.match(/(?:Eastings|RegistrationCoord\s*Begin[\s\S]*?Eastings)\s*=\s*([+\-0-9.eE]+)/i);
       if (oxMatch) meta.originX = parseFloat(oxMatch[1]);
 
@@ -4119,18 +4217,121 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       reader.readAsArrayBuffer(slice);
     }
 
+    // Local GIS Calibration Registry (In-Memory & LocalStorage for instant re-import memory)
+    const CALIBRATION_REGISTRY_KEY = 'iraq_atlas_calibrated_registry';
+    function saveCalibrationRecord(fileName, record) {
+      if (!fileName || !record || !record.bounds) return;
+      try {
+        const cleanName = fileName.replace(/\.[^/.]+$/, '').trim().toLowerCase();
+        const registry = JSON.parse(localStorage.getItem(CALIBRATION_REGISTRY_KEY) || '{}');
+        const b = record.bounds;
+        registry[cleanName] = {
+          fileName: fileName,
+          bounds: [
+            [b.getSouth(), b.getWest()],
+            [b.getNorth(), b.getEast()]
+          ],
+          rotationDeg: record.rotationDeg || 0,
+          scalePercent: record.scalePercent || 100,
+          epsgCode: record.epsgCode || 32638,
+          crsName: record.crsName || 'WGS 84 / UTM Zone 38N',
+          timestamp: Date.now()
+        };
+        localStorage.setItem(CALIBRATION_REGISTRY_KEY, JSON.stringify(registry));
+        console.log('Saved GIS calibration record for:', cleanName);
+      } catch (e) {
+        console.warn('Could not save calibration record to localStorage:', e);
+      }
+    }
+
+    function getCalibrationRecord(fileName) {
+      if (!fileName) return null;
+      try {
+        const cleanName = fileName.replace(/\.[^/.]+$/, '').trim().toLowerCase();
+        const registry = JSON.parse(localStorage.getItem(CALIBRATION_REGISTRY_KEY) || '{}');
+        if (registry[cleanName]) {
+          return registry[cleanName];
+        }
+        for (const k of Object.keys(registry)) {
+          if (cleanName.includes(k) || k.includes(cleanName)) {
+            return registry[k];
+          }
+        }
+      } catch (e) {}
+      return null;
+    }
+
+    // Zero-Dependency Browser ZIP Archive Parser (Supports Stored and Deflate via pako)
+    function parseZipArchive(buffer) {
+      const view = new DataView(buffer);
+      const uint8 = new Uint8Array(buffer);
+      const len = buffer.byteLength;
+
+      let eocdOffset = -1;
+      for (let i = len - 22; i >= Math.max(0, len - 65557); i--) {
+        if (view.getUint32(i, true) === 0x06054B50) {
+          eocdOffset = i;
+          break;
+        }
+      }
+      if (eocdOffset === -1) throw new Error('الملف المضغوط غير صالح أو تالف');
+
+      const numEntries = view.getUint16(eocdOffset + 8, true);
+      const centralDirOffset = view.getUint32(eocdOffset + 16, true);
+
+      const results = [];
+      let p = centralDirOffset;
+
+      for (let e = 0; e < numEntries; e++) {
+        if (p + 46 > len || view.getUint32(p, true) !== 0x02014B50) break;
+        const compression = view.getUint16(p + 10, true);
+        const compSize = view.getUint32(p + 20, true);
+        const uncompSize = view.getUint32(p + 24, true);
+        const fnLen = view.getUint16(p + 28, true);
+        const efLen = view.getUint16(p + 30, true);
+        const commentLen = view.getUint16(p + 32, true);
+        const localHeaderOffset = view.getUint32(p + 42, true);
+
+        const nameBytes = uint8.subarray(p + 46, p + 46 + fnLen);
+        let fileName = '';
+        try {
+          fileName = new TextDecoder('utf-8').decode(nameBytes);
+        } catch (ex) {
+          for (let k = 0; k < nameBytes.length; k++) fileName += String.fromCharCode(nameBytes[k]);
+        }
+
+        const localFnLen = view.getUint16(localHeaderOffset + 26, true);
+        const localEfLen = view.getUint16(localHeaderOffset + 28, true);
+        const dataOffset = localHeaderOffset + 30 + localFnLen + localEfLen;
+        const rawData = uint8.subarray(dataOffset, dataOffset + compSize);
+
+        let fileData = rawData;
+        if (compression === 8 && typeof pako !== 'undefined') {
+          try {
+            fileData = pako.inflate(rawData);
+          } catch (de) {
+            console.warn('pako.inflate failed for ' + fileName, de);
+          }
+        }
+
+        results.push({ name: fileName, data: fileData, compression, size: uncompSize });
+        p += 46 + fnLen + efLen + commentLen;
+      }
+      return results;
+    }
+
     /**
      * Unified Image Processor for ANY Satellite / Aerial Format (TIFF, GeoTIFF, PNG, JPG, JPEG, WEBP, ECW)
      */
-    async function processAnyImageFile(imageFile, sidecarFile = null) {
+    async function processAnyImageFile(imageFile, sidecarFile = null, preloadedSidecarText = null, preloadedPrjText = null) {
       if (!imageFile) return;
 
       try {
         switchToCalibrateTab();
         showToast(`جاري معالجة وفحص الخارطة: ${imageFile.name}...`, 'info');
 
-        let sidecarText = null;
-        if (sidecarFile) {
+        let sidecarText = preloadedSidecarText;
+        if (!sidecarText && sidecarFile) {
           try {
             sidecarText = await new Promise((resolve) => {
               const r = new FileReader();
@@ -4158,9 +4359,35 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
           if (sidecarText) {
             geoMeta = parseSidecarMetadata(sidecarText, geoMeta);
           }
+          if (preloadedPrjText) {
+            geoMeta = parseSidecarMetadata(preloadedPrjText, geoMeta);
+          }
           if (decoded.width > 0 && (!geoMeta.width || geoMeta.width <= 0)) {
             geoMeta.width = decoded.width;
             geoMeta.height = decoded.height;
+          }
+
+          // If no sidecar or tags detected, check local calibration registry
+          if (!sidecarText && (!geoMeta || !geoMeta.originX || geoMeta.originX === 0)) {
+            const cachedRec = getCalibrationRecord(imageFile.name);
+            if (cachedRec && cachedRec.bounds) {
+              const customBounds = L.latLngBounds(cachedRec.bounds);
+              displayECWMetadata(geoMeta || {}, customBounds);
+              if (customBounds && customBounds.isValid && customBounds.isValid()) {
+                try {
+                  map.flyToBounds(customBounds, { padding: [40, 40], maxZoom: 17, duration: 1.4 });
+                } catch (e) {
+                  map.fitBounds(customBounds, { padding: [40, 40] });
+                }
+              }
+              let imageSrcToUse = decoded.pngDataUrl;
+              if (!imageSrcToUse || imageSrcToUse.startsWith('data:image/svg+xml')) {
+                imageSrcToUse = getSatelliteServiceUrlForBounds(customBounds);
+              }
+              initCalibrationOverlay(imageSrcToUse, imageFile.name, customBounds);
+              showToast(`🎯 تم استرجاع موقع GeoTIFF بدقة متناهية من سجل المعايرة السابق!`, 'success');
+              return;
+            }
           }
 
           const customBounds = computeBoundsFromMeta(geoMeta);
@@ -4220,12 +4447,38 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
           displayDataUrl = c.toDataURL('image/jpeg', 0.94);
         }
 
+        // Check local calibration registry if no sidecar
+        if (!sidecarText) {
+          const cachedRec = getCalibrationRecord(imageFile.name);
+          if (cachedRec && cachedRec.bounds) {
+            const customBounds = L.latLngBounds(cachedRec.bounds);
+            let geoMeta = parseECWHeader(new ArrayBuffer(32), imageFile.name, imageFile.size);
+            geoMeta.width = dims.width;
+            geoMeta.height = dims.height;
+            geoMeta.detectionSource = 'سجل المعايرة المحلي للخارطة المصححة';
+            displayECWMetadata(geoMeta, customBounds);
+            if (customBounds && customBounds.isValid && customBounds.isValid()) {
+              try {
+                map.flyToBounds(customBounds, { padding: [40, 40], maxZoom: 17, duration: 1.4 });
+              } catch (e) {
+                map.fitBounds(customBounds, { padding: [40, 40] });
+              }
+            }
+            initCalibrationOverlay(displayDataUrl, imageFile.name, customBounds);
+            showToast(`🎯 تم استرجاع موقع الخارطة المصححة (${imageFile.name}) بدقة متناهية من سجل المعايرة السابق!`, 'success');
+            return;
+          }
+        }
+
         let geoMeta = parseECWHeader(new ArrayBuffer(32), imageFile.name, imageFile.size);
         geoMeta.width = dims.width;
         geoMeta.height = dims.height;
 
         if (sidecarText) {
           geoMeta = parseSidecarMetadata(sidecarText, geoMeta);
+        }
+        if (preloadedPrjText) {
+          geoMeta = parseSidecarMetadata(preloadedPrjText, geoMeta);
         }
 
         const customBounds = computeBoundsFromMeta(geoMeta);
@@ -4267,23 +4520,29 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
     }
 
     /**
-     * Handle Selected Files (Single or Multi-file drag/picker)
+     * Handle Selected Files (Single or Multi-file drag/picker & ZIP Archives)
      */
     async function handleSelectedFiles(files) {
       if (!files || files.length === 0) return;
 
+      let zipFile = null;
       let ecwFile = null;
       let sidecarFile = null;
+      let prjFile = null;
       let tiffFile = null;
       let companionRasterFile = null;
 
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
         const lower = f.name.toLowerCase();
-        if (lower.endsWith('.ecw')) {
+        if (lower.endsWith('.zip')) {
+          zipFile = f;
+        } else if (lower.endsWith('.ecw')) {
           ecwFile = f;
         } else if (lower.endsWith('.ers') || lower.endsWith('.eww') || lower.endsWith('.wld') || lower.endsWith('.tfw') || lower.endsWith('.jgw') || lower.endsWith('.pgw')) {
           sidecarFile = f;
+        } else if (lower.endsWith('.prj')) {
+          prjFile = f;
         } else if (lower.endsWith('.tif') || lower.endsWith('.tiff') || (f.type && f.type.includes('tiff'))) {
           tiffFile = f;
         } else if (f.type.startsWith('image/') || lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.webp')) {
@@ -4291,34 +4550,108 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
         }
       }
 
+      // 1. Direct handling of ArcView GIS Bundle (.ZIP)
+      if (zipFile) {
+        showToast(`جاري استخراج وفحص حزمة ArcView GIS: ${zipFile.name}...`, 'info');
+        try {
+          const zipBuf = await zipFile.arrayBuffer();
+          const unzippedEntries = parseZipArchive(zipBuf);
+          let extractedTiff = null;
+          let extractedRaster = null;
+          let extractedTfw = null;
+          let extractedPrj = null;
+
+          for (const item of unzippedEntries) {
+            const low = item.name.toLowerCase();
+            if (low.endsWith('.tif') || low.endsWith('.tiff')) {
+              extractedTiff = item;
+            } else if (low.endsWith('.png') || low.endsWith('.jpg') || low.endsWith('.jpeg')) {
+              extractedRaster = item;
+            } else if (low.endsWith('.tfw') || low.endsWith('.pgw') || low.endsWith('.wld')) {
+              extractedTfw = item;
+            } else if (low.endsWith('.prj')) {
+              extractedPrj = item;
+            }
+          }
+
+          let sidecarText = null;
+          if (extractedTfw && extractedTfw.data) {
+            try { sidecarText = new TextDecoder('utf-8').decode(extractedTfw.data); } catch (e) {}
+          }
+          let prjText = null;
+          if (extractedPrj && extractedPrj.data) {
+            try { prjText = new TextDecoder('utf-8').decode(extractedPrj.data); } catch (e) {}
+          }
+
+          if (extractedTiff) {
+            const tiffBlob = new Blob([extractedTiff.data], { type: 'image/tiff' });
+            tiffBlob.name = extractedTiff.name;
+            await processAnyImageFile(tiffBlob, null, sidecarText, prjText);
+            showToast(`🎉 تم استيراد خارطة GeoTIFF من حزمة ZIP بنجاح بمطابقة تامة!`, 'success');
+            return;
+          } else if (extractedRaster) {
+            const mime = extractedRaster.name.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+            const imgBlob = new Blob([extractedRaster.data], { type: mime });
+            imgBlob.name = extractedRaster.name;
+            await processAnyImageFile(imgBlob, null, sidecarText, prjText);
+            showToast(`🎉 تم استيراد الخارطة المصححة مع ملفات الإسناد (.TFW/.PRJ) من حزمة ZIP بنجاح!`, 'success');
+            return;
+          } else {
+            showToast('لم يتم العثور على ملف صورة أو GeoTIFF داخل حزمة ZIP', 'warning');
+          }
+        } catch (zipErr) {
+          console.error('Error reading ZIP file:', zipErr);
+          showToast(`خطأ في قراءة حزمة ZIP: ${zipErr.message || zipErr}`, 'error');
+        }
+        return;
+      }
+
+      // Read PRJ text if supplied in multi-file drop
+      let preloadedPrjText = null;
+      if (prjFile) {
+        try {
+          preloadedPrjText = await new Promise((resolve) => {
+            const r = new FileReader();
+            r.onload = () => resolve(r.target.result);
+            r.onerror = () => resolve(null);
+            r.readAsText(prjFile);
+          });
+        } catch (pe) {}
+      }
+
+      // Read Sidecar text if supplied in multi-file drop
+      let preloadedSidecarText = null;
+      if (sidecarFile) {
+        try {
+          preloadedSidecarText = await new Promise((resolve) => {
+            const r = new FileReader();
+            r.onload = () => resolve(r.target.result);
+            r.onerror = () => resolve(null);
+            r.readAsText(sidecarFile);
+          });
+        } catch (se) {}
+      }
+
       if (ecwFile) {
         if (companionRasterFile) {
           const companionSrc = URL.createObjectURL(companionRasterFile);
-          if (sidecarFile) {
-            const sidecarReader = new FileReader();
-            sidecarReader.onload = (se) => processECWDataset(ecwFile, companionSrc, se.target.result);
-            sidecarReader.readAsText(sidecarFile);
-          } else {
-            processECWDataset(ecwFile, companionSrc, null);
-          }
-        } else if (sidecarFile) {
-          const sidecarReader = new FileReader();
-          sidecarReader.onload = (se) => processECWDataset(ecwFile, null, se.target.result);
-          sidecarReader.readAsText(sidecarFile);
+          processECWDataset(ecwFile, companionSrc, preloadedSidecarText);
         } else {
-          processECWDataset(ecwFile, null, null);
+          processECWDataset(ecwFile, null, preloadedSidecarText);
         }
       } else if (tiffFile) {
-        await processAnyImageFile(tiffFile, sidecarFile);
+        await processAnyImageFile(tiffFile, sidecarFile, preloadedSidecarText, preloadedPrjText);
         if (companionRasterFile && overlay) {
           const companionSrc = URL.createObjectURL(companionRasterFile);
           overlay.setUrl(companionSrc);
           showToast(`تم إقران الصورة المرفقة (${companionRasterFile.name}) بنطاق الخارطة بنجاح!`, 'success');
         }
       } else if (companionRasterFile) {
-        await processAnyImageFile(companionRasterFile, sidecarFile);
+        await processAnyImageFile(companionRasterFile, sidecarFile, preloadedSidecarText, preloadedPrjText);
+      } else if (sidecarFile || prjFile) {
+        showToast('يرجى اختيار ملف الصورة (TIFF / PNG / JPG) مع ملفات الإسناد (.TFW / .PRJ)', 'warning');
       } else {
-        showToast('يرجى اختيار ملف بصيغة .ecw أو صورة فضائية مدعومة (TIFF / PNG / JPG)', 'warning');
+        showToast('يرجى اختيار ملف بصيغة .ecw أو صورة فضائية مدعومة (TIFF / PNG / JPG) أو حزمة .zip', 'warning');
       }
     }
 
@@ -5422,6 +5755,8 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
         className: 'calibrated-satellite-overlay direct-drag-active'
       }).addTo(map);
 
+      overlay._isGeoreferencedStrict = !!customBounds;
+
       // Safeguard: ensure Leaflet zoom animations never strip CSS rotation
       if (overlay) {
         overlay._origAnimateZoom = overlay._animateZoom;
@@ -5439,29 +5774,31 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       });
 
       overlay.on('load', () => {
-        // Enforce physical 1:1 pixel aspect ratio upon load
-        const el = overlay.getElement ? overlay.getElement() : overlay._image;
-        if (el && el.naturalWidth && el.naturalHeight && el.naturalHeight > 0) {
-          const naturalAspect = el.naturalWidth / el.naturalHeight;
-          const z = map.getZoom() || 15;
-          const nwPt = map.project(bounds.getNorthWest(), z);
-          const sePt = map.project(bounds.getSouthEast(), z);
-          const curW = Math.abs(sePt.x - nwPt.x);
-          const curH = Math.abs(sePt.y - nwPt.y);
-          const currentAspect = curW / Math.max(1, curH);
+        // Enforce physical 1:1 pixel aspect ratio upon load ONLY if bounds are not strictly georeferenced
+        if (!overlay._isGeoreferencedStrict) {
+          const el = overlay.getElement ? overlay.getElement() : overlay._image;
+          if (el && el.naturalWidth && el.naturalHeight && el.naturalHeight > 0) {
+            const naturalAspect = el.naturalWidth / el.naturalHeight;
+            const z = map.getZoom() || 15;
+            const nwPt = map.project(bounds.getNorthWest(), z);
+            const sePt = map.project(bounds.getSouthEast(), z);
+            const curW = Math.abs(sePt.x - nwPt.x);
+            const curH = Math.abs(sePt.y - nwPt.y);
+            const currentAspect = curW / Math.max(1, curH);
 
-          // If bounds aspect ratio deviates from physical raster by > 1.5%, conform geometry
-          if (Math.abs(currentAspect - naturalAspect) / naturalAspect > 0.015) {
-            const cPt = map.project(bounds.getCenter(), z);
-            const targetH = curH;
-            const targetW = targetH * naturalAspect;
-            const newNW = map.unproject(L.point(cPt.x - targetW / 2, cPt.y - targetH / 2), z);
-            const newSE = map.unproject(L.point(cPt.x + targetW / 2, cPt.y + targetH / 2), z);
-            bounds = L.latLngBounds(newSE, newNW);
-            baseCenter = bounds.getCenter();
-            baseSpanLat = bounds.getNorth() - bounds.getSouth();
-            baseSpanLng = bounds.getEast() - bounds.getWest();
-            overlay.setBounds(bounds);
+            // If bounds aspect ratio deviates from physical raster by > 1.5%, conform geometry
+            if (Math.abs(currentAspect - naturalAspect) / naturalAspect > 0.015) {
+              const cPt = map.project(bounds.getCenter(), z);
+              const targetH = curH;
+              const targetW = targetH * naturalAspect;
+              const newNW = map.unproject(L.point(cPt.x - targetW / 2, cPt.y - targetH / 2), z);
+              const newSE = map.unproject(L.point(cPt.x + targetW / 2, cPt.y + targetH / 2), z);
+              bounds = L.latLngBounds(newSE, newNW);
+              baseCenter = bounds.getCenter();
+              baseSpanLat = bounds.getNorth() - bounds.getSouth();
+              baseSpanLng = bounds.getEast() - bounds.getWest();
+              overlay.setBounds(bounds);
+            }
           }
         }
         attachOverlayDragEvents();
@@ -6534,8 +6871,10 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       view.setFloat64(modelTiepointOffset, 0.0, true);
       view.setFloat64(modelTiepointOffset + 8, 0.0, true);
       view.setFloat64(modelTiepointOffset + 16, 0.0, true);
-      view.setFloat64(modelTiepointOffset + 24, geodata.xTopLeft, true);
-      view.setFloat64(modelTiepointOffset + 32, geodata.yTopLeft, true);
+      const tieX = (geodata.xMin !== undefined && geodata.xMin !== null) ? geodata.xMin : geodata.xTopLeft;
+      const tieY = (geodata.yMax !== undefined && geodata.yMax !== null) ? geodata.yMax : geodata.yTopLeft;
+      view.setFloat64(modelTiepointOffset + 24, tieX, true);
+      view.setFloat64(modelTiepointOffset + 32, tieY, true);
       view.setFloat64(modelTiepointOffset + 40, 0.0, true);
 
       for (let i = 0; i < geoKeys.length; i++) {
@@ -6987,6 +7326,17 @@ Date: ${new Date().toLocaleString('ar-IQ')} / ${new Date().toISOString()}
         const baseName = (rawName || 'rectified_map')
           .replace(/\.[^/.]+$/, '')
           .replace(/[^a-zA-Z0-9_\u0600-\u06FF-]/g, '_') || 'rectified_map';
+
+        const effectiveExportBounds = (overlay && bounds && bounds.isValid && bounds.isValid()) ? bounds : map.getBounds();
+        saveCalibrationRecord(baseName, {
+          bounds: effectiveExportBounds,
+          rotationDeg: 0,
+          scalePercent: 100,
+          epsgCode: geodata.epsgCode,
+          crsName: geodata.crsName,
+          width: geodata.width,
+          height: geodata.height
+        });
 
         const prjText = generatePrjText(geodata.epsgCode);
         const tfwText = generateWorldFileText(geodata.dx, geodata.rotY, geodata.rotX, geodata.dy, geodata.xTopLeft, geodata.yTopLeft, geodata.isProjected);
