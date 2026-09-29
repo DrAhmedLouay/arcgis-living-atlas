@@ -3775,20 +3775,19 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
 
     function applyMultiPointGcp() {
       if (isApplyingGcp) return;
-      if (!isGcpMatchingActive && gcpPairs.length < 2) return;
+
+      if (!overlay || !bounds) {
+        showToast('يرجى استيراد خارطة فضائية أولاً لإجراء المعايرة', 'warning');
+        return;
+      }
+
+      if (gcpPairs.length < 2) {
+        showToast(`يرجى تحديد نقطتي ضبط (زوجين) على الأقل لإجراء المعايرة (المحدد حالياً: ${gcpPairs.length} أزواج)`, 'warning');
+        return;
+      }
 
       isApplyingGcp = true;
       try {
-        if (!overlay || !bounds) {
-          showToast('يرجى استيراد خارطة فضائية أولاً لإجراء المعايرة', 'warning');
-          return;
-        }
-
-        if (gcpPairs.length < 2) {
-          showToast('يرجى تحديد نقطتي ضبط (زوجين) على الأقل لإجراء المعايرة', 'warning');
-          return;
-        }
-
         // If user had clicked point A and forgot point B, remove the pending point A
         if (gcpPendingImgPt !== null) {
           if (gcpPendingMarkerA && map.hasLayer(gcpPendingMarkerA)) {
@@ -3800,13 +3799,14 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
           gcpPendingMarkerA = null;
         }
 
+        const countSolved = gcpPairs.length;
         pushCalibHistory('معايرة نقاط الضبط GCP');
         const solved = solveMultiPointGcpAffine(gcpPairs);
         if (!solved) {
           return;
         }
 
-        // Finish mode cleanly
+        // Finish mode cleanly and immediately clear control markers
         isGcpMatchingActive = false;
         map.getContainer().classList.remove('gcp-calibration-active');
         map.getContainer().removeEventListener('click', handleGcpNativeClick, true);
@@ -3820,6 +3820,18 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
         if (sidebarUndoGcpBtn) sidebarUndoGcpBtn.classList.add('hidden');
         if (floatRedoGcpBtn) floatRedoGcpBtn.classList.add('hidden');
         if (sidebarRedoGcpBtn) sidebarRedoGcpBtn.classList.add('hidden');
+        if (gcpInstructionsText) gcpInstructionsText.classList.add('hidden');
+        if (gcpPointsList) gcpPointsList.classList.add('hidden');
+
+        // Clean up markers and line overlays immediately
+        clearGcpMarkers();
+        gcpPairs = [];
+        gcpPendingImgPt = null;
+        gcpPendingMarkerA = null;
+        if (gcpClearTimeoutId) {
+          clearTimeout(gcpClearTimeoutId);
+          gcpClearTimeoutId = null;
+        }
 
         // Restore handles and original opacity
         if (overlay && bounds && !isLocked) createHandles();
@@ -3833,26 +3845,14 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
         }
 
         if (gcpStatusBadge) {
-          gcpStatusBadge.textContent = `معايرة مكتملة (${gcpPairs.length} نقاط)`;
+          gcpStatusBadge.textContent = `معايرة مكتملة (${countSolved} نقاط)`;
           gcpStatusBadge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold';
         }
         if (gcpBtnLabel) gcpBtnLabel.textContent = 'إعادة المعايرة بنقاط الضبط (GCP)';
 
-        // Cancel previous timer if any
-        if (gcpClearTimeoutId) {
-          clearTimeout(gcpClearTimeoutId);
-        }
-        // Retain markers for 10 seconds for user visual verification, then clear
-        gcpClearTimeoutId = setTimeout(() => {
-          clearGcpMarkers();
-          if (gcpInstructionsText) gcpInstructionsText.classList.add('hidden');
-          if (gcpPointsList) gcpPointsList.classList.add('hidden');
-          if (gcpStatusBadge) {
-            gcpStatusBadge.textContent = 'غير نشط';
-            gcpStatusBadge.className = 'text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-mono';
-          }
-          gcpClearTimeoutId = null;
-        }, 10000);
+        setTimeout(() => {
+          blinkCompare();
+        }, 250);
       } catch (err) {
         console.error('Error applying Multi-Point GCP:', err);
         showToast('حدث خطأ أثناء تطبيق نقاط المعايرة: ' + (err.message || 'يرجى إعادة المحاولة'), 'error');
@@ -3958,12 +3958,18 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       // Compute current unrotated bounding box dimensions in projected pixels
       const curNW = map.project(bounds.getNorthWest(), zoom);
       const curSE = map.project(bounds.getSouthEast(), zoom);
-      const curW = Math.abs(curSE.x - curNW.x);
-      const curH = Math.abs(curSE.y - curNW.y);
+      let curW = Math.abs(curSE.x - curNW.x);
+      let curH = Math.abs(curSE.y - curNW.y);
+
+      // Determine physical image aspect ratio to eliminate distortion from any side
+      const el = overlay.getElement ? overlay.getElement() : overlay._image;
+      const naturalAspect = (el && el.naturalWidth && el.naturalHeight && el.naturalHeight > 0)
+        ? (el.naturalWidth / el.naturalHeight)
+        : (curW / Math.max(1, curH));
 
       // Uniformly scale unrotated dimensions (Preserves aspect ratio 100% with zero distortion)
-      const newW = curW * scaleRatio;
-      const newH = curH * scaleRatio;
+      let newH = curH * scaleRatio;
+      let newW = newH * naturalAspect;
 
       if (isNaN(newCenterX) || isNaN(newCenterY) || isNaN(newW) || isNaN(newH) || newW <= 0 || newH <= 0) {
         showToast('تعذر احتساب إحداثيات صحيحة من نقاط الضبط، يرجى إعادة المحاولة', 'error');
@@ -3981,16 +3987,27 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       baseSpanLat = bounds.getNorth() - bounds.getSouth();
       baseSpanLng = bounds.getEast() - bounds.getWest();
 
-      // Accumulate rotation in degrees
-      rotationDeg = Math.round((rotationDeg + deltaAngleDeg) % 360);
-      if (rotationDeg < 0) rotationDeg += 360;
+      // Check for reverse-order click anomaly:
+      let finalDeltaDeg = deltaAngleDeg;
+      if (N === 2 && Math.abs(deltaAngleDeg) > 120) {
+        const altDelta = deltaAngleDeg > 0 ? (deltaAngleDeg - 180) : (deltaAngleDeg + 180);
+        if (Math.abs(altDelta) < 45) {
+          finalDeltaDeg = altDelta;
+          console.warn('Auto-corrected reversed GCP pair vector to preserve North-Up orientation');
+        }
+      }
+
+      // Accumulate rotation with 2 decimal places precision
+      let newRot = (rotationDeg + finalDeltaDeg) % 360;
+      if (newRot < 0) newRot += 360;
+      rotationDeg = parseFloat(newRot.toFixed(2));
 
       // Update scale slider percentage
       scalePercent = Math.min(Math.max(Math.round(scalePercent * scaleRatio), 10), 1000);
       if (scaleSlider) scaleSlider.value = Math.min(Math.max(scalePercent, 20), 400);
       if (scaleLabel) scaleLabel.textContent = `${scalePercent}%`;
 
-      if (rotationSlider) rotationSlider.value = rotationDeg;
+      if (rotationSlider) rotationSlider.value = Math.round(rotationDeg);
       if (rotationLabel) rotationLabel.textContent = `${rotationDeg}°`;
       if (boundRot) boundRot.textContent = `${rotationDeg}°`;
 
@@ -3999,30 +4016,12 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       updateReadout();
 
       try {
-        map.flyToBounds(bounds, { padding: [40, 40], duration: 1.2 });
-      } catch (flyErr) {
-        try {
-          map.fitBounds(bounds, { padding: [40, 40] });
-        } catch (fitErr) {
-          console.warn('Map bounds fit fallback:', fitErr);
-        }
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 18, animate: false });
+      } catch (fitErr) {
+        console.warn('Map bounds fit fallback:', fitErr);
       }
 
-      if (gcpInstructionsText) {
-        gcpInstructionsText.innerHTML = `
-          <div class="text-emerald-400 font-bold flex items-center gap-1.5">
-            <i class="fa-solid fa-circle-check"></i>
-            <span>اكتملت المعايرة بنجاح عبر (${N}) نقاط ضبط!</span>
-          </div>
-          <div class="text-[10px] text-slate-300 space-y-0.5 mt-1">
-            <div>دوران الخارطة: <strong class="text-white">${Math.round(rotationDeg)}°</strong> | المقياس: <strong class="text-white">${(scaleRatio * 100).toFixed(0)}%</strong></div>
-            <div>دقة التطابق (RMS Error): <strong class="text-emerald-300">≈ ${rmseMeters} متر</strong></div>
-          </div>
-        `;
-      }
-
-      showToast(`⚡ تمت المعايرة التآلفية بدقة متناهية دون أي تشويه عبر (${N}) نقاط! دوران: ${Math.round(rotationDeg)}°، مقياس: ${(scaleRatio * 100).toFixed(0)}%، خطأ المطابقة: ≈ ${rmseMeters}م`, 'success');
-      setTimeout(() => { blinkCompare(); }, 500);
+      showToast(`⚡ تمت المعايرة التآلفية بدقة متناهية دون أي تشويه عبر (${N}) نقاط! دوران: ${rotationDeg}°، مقياس: ${(scaleRatio * 100).toFixed(0)}%، خطأ المطابقة: ≈ ${rmseMeters}م`, 'success');
       return true;
     }
 
@@ -5421,6 +5420,15 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
         className: 'calibrated-satellite-overlay direct-drag-active'
       }).addTo(map);
 
+      // Safeguard: ensure Leaflet zoom animations never strip CSS rotation
+      if (overlay) {
+        overlay._origAnimateZoom = overlay._animateZoom;
+        overlay._animateZoom = function(opt) {
+          if (this._origAnimateZoom) this._origAnimateZoom.call(this, opt);
+          applyRotation();
+        };
+      }
+
       overlay.on('error', () => {
         console.warn('Overlay image failed to load, falling back to satellite service');
         if (bounds && typeof getSatelliteServiceUrlForBounds === 'function') {
@@ -5429,9 +5437,35 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       });
 
       overlay.on('load', () => {
+        // Enforce physical 1:1 pixel aspect ratio upon load
+        const el = overlay.getElement ? overlay.getElement() : overlay._image;
+        if (el && el.naturalWidth && el.naturalHeight && el.naturalHeight > 0) {
+          const naturalAspect = el.naturalWidth / el.naturalHeight;
+          const z = map.getZoom() || 15;
+          const nwPt = map.project(bounds.getNorthWest(), z);
+          const sePt = map.project(bounds.getSouthEast(), z);
+          const curW = Math.abs(sePt.x - nwPt.x);
+          const curH = Math.abs(sePt.y - nwPt.y);
+          const currentAspect = curW / Math.max(1, curH);
+
+          // If bounds aspect ratio deviates from physical raster by > 1.5%, conform geometry
+          if (Math.abs(currentAspect - naturalAspect) / naturalAspect > 0.015) {
+            const cPt = map.project(bounds.getCenter(), z);
+            const targetH = curH;
+            const targetW = targetH * naturalAspect;
+            const newNW = map.unproject(L.point(cPt.x - targetW / 2, cPt.y - targetH / 2), z);
+            const newSE = map.unproject(L.point(cPt.x + targetW / 2, cPt.y + targetH / 2), z);
+            bounds = L.latLngBounds(newSE, newNW);
+            baseCenter = bounds.getCenter();
+            baseSpanLat = bounds.getNorth() - bounds.getSouth();
+            baseSpanLng = bounds.getEast() - bounds.getWest();
+            overlay.setBounds(bounds);
+          }
+        }
         attachOverlayDragEvents();
         applyVisualFilters();
         applyRotation();
+        createHandles();
       });
 
       window.calibOverlayInstance = overlay;
@@ -5568,55 +5602,34 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
 
         marker.on('drag', () => {
           const newPos = marker.getLatLng();
-          const curSw = bounds.getSouthWest();
-          const curNe = bounds.getNorthEast();
+          const z = map.getZoom() || 15;
+          const newPt = map.project(newPos, z);
+          const curCenter = map.project(bounds.getCenter(), z);
+          const curNwPt = map.project(bounds.getNorthWest(), z);
+          const curSePt = map.project(bounds.getSouthEast(), z);
+          const halfW_orig = Math.abs(curSePt.x - curNwPt.x) / 2;
+          const halfH_orig = Math.abs(curSePt.y - curNwPt.y) / 2;
+          const origDist = Math.sqrt(halfW_orig * halfW_orig + halfH_orig * halfH_orig);
+          const curDist = Math.sqrt(Math.pow(newPt.x - curCenter.x, 2) + Math.pow(newPt.y - curCenter.y, 2));
 
-          if (rotationDeg === 0) {
-            if (corner.id === 'ne') {
-              bounds = L.latLngBounds(curSw, newPos);
-            } else if (corner.id === 'nw') {
-              bounds = L.latLngBounds([curSw.lat, newPos.lng], [newPos.lat, curNe.lng]);
-            } else if (corner.id === 'se') {
-              bounds = L.latLngBounds([newPos.lat, curSw.lng], [curNe.lat, newPos.lng]);
-            } else if (corner.id === 'sw') {
-              bounds = L.latLngBounds(newPos, curNe);
-            }
-
+          if (origDist > 1 && curDist > 5) {
+            const ratio = curDist / origDist;
+            const newHalfW = halfW_orig * ratio;
+            const newHalfH = halfH_orig * ratio;
+            const newNW = map.unproject(L.point(curCenter.x - newHalfW, curCenter.y - newHalfH), z);
+            const newSE = map.unproject(L.point(curCenter.x + newHalfW, curCenter.y + newHalfH), z);
+            bounds = L.latLngBounds(newSE, newNW);
             baseCenter = bounds.getCenter();
             baseSpanLat = bounds.getNorth() - bounds.getSouth();
             baseSpanLng = bounds.getEast() - bounds.getWest();
-            updateOverlayGeometry();
-          } else {
-            // Proportional uniform scaling from center when rotated (zero aspect ratio distortion)
-            const z = map.getZoom() || 15;
-            const newPt = map.project(newPos, z);
-            const curCenter = map.project(bounds.getCenter(), z);
-            const curNwPt = map.project(bounds.getNorthWest(), z);
-            const curSePt = map.project(bounds.getSouthEast(), z);
-            const halfW_orig = Math.abs(curSePt.x - curNwPt.x) / 2;
-            const halfH_orig = Math.abs(curSePt.y - curNwPt.y) / 2;
-            const origDist = Math.sqrt(halfW_orig * halfW_orig + halfH_orig * halfH_orig);
-            const curDist = Math.sqrt(Math.pow(newPt.x - curCenter.x, 2) + Math.pow(newPt.y - curCenter.y, 2));
 
-            if (origDist > 1 && curDist > 10) {
-              const ratio = curDist / origDist;
-              const newHalfW = halfW_orig * ratio;
-              const newHalfH = halfH_orig * ratio;
-              const newNW = map.unproject(L.point(curCenter.x - newHalfW, curCenter.y - newHalfH), z);
-              const newSE = map.unproject(L.point(curCenter.x + newHalfW, curCenter.y + newHalfH), z);
-              bounds = L.latLngBounds(newSE, newNW);
-              baseCenter = bounds.getCenter();
-              baseSpanLat = bounds.getNorth() - bounds.getSouth();
-              baseSpanLng = bounds.getEast() - bounds.getWest();
+            scalePercent = Math.min(Math.max(Math.round(scalePercent * ratio), 10), 1000);
+            if (scaleSlider) scaleSlider.value = Math.min(Math.max(scalePercent, 20), 400);
+            if (scaleLabel) scaleLabel.textContent = `${scalePercent}%`;
 
-              scalePercent = Math.min(Math.max(Math.round(scalePercent * ratio), 10), 1000);
-              if (scaleSlider) scaleSlider.value = Math.min(Math.max(scalePercent, 20), 400);
-              if (scaleLabel) scaleLabel.textContent = `${scalePercent}%`;
-
-              overlay.setBounds(bounds);
-              applyRotation();
-              updateReadout();
-            }
+            overlay.setBounds(bounds);
+            applyRotation();
+            updateReadout();
           }
         });
 
@@ -5829,7 +5842,7 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       }
     }
 
-    map.on('zoom viewreset moveend', () => {
+    map.on('zoomanim zoom move viewreset moveend resize', () => {
       if (overlay) {
         applyRotation();
       }
