@@ -3771,7 +3771,13 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       }
     }
 
+    let isApplyingGcp = false;
+
     function applyMultiPointGcp() {
+      if (isApplyingGcp) return;
+      if (!isGcpMatchingActive && gcpPairs.length < 2) return;
+
+      isApplyingGcp = true;
       try {
         if (!overlay || !bounds) {
           showToast('يرجى استيراد خارطة فضائية أولاً لإجراء المعايرة', 'warning');
@@ -3812,6 +3818,8 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
         if (sidebarApplyGcpBtn) sidebarApplyGcpBtn.classList.add('hidden');
         if (floatUndoGcpBtn) floatUndoGcpBtn.classList.add('hidden');
         if (sidebarUndoGcpBtn) sidebarUndoGcpBtn.classList.add('hidden');
+        if (floatRedoGcpBtn) floatRedoGcpBtn.classList.add('hidden');
+        if (sidebarRedoGcpBtn) sidebarRedoGcpBtn.classList.add('hidden');
 
         // Restore handles and original opacity
         if (overlay && bounds && !isLocked) createHandles();
@@ -3848,12 +3856,17 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       } catch (err) {
         console.error('Error applying Multi-Point GCP:', err);
         showToast('حدث خطأ أثناء تطبيق نقاط المعايرة: ' + (err.message || 'يرجى إعادة المحاولة'), 'error');
+      } finally {
+        isApplyingGcp = false;
       }
     }
 
     /**
      * Solve Least Squares Affine / Helmert Similarity Transformation for N Points (N >= 2)
-     * Finds optimal translation, scale, and rotation that minimizes Mean Squared Error
+     * Formulated in Conformal Web Mercator Global Projection Pixels to ensure:
+     * 1. 100% Isotropic, uniform scaling (ZERO aspect ratio distortion from any side)
+     * 2. True geometric clockwise rotation angle matching CSS rotate() exactly
+     * 3. Perfect landmark alignment minimizing Mean Squared Error with the original base map
      */
     function solveMultiPointGcpAffine(pairs) {
       if (!overlay || !bounds || !pairs || pairs.length < 2) {
@@ -3861,112 +3874,125 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
         return false;
       }
       const N = pairs.length;
+      const zoom = map.getZoom() || 15;
 
-      // Centroids
-      let sumImgX = 0, sumImgY = 0, sumGrdX = 0, sumGrdY = 0;
-      pairs.forEach(p => {
-        sumImgX += p.imgPt.lng;
-        sumImgY += p.imgPt.lat;
-        sumGrdX += p.basePt.lng;
-        sumGrdY += p.basePt.lat;
-      });
+      // Project all points to global conformal Web Mercator pixel coordinates at current map zoom
+      // In this coordinate system, 1 pixel X = 1 pixel Y everywhere on Earth (isotropic 1:1 aspect ratio)
+      const ptsA = pairs.map(p => map.project(p.imgPt, zoom));
+      const ptsB = pairs.map(p => map.project(p.basePt, zoom));
 
-      const meanImgX = sumImgX / N;
-      const meanImgY = sumImgY / N;
-      const meanGrdX = sumGrdX / N;
-      const meanGrdY = sumGrdY / N;
+      // Calculate Centroids in projected pixels
+      let sumA_x = 0, sumA_y = 0, sumB_x = 0, sumB_y = 0;
+      for (let i = 0; i < N; i++) {
+        sumA_x += ptsA[i].x;
+        sumA_y += ptsA[i].y;
+        sumB_x += ptsB[i].x;
+        sumB_y += ptsB[i].y;
+      }
+      const meanA = { x: sumA_x / N, y: sumA_y / N };
+      const meanB = { x: sumB_x / N, y: sumB_y / N };
 
-      // Normal equations for similarity transform
+      // Normal equations for 2D Helmert Similarity Transformation
       let denom = 0;
       let numA = 0;
       let numB = 0;
 
-      pairs.forEach(p => {
-        const u = p.imgPt.lng - meanImgX;
-        const v = p.imgPt.lat - meanImgY;
-        const U = p.basePt.lng - meanGrdX;
-        const V = p.basePt.lat - meanGrdY;
+      for (let i = 0; i < N; i++) {
+        const u = ptsA[i].x - meanA.x;
+        const v = ptsA[i].y - meanA.y;
+        const U = ptsB[i].x - meanB.x;
+        const V = ptsB[i].y - meanB.y;
 
         denom += (u * u + v * v);
         numA += (u * U + v * V);
         numB += (u * V - v * U);
-      });
+      }
 
-      if (denom < 1e-12) {
-        showToast('نقاط الضبط متقاربة جداً أو متطابقة، يرجى اختيار نقاط متباعدة عبر الخارطة', 'warning');
+      if (denom < 1e-4) {
+        showToast('نقاط الضبط متقاربة جداً، يرجى اختيار نقاط متباعدة عبر الخارطة', 'warning');
         return false;
       }
 
       const a = numA / denom;
       const b = numB / denom;
 
-      // Scale & Rotation
+      // Pure uniform scale ratio (no aspect ratio distortion)
       const scaleRatio = Math.sqrt(a * a + b * b);
-      const deltaAngleRad = Math.atan2(b, a);
-      const deltaAngleDeg = deltaAngleRad * (180 / Math.PI);
 
-      if (scaleRatio < 0.01 || scaleRatio > 100 || isNaN(scaleRatio)) {
+      if (scaleRatio < 0.005 || scaleRatio > 200 || isNaN(scaleRatio)) {
         showToast('نسبة المقياس المحسوبة غير معقولة، يرجى التحقق من صحة النقاط المحددة', 'warning');
         return false;
       }
 
-      // Calculate Root Mean Square Error (RMSE)
+      // In pixel space where +X is East and +Y is South (downwards):
+      // atan2(b, a) gives the clockwise angular change in radians
+      const deltaAngleRad = Math.atan2(b, a);
+      const deltaAngleDeg = deltaAngleRad * (180 / Math.PI);
+
+      // Calculate Root Mean Square Error (RMSE) in meters
       let sumSqResiduals = 0;
-      pairs.forEach(p => {
-        const u = p.imgPt.lng - meanImgX;
-        const v = p.imgPt.lat - meanImgY;
+      for (let i = 0; i < N; i++) {
+        const u = ptsA[i].x - meanA.x;
+        const v = ptsA[i].y - meanA.y;
         const predU = a * u - b * v;
         const predV = b * u + a * v;
-        const actualU = p.basePt.lng - meanGrdX;
-        const actualV = p.basePt.lat - meanGrdY;
+        const actualU = ptsB[i].x - meanB.x;
+        const actualV = ptsB[i].y - meanB.y;
         const errX = actualU - predU;
         const errY = actualV - predV;
         sumSqResiduals += (errX * errX + errY * errY);
-      });
-      const rmseDegrees = Math.sqrt(sumSqResiduals / N);
-      const rmseMeters = Math.round(rmseDegrees * 111320);
+      }
+      const rmsePixels = Math.sqrt(sumSqResiduals / N);
+      const centerLatRad = bounds.getCenter().lat * Math.PI / 180;
+      const metersPerPixel = (40075016.686 * Math.cos(centerLatRad)) / Math.pow(2, zoom + 8);
+      const rmseMeters = Math.round(rmsePixels * metersPerPixel);
 
-      // Accumulate rotation
-      rotationDeg = Math.round((rotationDeg + deltaAngleDeg) % 360);
-      if (rotationDeg < 0) rotationDeg += 360;
+      // Compute new center in projected pixels
+      const curCenterPt = map.project(bounds.getCenter(), zoom);
+      const relCenterX = curCenterPt.x - meanA.x;
+      const relCenterY = curCenterPt.y - meanA.y;
 
-      if (rotationSlider) rotationSlider.value = rotationDeg;
-      if (rotationLabel) rotationLabel.textContent = `${rotationDeg}°`;
-      if (boundRot) boundRot.textContent = `${rotationDeg}°`;
-      applyRotation();
+      const newCenterX = meanB.x + (a * relCenterX - b * relCenterY);
+      const newCenterY = meanB.y + (b * relCenterX + a * relCenterY);
 
-      // Center translation
-      const curCenter = bounds.getCenter();
-      const relLng = curCenter.lng - meanImgX;
-      const relLat = curCenter.lat - meanImgY;
+      // Compute current unrotated bounding box dimensions in projected pixels
+      const curNW = map.project(bounds.getNorthWest(), zoom);
+      const curSE = map.project(bounds.getSouthEast(), zoom);
+      const curW = Math.abs(curSE.x - curNW.x);
+      const curH = Math.abs(curSE.y - curNW.y);
 
-      const newRelLng = a * relLng - b * relLat;
-      const newRelLat = b * relLng + a * relLat;
+      // Uniformly scale unrotated dimensions (Preserves aspect ratio 100% with zero distortion)
+      const newW = curW * scaleRatio;
+      const newH = curH * scaleRatio;
 
-      const newCenterLng = meanGrdX + newRelLng;
-      const newCenterLat = meanGrdY + newRelLat;
-
-      // Update Spans & Bounds
-      const newSpanLat = (bounds.getNorth() - bounds.getSouth()) * scaleRatio;
-      const newSpanLng = (bounds.getEast() - bounds.getWest()) * scaleRatio;
-
-      if (isNaN(newCenterLat) || isNaN(newCenterLng) || isNaN(newSpanLat) || isNaN(newSpanLng) || newSpanLat <= 0 || newSpanLng <= 0) {
+      if (isNaN(newCenterX) || isNaN(newCenterY) || isNaN(newW) || isNaN(newH) || newW <= 0 || newH <= 0) {
         showToast('تعذر احتساب إحداثيات صحيحة من نقاط الضبط، يرجى إعادة المحاولة', 'error');
         return false;
       }
 
-      bounds = L.latLngBounds(
-        [newCenterLat - newSpanLat / 2, newCenterLng - newSpanLng / 2],
-        [newCenterLat + newSpanLat / 2, newCenterLng + newSpanLng / 2]
-      );
+      const newNW_pt = L.point(newCenterX - newW / 2, newCenterY - newH / 2);
+      const newSE_pt = L.point(newCenterX + newW / 2, newCenterY + newH / 2);
 
+      const newNW_ll = map.unproject(newNW_pt, zoom);
+      const newSE_ll = map.unproject(newSE_pt, zoom);
+
+      bounds = L.latLngBounds(newSE_ll, newNW_ll);
       baseCenter = bounds.getCenter();
-      baseSpanLat = newSpanLat;
-      baseSpanLng = newSpanLng;
+      baseSpanLat = bounds.getNorth() - bounds.getSouth();
+      baseSpanLng = bounds.getEast() - bounds.getWest();
 
+      // Accumulate rotation in degrees
+      rotationDeg = Math.round((rotationDeg + deltaAngleDeg) % 360);
+      if (rotationDeg < 0) rotationDeg += 360;
+
+      // Update scale slider percentage
       scalePercent = Math.min(Math.max(Math.round(scalePercent * scaleRatio), 10), 1000);
       if (scaleSlider) scaleSlider.value = Math.min(Math.max(scalePercent, 20), 400);
       if (scaleLabel) scaleLabel.textContent = `${scalePercent}%`;
+
+      if (rotationSlider) rotationSlider.value = rotationDeg;
+      if (rotationLabel) rotationLabel.textContent = `${rotationDeg}°`;
+      if (boundRot) boundRot.textContent = `${rotationDeg}°`;
 
       updateOverlayGeometry();
       createHandles();
@@ -3995,7 +4021,7 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
         `;
       }
 
-      showToast(`⚡ تمت المعايرة التآلفية بنجاح عبر (${N}) نقاط! دوران: ${Math.round(rotationDeg)}°، مقياس: ${(scaleRatio * 100).toFixed(0)}%، خطأ المطابقة: ≈ ${rmseMeters}م`, 'success');
+      showToast(`⚡ تمت المعايرة التآلفية بدقة متناهية دون أي تشويه عبر (${N}) نقاط! دوران: ${Math.round(rotationDeg)}°، مقياس: ${(scaleRatio * 100).toFixed(0)}%، خطأ المطابقة: ≈ ${rmseMeters}م`, 'success');
       setTimeout(() => { blinkCompare(); }, 500);
       return true;
     }
@@ -5469,21 +5495,63 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       clearHandles();
       if (!bounds || isLocked) return;
 
-      // Dashed boundary rectangle
-      boundaryBox = L.rectangle(bounds, {
-        color: '#f59e0b',
-        weight: 1.5,
-        dashArray: '5, 8',
-        fill: false,
-        interactive: false
-      }).addTo(map);
+      const zoom = map.getZoom() || 15;
+      const cPt = map.project(bounds.getCenter(), zoom);
+      const nwPt = map.project(bounds.getNorthWest(), zoom);
+      const sePt = map.project(bounds.getSouthEast(), zoom);
 
-      const corners = [
-        { id: 'ne', pos: bounds.getNorthEast(), cursor: 'ne-resize' },
-        { id: 'nw', pos: bounds.getNorthWest(), cursor: 'nw-resize' },
-        { id: 'se', pos: bounds.getSouthEast(), cursor: 'se-resize' },
-        { id: 'sw', pos: bounds.getSouthWest(), cursor: 'sw-resize' }
-      ];
+      let corners = [];
+      if (rotationDeg === 0) {
+        // Unrotated rectangular boundary
+        boundaryBox = L.rectangle(bounds, {
+          color: '#f59e0b',
+          weight: 1.5,
+          dashArray: '5, 8',
+          fill: false,
+          interactive: false
+        }).addTo(map);
+
+        corners = [
+          { id: 'ne', pos: bounds.getNorthEast(), cursor: 'ne-resize' },
+          { id: 'nw', pos: bounds.getNorthWest(), cursor: 'nw-resize' },
+          { id: 'se', pos: bounds.getSouthEast(), cursor: 'se-resize' },
+          { id: 'sw', pos: bounds.getSouthWest(), cursor: 'sw-resize' }
+        ];
+      } else {
+        // Rotated boundary polygon that hugs the rotated image exactly
+        const rad = rotationDeg * (Math.PI / 180);
+        const cosR = Math.cos(rad);
+        const sinR = Math.sin(rad);
+
+        function rotPx(x, y) {
+          const dx = x - cPt.x;
+          const dy = y - cPt.y;
+          return L.point(
+            cPt.x + (dx * cosR - dy * sinR),
+            cPt.y + (dx * sinR + dy * cosR)
+          );
+        }
+
+        const rNW = map.unproject(rotPx(nwPt.x, nwPt.y), zoom);
+        const rNE = map.unproject(rotPx(sePt.x, nwPt.y), zoom);
+        const rSE = map.unproject(rotPx(sePt.x, sePt.y), zoom);
+        const rSW = map.unproject(rotPx(nwPt.x, sePt.y), zoom);
+
+        boundaryBox = L.polygon([rNW, rNE, rSE, rSW], {
+          color: '#f59e0b',
+          weight: 1.5,
+          dashArray: '5, 8',
+          fill: false,
+          interactive: false
+        }).addTo(map);
+
+        corners = [
+          { id: 'ne', pos: rNE, cursor: 'crosshair' },
+          { id: 'nw', pos: rNW, cursor: 'crosshair' },
+          { id: 'se', pos: rSE, cursor: 'crosshair' },
+          { id: 'sw', pos: rSW, cursor: 'crosshair' }
+        ];
+      }
 
       corners.forEach(corner => {
         const marker = L.marker(corner.pos, {
@@ -5503,21 +5571,53 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
           const curSw = bounds.getSouthWest();
           const curNe = bounds.getNorthEast();
 
-          if (corner.id === 'ne') {
-            bounds = L.latLngBounds(curSw, newPos);
-          } else if (corner.id === 'nw') {
-            bounds = L.latLngBounds([curSw.lat, newPos.lng], [newPos.lat, curNe.lng]);
-          } else if (corner.id === 'se') {
-            bounds = L.latLngBounds([newPos.lat, curSw.lng], [curNe.lat, newPos.lng]);
-          } else if (corner.id === 'sw') {
-            bounds = L.latLngBounds(newPos, curNe);
+          if (rotationDeg === 0) {
+            if (corner.id === 'ne') {
+              bounds = L.latLngBounds(curSw, newPos);
+            } else if (corner.id === 'nw') {
+              bounds = L.latLngBounds([curSw.lat, newPos.lng], [newPos.lat, curNe.lng]);
+            } else if (corner.id === 'se') {
+              bounds = L.latLngBounds([newPos.lat, curSw.lng], [curNe.lat, newPos.lng]);
+            } else if (corner.id === 'sw') {
+              bounds = L.latLngBounds(newPos, curNe);
+            }
+
+            baseCenter = bounds.getCenter();
+            baseSpanLat = bounds.getNorth() - bounds.getSouth();
+            baseSpanLng = bounds.getEast() - bounds.getWest();
+            updateOverlayGeometry();
+          } else {
+            // Proportional uniform scaling from center when rotated (zero aspect ratio distortion)
+            const z = map.getZoom() || 15;
+            const newPt = map.project(newPos, z);
+            const curCenter = map.project(bounds.getCenter(), z);
+            const curNwPt = map.project(bounds.getNorthWest(), z);
+            const curSePt = map.project(bounds.getSouthEast(), z);
+            const halfW_orig = Math.abs(curSePt.x - curNwPt.x) / 2;
+            const halfH_orig = Math.abs(curSePt.y - curNwPt.y) / 2;
+            const origDist = Math.sqrt(halfW_orig * halfW_orig + halfH_orig * halfH_orig);
+            const curDist = Math.sqrt(Math.pow(newPt.x - curCenter.x, 2) + Math.pow(newPt.y - curCenter.y, 2));
+
+            if (origDist > 1 && curDist > 10) {
+              const ratio = curDist / origDist;
+              const newHalfW = halfW_orig * ratio;
+              const newHalfH = halfH_orig * ratio;
+              const newNW = map.unproject(L.point(curCenter.x - newHalfW, curCenter.y - newHalfH), z);
+              const newSE = map.unproject(L.point(curCenter.x + newHalfW, curCenter.y + newHalfH), z);
+              bounds = L.latLngBounds(newSE, newNW);
+              baseCenter = bounds.getCenter();
+              baseSpanLat = bounds.getNorth() - bounds.getSouth();
+              baseSpanLng = bounds.getEast() - bounds.getWest();
+
+              scalePercent = Math.min(Math.max(Math.round(scalePercent * ratio), 10), 1000);
+              if (scaleSlider) scaleSlider.value = Math.min(Math.max(scalePercent, 20), 400);
+              if (scaleLabel) scaleLabel.textContent = `${scalePercent}%`;
+
+              overlay.setBounds(bounds);
+              applyRotation();
+              updateReadout();
+            }
           }
-
-          baseCenter = bounds.getCenter();
-          baseSpanLat = bounds.getNorth() - bounds.getSouth();
-          baseSpanLng = bounds.getEast() - bounds.getWest();
-
-          updateOverlayGeometry();
         });
 
         marker.on('dragend', () => {
@@ -5702,7 +5802,13 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       if (overlay && bounds) {
         overlay.setBounds(bounds);
         applyRotation();
-        if (boundaryBox) boundaryBox.setBounds(bounds);
+        if (boundaryBox) {
+          if (rotationDeg === 0 && typeof boundaryBox.setBounds === 'function') {
+            boundaryBox.setBounds(bounds);
+          } else {
+            createHandles();
+          }
+        }
         updateReadout();
       }
     }
@@ -5712,7 +5818,7 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
      */
     function applyRotation() {
       if (!overlay) return;
-      const el = overlay.getElement();
+      const el = overlay.getElement ? overlay.getElement() : overlay._image;
       if (!el) return;
       el.style.transformOrigin = 'center center';
       const cleanTransform = (el.style.transform || '').replace(/\s*rotate\([^)]*\)/g, '').trim();
