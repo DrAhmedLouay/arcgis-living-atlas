@@ -28,6 +28,25 @@
 
   <!-- Custom Styling -->
   <link rel="stylesheet" href="css/styles.css?v=20260929_02">
+
+  <script>
+    // Immediate Synchronous Handlers for ArcView GIS & GeoTIFF Export Studio
+    window.openGisExportModal = function() {
+      var modal = document.getElementById('gisExportModal');
+      if (modal) {
+        modal.classList.remove('hidden');
+      }
+      if (typeof window.syncGisExportModalData === 'function') {
+        window.syncGisExportModalData();
+      }
+    };
+    window.closeGisExportModal = function() {
+      var modal = document.getElementById('gisExportModal');
+      if (modal) {
+        modal.classList.add('hidden');
+      }
+    };
+  </script>
 </head>
 <body class="bg-slate-950 text-slate-100 h-screen w-screen flex flex-col overflow-hidden select-none">
 
@@ -86,7 +105,13 @@
       <!-- Export Screenshot -->
       <button id="screenshotBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700/80 text-xs font-medium text-slate-200 flex items-center gap-1.5 transition-colors" title="تصدير لقطة للخريطة">
         <i class="fa-solid fa-camera text-amber-400"></i>
-        <span class="hidden sm:inline">تصدير</span>
+        <span class="hidden sm:inline">لقطة</span>
+      </button>
+
+      <!-- ArcView GIS & GeoTIFF Export Studio Header Button -->
+      <button id="headerGisExportBtn" onclick="window.openGisExportModal()" type="button" class="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-xs font-semibold text-amber-200 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer" title="خزن وتصدير الخارطة بصيغة GeoTIFF و ArcView GIS">
+        <i class="fa-solid fa-file-export text-amber-400"></i>
+        <span class="hidden sm:inline">تصدير GIS</span>
       </button>
 
       <!-- Toggle Quick Basemap Bar -->
@@ -241,7 +266,7 @@
         </button>
 
         <!-- GIS & ArcView Export Studio Trigger -->
-        <button type="button" id="floatGisExportBtn" onclick="window.openGisExportModal && window.openGisExportModal()" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-amber-200 hover:text-white bg-amber-950/80 hover:bg-amber-900 border border-amber-500/50 transition-all flex items-center gap-1.5 shadow-sm" title="خزن وتصدير الخارطة المصححة بصيغة GeoTIFF و ArcView GIS">
+        <button type="button" id="floatGisExportBtn" onclick="window.openGisExportModal()" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-amber-200 hover:text-white bg-amber-950/80 hover:bg-amber-900 border border-amber-500/50 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer" title="خزن وتصدير الخارطة المصححة بصيغة GeoTIFF و ArcView GIS">
           <i class="fa-solid fa-file-export text-amber-400"></i>
           <span>تصدير GIS</span>
         </button>
@@ -724,6 +749,15 @@
                   <span class="text-[10px] text-emerald-300 font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">ECW Preset</span>
                 </button>
                 <button type="button" id="loadSampleSatelliteBtn" class="hidden"></button>
+
+                <!-- Direct Studio Launch Shortcut -->
+                <button type="button" onclick="window.openGisExportModal()" class="w-full py-2 px-2.5 rounded-lg bg-gradient-to-r from-amber-950/80 via-amber-900/60 to-slate-900 border border-amber-500/50 text-right text-xs text-amber-200 hover:text-white flex items-center justify-between transition-all shadow-sm cursor-pointer group">
+                  <span class="flex items-center gap-1.5 font-bold">
+                    <i class="fa-solid fa-box-archive text-amber-400 group-hover:scale-110 transition-transform"></i>
+                    <span>فتح استوديو خزن وتصدير الخارطة (ArcView GIS & GeoTIFF)</span>
+                  </span>
+                  <i class="fa-solid fa-arrow-left text-amber-400 text-[10px]"></i>
+                </button>
               </div>
             </div>
 
@@ -1318,7 +1352,7 @@
               </div>
 
               <!-- ArcView & GeoTIFF Export Studio Trigger -->
-              <button type="button" id="openGisExportModalBtn" class="w-full py-2.5 px-3 bg-gradient-to-r from-amber-600 via-emerald-600 to-teal-600 hover:from-amber-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 text-xs transition-all border border-amber-400/40 cursor-pointer active:scale-95 shadow-emerald-950/50">
+              <button type="button" id="openGisExportModalBtn" onclick="window.openGisExportModal()" class="w-full py-2.5 px-3 bg-gradient-to-r from-amber-600 via-emerald-600 to-teal-600 hover:from-amber-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 text-xs transition-all border border-amber-400/40 cursor-pointer active:scale-95 shadow-emerald-950/50">
                 <i class="fa-solid fa-file-export text-sm text-amber-200"></i>
                 <span>خزن وتصدير الخارطة المصححة (GeoTIFF / ArcView GIS)</span>
               </button>
@@ -1715,8 +1749,8 @@
   <!-- =========================================================================
        ArcView GIS & GeoTIFF Export Studio Modal
        ========================================================================= -->
-  <div id="gisExportModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-    <div class="glass-panel rounded-2xl w-full max-w-2xl border border-amber-500/60 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden my-auto animate-fadeIn">
+  <div id="gisExportModal" class="hidden fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="glass-panel rounded-2xl w-full max-w-2xl border border-amber-500/60 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden my-auto animate-fadeIn relative z-[101]">
       
       <!-- Modal Header -->
       <div class="p-4 border-b border-amber-950/80 bg-gradient-to-r from-slate-900 via-amber-950/70 to-slate-900 flex items-center justify-between">
@@ -1732,13 +1766,34 @@
             <p class="text-[11px] text-slate-400 mt-0.5">تصدير الخارطة المصححة جيوديسياً مع ملفات الإسناد المكاني المتوافقة مع كافة برامج GIS</p>
           </div>
         </div>
-        <button id="closeGisExportModalBtn" class="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors">
+        <button id="closeGisExportModalBtn" onclick="window.closeGisExportModal()" class="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer">
           <i class="fa-solid fa-xmark text-lg"></i>
         </button>
       </div>
 
       <!-- Scrollable Modal Body -->
       <div class="p-4 overflow-y-auto space-y-4 text-xs">
+
+        <!-- Notice Banner when no custom overlay is loaded -->
+        <div id="gisExportNoOverlayNotice" class="hidden bg-amber-950/40 border border-amber-500/50 rounded-xl p-3 space-y-2">
+          <div class="flex items-center gap-2 text-amber-300 font-bold text-xs">
+            <i class="fa-solid fa-circle-info text-amber-400 text-sm"></i>
+            <span>لم يتم استيراد خارطة مخصصة بعد — يمكنك التصدير مباشرة لنطاق الشاشة الحالي، أو اختيار خارطة:</span>
+          </div>
+          <p class="text-[11px] text-slate-300 leading-relaxed">
+            النظام جاهز لتصدير نطاق خارطة الأساس الحالي كحزمة ArcView GIS و GeoTIFF، أو يمكنك استيراد ملف راستر لمعايرته وتصديره:
+          </p>
+          <div class="flex items-center gap-2 flex-wrap pt-0.5">
+            <button type="button" id="gisModalPickFileBtn" class="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow transition-colors cursor-pointer">
+              <i class="fa-solid fa-folder-open text-xs"></i>
+              <span>استيراد ملف خارطة من جهازك</span>
+            </button>
+            <button type="button" id="gisModalLoadBaghdadBtn" class="py-1.5 px-3 bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-white border border-slate-700 rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer">
+              <i class="fa-solid fa-satellite text-xs"></i>
+              <span>تحميل عينة بغداد ودجلة (ECW)</span>
+            </button>
+          </div>
+        </div>
 
         <!-- Status & Extent Card -->
         <div class="bg-slate-950/80 rounded-xl p-3 border border-slate-800 space-y-2">
@@ -1921,7 +1976,7 @@
       <!-- Modal Footer -->
       <div class="p-3 border-t border-slate-800 bg-slate-950 flex items-center justify-between text-[11px]">
         <span class="text-slate-400 font-mono">ESRI ArcView GIS 3.x / ArcGIS Pro / QGIS Compatible</span>
-        <button type="button" id="closeGisExportBottomBtn" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors cursor-pointer">إغلاق</button>
+        <button type="button" id="closeGisExportBottomBtn" onclick="window.closeGisExportModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors cursor-pointer">إغلاق</button>
       </div>
 
     </div>
@@ -1934,13 +1989,13 @@
        Scripts
        ========================================================================= -->
   <!-- Curated Catalog Data -->
-  <script src="js/catalog-data.js?v=20260929_05"></script>
+  <script src="js/catalog-data.js?v=20260929_07"></script>
 
   <!-- Curated Official Archaeological Sites of Iraq -->
-  <script src="js/archaeology-data.js?v=20260929_05"></script>
+  <script src="js/archaeology-data.js?v=20260929_07"></script>
 
   <!-- Living Atlas Engine Entry -->
-  <script src="js/atlas-core.js?v=20260929_05"></script>
+  <script src="js/atlas-core.js?v=20260929_07"></script>
 
 </body>
 </html>

@@ -3647,7 +3647,7 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       if (!isGcpMatchingActive) return;
 
       // Ignore clicks on UI controls, sidebars, modals, floating bars, or buttons
-      if (e.target.closest('#appSidebar, #aiAlignmentModal, #floatingVisibilityBar, #floatRestoreVisibilityBarBtn, #floatingQuickBasemapBar, #showQuickBasemapBtn, #floatingRoiBar, #floatingMeasureBar, #floatingGcpBar, .leaflet-control, button, input, select, textarea, a')) {
+      if (e.target.closest('#appSidebar, #aiAlignmentModal, #gisExportModal, #floatingVisibilityBar, #floatRestoreVisibilityBarBtn, #floatingQuickBasemapBar, #showQuickBasemapBtn, #floatingRoiBar, #floatingMeasureBar, #floatingGcpBar, .leaflet-control, button, input, select, textarea, a')) {
         return;
       }
 
@@ -6666,24 +6666,40 @@ Date: ${new Date().toLocaleString('ar-IQ')} / ${new Date().toISOString()}
 
     // Render Rectified Raster onto an in-memory Canvas
     async function renderRectifiedOverlayCanvas() {
-      if (!overlay || !bounds) {
-        throw new Error('لا توجد خارطة مستوردة نشطة للمعايرة والتصدير');
+      const hasCustomOverlay = !!(overlay && bounds && bounds.isValid && bounds.isValid());
+      const effectiveBounds = hasCustomOverlay ? bounds : (map && map.getBounds ? map.getBounds() : L.latLngBounds([29.0, 38.0], [38.0, 49.0]));
+
+      if (!effectiveBounds) {
+        throw new Error('لا توجد خارطة أو نطاق جغرافي نشط للتصدير');
       }
 
-      const el = overlay.getElement ? overlay.getElement() : overlay._image;
-      let sourceImg = el;
-      if (!sourceImg || !sourceImg.complete || !sourceImg.naturalWidth) {
+      let sourceImg = null;
+      if (hasCustomOverlay) {
+        const el = overlay.getElement ? overlay.getElement() : overlay._image;
+        sourceImg = el;
+        if (!sourceImg || !sourceImg.complete || !sourceImg.naturalWidth) {
+          sourceImg = await new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error('فشل تحميل بيانات صورة الخارطة للتصدير'));
+            img.src = overlay._url;
+          });
+        }
+      } else {
+        const fallbackUrl = getSatelliteServiceUrlForBounds(effectiveBounds);
         sourceImg = await new Promise((resolve, reject) => {
           const img = new Image();
           img.crossOrigin = 'anonymous';
           img.onload = () => resolve(img);
-          img.onerror = () => reject(new Error('فشل تحميل بيانات صورة الخارطة للتصدير'));
-          img.src = overlay._url;
+          img.onerror = () => reject(new Error('فشل جلب لقطة الخارطة للتصدير'));
+          img.src = fallbackUrl;
         });
       }
 
       const naturalW = sourceImg.naturalWidth || 2048;
       const naturalH = sourceImg.naturalHeight || 2048;
+      const effectiveRotationDeg = hasCustomOverlay ? rotationDeg : 0;
 
       const crsVal = (gisExportCrsSelect ? gisExportCrsSelect.value : 'EPSG:32638');
       const alignMode = (gisExportAlignSelect ? gisExportAlignSelect.value : 'north-up');
@@ -6729,16 +6745,16 @@ Date: ${new Date().toLocaleString('ar-IQ')} / ${new Date().toISOString()}
         return latLngToUtm(lat, lng, utmZone);
       }
 
-      const cCrs = toCrs(bounds.getCenter().lat, bounds.getCenter().lng);
-      const nwCrs = toCrs(bounds.getNorth(), bounds.getWest());
-      const neCrs = toCrs(bounds.getNorth(), bounds.getEast());
-      const seCrs = toCrs(bounds.getSouth(), bounds.getEast());
-      const swCrs = toCrs(bounds.getSouth(), bounds.getWest());
+      const cCrs = toCrs(effectiveBounds.getCenter().lat, effectiveBounds.getCenter().lng);
+      const nwCrs = toCrs(effectiveBounds.getNorth(), effectiveBounds.getWest());
+      const neCrs = toCrs(effectiveBounds.getNorth(), effectiveBounds.getEast());
+      const seCrs = toCrs(effectiveBounds.getSouth(), effectiveBounds.getEast());
+      const swCrs = toCrs(effectiveBounds.getSouth(), effectiveBounds.getWest());
 
       const rawSpanX = Math.abs(neCrs.x - nwCrs.x);
       const rawSpanY = Math.abs(nwCrs.y - swCrs.y);
 
-      const rotRad = (rotationDeg * Math.PI) / 180;
+      const rotRad = (effectiveRotationDeg * Math.PI) / 180;
       const mathRotRad = -rotRad;
 
       let xMin, xMax, yMin, yMax;
@@ -6756,7 +6772,7 @@ Date: ${new Date().toLocaleString('ar-IQ')} / ${new Date().toISOString()}
         targetMaxDim = 2048;
       }
 
-      if (northUpMode && rotationDeg !== 0) {
+      if (northUpMode && effectiveRotationDeg !== 0) {
         const corners = [nwCrs, neCrs, seCrs, swCrs];
         const rotatedCorners = corners.map(pt => {
           const rx = pt.x - cCrs.x;
@@ -6811,7 +6827,7 @@ Date: ${new Date().toLocaleString('ar-IQ')} / ${new Date().toISOString()}
         dx = spanX / outW;
         dy = spanY / outH;
 
-        if (!northUpMode && rotationDeg !== 0) {
+        if (!northUpMode && effectiveRotationDeg !== 0) {
           const cosA = Math.cos(mathRotRad);
           const sinA = Math.sin(mathRotRad);
           const rx = (nwCrs.x - cCrs.x);
@@ -6834,12 +6850,12 @@ Date: ${new Date().toLocaleString('ar-IQ')} / ${new Date().toISOString()}
       const ctx = canvas.getContext('2d');
 
       let filterStr = '';
-      if (includeVisualFilters && visualState) {
+      if (includeVisualFilters && visualState && hasCustomOverlay) {
         filterStr = `brightness(${visualState.brightness}%) contrast(${visualState.contrast}%) saturate(${visualState.saturation}%)`;
         if (visualState.invert) filterStr += ' invert(100%)';
       }
 
-      if (northUpMode && rotationDeg !== 0) {
+      if (northUpMode && effectiveRotationDeg !== 0) {
         ctx.save();
         ctx.translate(outW / 2, outH / 2);
         ctx.rotate(rotRad);
@@ -6873,44 +6889,71 @@ Date: ${new Date().toLocaleString('ar-IQ')} / ${new Date().toISOString()}
         epsgCode,
         crsName,
         northUpMode,
-        rotationDeg
+        rotationDeg: effectiveRotationDeg,
+        hasCustomOverlay
       };
     }
 
     // Modal Control & Metadata Population
     function openGisExportModal() {
-      if (!overlay || !bounds) {
-        showToast('يرجى استيراد خارطة ومعايرتها أولاً لتتمكن من تصديرها', 'warning');
-        return;
+      if (!gisExportModal) return;
+
+      const hasCustomOverlay = !!(overlay && bounds && bounds.isValid && bounds.isValid());
+      const effectiveBounds = hasCustomOverlay ? bounds : (map && map.getBounds ? map.getBounds() : L.latLngBounds([29.0, 38.0], [38.0, 49.0]));
+
+      const gisExportNoOverlayNotice = document.getElementById('gisExportNoOverlayNotice');
+      if (gisExportNoOverlayNotice) {
+        gisExportNoOverlayNotice.classList.toggle('hidden', hasCustomOverlay);
       }
 
       if (gisExportFileName) {
-        gisExportFileName.textContent = (currentOverlayFileName || 'خارطة مصححة (Rectified Map)');
+        if (hasCustomOverlay) {
+          gisExportFileName.textContent = (currentOverlayFileName || 'خارطة مصححة (Rectified Map)');
+        } else {
+          gisExportFileName.textContent = 'نطاق الشاشة الحالي (خارطة الأساس)';
+        }
       }
+
+      if (gisExportStatusBadge) {
+        if (hasCustomOverlay) {
+          gisExportStatusBadge.textContent = 'خارطة مستوردة مصححة';
+          gisExportStatusBadge.className = 'text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono';
+        } else {
+          gisExportStatusBadge.textContent = 'نطاق الأساس الحالي (جاهز للتصدير)';
+          gisExportStatusBadge.className = 'text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono';
+        }
+      }
+
       if (gisExportDims) {
-        const el = overlay.getElement ? overlay.getElement() : overlay._image;
-        const w = (el && el.naturalWidth) ? el.naturalWidth : 2048;
-        const h = (el && el.naturalHeight) ? el.naturalHeight : 2048;
-        gisExportDims.textContent = `${w} × ${h} بكسل`;
+        if (hasCustomOverlay) {
+          const el = overlay.getElement ? overlay.getElement() : overlay._image;
+          const w = (el && el.naturalWidth) ? el.naturalWidth : 2048;
+          const h = (el && el.naturalHeight) ? el.naturalHeight : 2048;
+          gisExportDims.textContent = `${w} × ${h} بكسل`;
+        } else {
+          const sz = map && map.getSize ? map.getSize() : { x: 1920, y: 1080 };
+          gisExportDims.textContent = `${sz.x} × ${sz.y} بكسل`;
+        }
       }
+
       if (gisExportRot) {
-        gisExportRot.textContent = `${rotationDeg}°`;
+        gisExportRot.textContent = `${hasCustomOverlay ? rotationDeg : 0}°`;
       }
-      if (gisExportNorth) gisExportNorth.textContent = bounds.getNorth().toFixed(5) + '° N';
-      if (gisExportSouth) gisExportSouth.textContent = bounds.getSouth().toFixed(5) + '° S';
-      if (gisExportEast)  gisExportEast.textContent  = bounds.getEast().toFixed(5) + '° E';
-      if (gisExportWest)  gisExportWest.textContent  = bounds.getWest().toFixed(5) + '° W';
 
-      // Estimate pixel resolution in meters
-      const midLat = bounds.getCenter().lat;
-      const metersPerDeg = 111320 * Math.cos((midLat * Math.PI) / 180);
-      const spanLngMeters = (bounds.getEast() - bounds.getWest()) * metersPerDeg;
-      const estRes = (spanLngMeters / 2048).toFixed(2);
-      if (gisExportRes) gisExportRes.textContent = `~${estRes} م / بكسل`;
+      if (effectiveBounds && effectiveBounds.isValid && effectiveBounds.isValid()) {
+        if (gisExportNorth) gisExportNorth.textContent = effectiveBounds.getNorth().toFixed(5) + '° N';
+        if (gisExportSouth) gisExportSouth.textContent = effectiveBounds.getSouth().toFixed(5) + '° S';
+        if (gisExportEast)  gisExportEast.textContent  = effectiveBounds.getEast().toFixed(5) + '° E';
+        if (gisExportWest)  gisExportWest.textContent  = effectiveBounds.getWest().toFixed(5) + '° W';
 
-      if (gisExportModal) {
-        gisExportModal.classList.remove('hidden');
+        const midLat = effectiveBounds.getCenter().lat;
+        const metersPerDeg = 111320 * Math.cos((midLat * Math.PI) / 180);
+        const spanLngMeters = (effectiveBounds.getEast() - effectiveBounds.getWest()) * metersPerDeg;
+        const estRes = (spanLngMeters / 2048).toFixed(2);
+        if (gisExportRes) gisExportRes.textContent = `~${estRes} م / بكسل`;
       }
+
+      gisExportModal.classList.remove('hidden');
     }
 
     function closeGisExportModal() {
@@ -6936,16 +6979,12 @@ Date: ${new Date().toLocaleString('ar-IQ')} / ${new Date().toISOString()}
 
     // Main GIS Export Execution Dispatcher
     async function executeGisExport(targetType) {
-      if (!overlay || !bounds) {
-        showToast('يرجى استيراد خارطة ومعايرتها أولاً للتصدير', 'warning');
-        return;
-      }
-
-      showToast('⏳ جاري تصحيح الخارطة وبناء ملفات الإسناد المكاني...', 'info');
+      showToast('⏳ جاري تحضير ملفات الإسناد المكاني والتصدير...', 'info');
 
       try {
         const geodata = await renderRectifiedOverlayCanvas();
-        const baseName = (currentOverlayFileName || 'rectified_map')
+        const rawName = geodata.hasCustomOverlay ? currentOverlayFileName : 'iraq_basemap_viewport';
+        const baseName = (rawName || 'rectified_map')
           .replace(/\.[^/.]+$/, '')
           .replace(/[^a-zA-Z0-9_\u0600-\u06FF-]/g, '_') || 'rectified_map';
 
@@ -6998,16 +7037,15 @@ Date: ${new Date().toLocaleString('ar-IQ')} / ${new Date().toISOString()}
         const rawData = imgData.data;
 
         for (let i = 0, j = 0; i < rawData.length; i += 4, j += 3) {
-          rgbBytes[j]     = rawData[i];     // Red
-          rgbBytes[j + 1] = rawData[i + 1]; // Green
-          rgbBytes[j + 2] = rawData[i + 2]; // Blue
+          rgbBytes[j]     = rawData[i];
+          rgbBytes[j + 1] = rawData[i + 1];
+          rgbBytes[j + 2] = rawData[i + 2];
         }
 
         const geoTiffBuf = createGeoTiffBuffer(geodata.width, geodata.height, rgbBytes, geodata);
 
         if (targetType === 'tif') {
           triggerDownload(geoTiffBuf, `${baseName}.tif`, 'image/tiff');
-          // Also automatically supply .tfw and .prj alongside .tif for 100% legacy ArcView 3.x compatibility
           setTimeout(() => triggerDownload(tfwText, `${baseName}.tfw`, 'text/plain'), 400);
           setTimeout(() => triggerDownload(prjText, `${baseName}.prj`, 'text/plain'), 800);
           showToast(`✅ تم تنزيل ملف GeoTIFF (.TIF) وملفات الإسناد (.TFW و .PRJ)`, 'success');
@@ -7063,12 +7101,38 @@ Date: ${new Date().toLocaleString('ar-IQ')} / ${new Date().toISOString()}
     if (closeGisExportModalBtn) closeGisExportModalBtn.addEventListener('click', closeGisExportModal);
     if (closeGisExportBottomBtn) closeGisExportBottomBtn.addEventListener('click', closeGisExportModal);
 
+    const headerGisExportBtn = document.getElementById('headerGisExportBtn');
+    if (headerGisExportBtn) headerGisExportBtn.addEventListener('click', openGisExportModal);
+
+    const gisModalPickFileBtn = document.getElementById('gisModalPickFileBtn');
+    if (gisModalPickFileBtn) {
+      gisModalPickFileBtn.addEventListener('click', () => {
+        closeGisExportModal();
+        if (fileInput) fileInput.click();
+      });
+    }
+
+    const gisModalLoadBaghdadBtn = document.getElementById('gisModalLoadBaghdadBtn');
+    if (gisModalLoadBaghdadBtn) {
+      gisModalLoadBaghdadBtn.addEventListener('click', () => {
+        closeGisExportModal();
+        if (loadBaghdadEcwBtn) loadBaghdadEcwBtn.click();
+      });
+    }
+
     if (gisExportModal) {
       gisExportModal.addEventListener('click', (e) => {
         if (e.target === gisExportModal) closeGisExportModal();
       });
     }
 
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && gisExportModal && !gisExportModal.classList.contains('hidden')) {
+        closeGisExportModal();
+      }
+    });
+
+    window.syncGisExportModalData = openGisExportModal;
     window.openGisExportModal = openGisExportModal;
     window.closeGisExportModal = closeGisExportModal;
     window.executeGisExport = executeGisExport;
