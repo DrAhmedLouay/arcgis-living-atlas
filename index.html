@@ -27,7 +27,7 @@
   <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 
   <!-- Custom Styling -->
-  <link rel="stylesheet" href="css/styles.css?v=20260929_01">
+  <link rel="stylesheet" href="css/styles.css?v=20260929_02">
 </head>
 <body class="bg-slate-950 text-slate-100 h-screen w-screen flex flex-col overflow-hidden select-none">
 
@@ -184,6 +184,19 @@
           <i class="fa-solid fa-compass text-sky-400 text-[11px]"></i>
           <span>شمال 0°</span>
         </button>
+
+        <!-- Direct Overlay Drag Mode Toggle -->
+        <button type="button" id="floatDragModeBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 border border-amber-300 transition-all flex items-center gap-1.5 shadow-sm" title="سحب الخريطة المستوردة بالماوس مباشرة (انقر واسحب الخارطة بحرية فوق الأساس)">
+          <i id="floatDragModeIcon" class="fa-solid fa-hand text-slate-950"></i>
+          <span id="floatDragModeText">سحب الخارطة: نشط</span>
+        </button>
+
+        <!-- Quick Floating Opacity Slider -->
+        <div class="flex items-center gap-1.5 bg-slate-950/90 px-2 py-1 rounded-lg border border-slate-700/80 text-xs shadow-inner" title="شفافية سريعة للمقارنة البصرية المباشرة بالماوس">
+          <i class="fa-solid fa-circle-half-stroke text-sky-400 text-[11px]"></i>
+          <input type="range" id="floatOpacityQuickSlider" min="10" max="100" value="85" class="w-16 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-400">
+          <span id="floatOpacityQuickVal" class="text-[10px] font-mono font-bold text-sky-300 w-7 text-center">85%</span>
+        </div>
 
         <!-- 2. Interactive Swipe Tool -->
         <button type="button" id="floatSwipeBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-sky-200 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1.5 shadow-sm" title="تفعيل شريط المسح والمقارنة التفاعلي">
@@ -1087,6 +1100,22 @@
                 </div>
               </div>
 
+              <!-- Direct Overlay Mouse Drag Banner -->
+              <div class="bg-gradient-to-r from-amber-950/40 to-slate-900 border border-amber-500/40 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-sm">
+                <div class="flex items-center gap-2">
+                  <span class="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center justify-center text-xs shadow-inner">
+                    <i class="fa-solid fa-hand"></i>
+                  </span>
+                  <div>
+                    <span class="font-bold text-slate-100 block text-[11px]">سحب الخارطة المباشر بالماوس</span>
+                    <span class="text-[10px] text-slate-400">انقر واسحب الخارطة في أي مكان لمطابقتها</span>
+                  </div>
+                </div>
+                <button type="button" id="sidebarDragToggleBtn" class="px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 font-bold border border-amber-400 hover:bg-amber-400 text-[11px] transition-all shadow-sm">
+                  <span id="sidebarDragToggleText">مفعّل</span>
+                </button>
+              </div>
+
               <!-- Nudge Direction Pad -->
               <div class="flex flex-col items-center gap-1.5 py-1">
                 <span class="text-[10px] text-slate-400">تحريك وإزاحة دقيقة (Nudge Alignment):</span>
@@ -1123,6 +1152,53 @@
                   </select>
                 </div>
               </div>
+
+              <!-- Exact 4-Corner Coordinates Input Card -->
+              <details class="text-xs bg-slate-950/90 border border-emerald-500/40 rounded-xl p-2.5 space-y-2 group">
+                <summary class="cursor-pointer text-emerald-300 font-bold select-none flex items-center justify-between">
+                  <span class="flex items-center gap-1.5">
+                    <i class="fa-solid fa-crosshairs text-emerald-400"></i>
+                    <span>إدخال إحداثيات أركان الخارطة المطبوعة (4 Corners)</span>
+                  </span>
+                  <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 transition-transform group-open:rotate-180"></i>
+                </summary>
+                
+                <div class="pt-2 space-y-2 text-[11px] border-t border-slate-800">
+                  <p class="text-slate-400 text-[10px] leading-relaxed">
+                    إذا كان لديك أرقام الإحداثيات المطبوعة على هوامش الخارطة (Graticule Margins)، أدخلها هنا للتثبيت الهندسي الدقيق بنسبة 100%:
+                  </p>
+
+                  <div class="grid grid-cols-2 gap-2">
+                    <div>
+                      <label class="block text-[10px] text-slate-400 mb-0.5 font-medium">أعلى شمال (North Lat):</label>
+                      <input type="number" step="0.000001" id="inputExactNorth" placeholder="33.350000" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-sky-300 font-mono focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <div>
+                      <label class="block text-[10px] text-slate-400 mb-0.5 font-medium">أسفل جنوب (South Lat):</label>
+                      <input type="number" step="0.000001" id="inputExactSouth" placeholder="33.250000" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-sky-300 font-mono focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <div>
+                      <label class="block text-[10px] text-slate-400 mb-0.5 font-medium">أقصى غرب (West Lng):</label>
+                      <input type="number" step="0.000001" id="inputExactWest" placeholder="44.400000" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-sky-300 font-mono focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <div>
+                      <label class="block text-[10px] text-slate-400 mb-0.5 font-medium">أقصى شرق (East Lng):</label>
+                      <input type="number" step="0.000001" id="inputExactEast" placeholder="44.520000" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-sky-300 font-mono focus:outline-none focus:border-emerald-500">
+                    </div>
+                  </div>
+
+                  <div class="flex items-center gap-2 pt-1">
+                    <button type="button" id="loadCurrentToInputsBtn" class="flex-1 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg text-[10px] font-medium transition-colors flex items-center justify-center gap-1">
+                      <i class="fa-solid fa-arrow-down-to-bracket text-sky-400"></i>
+                      <span>جلب الحدود الحالية</span>
+                    </button>
+                    <button type="button" id="applyExactCoordsBtn" class="flex-1 py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-[10px] transition-all shadow flex items-center justify-center gap-1">
+                      <i class="fa-solid fa-check-double"></i>
+                      <span>تثبيت الأركان (Snap)</span>
+                    </button>
+                  </div>
+                </div>
+              </details>
 
               <!-- Rotation Slider -->
               <div class="pt-2 border-t border-slate-800 space-y-1.5">
@@ -1631,13 +1707,13 @@
        Scripts
        ========================================================================= -->
   <!-- Curated Catalog Data -->
-  <script src="js/catalog-data.js?v=20260929_01"></script>
+  <script src="js/catalog-data.js?v=20260929_02"></script>
 
   <!-- Curated Official Archaeological Sites of Iraq -->
-  <script src="js/archaeology-data.js?v=20260929_01"></script>
+  <script src="js/archaeology-data.js?v=20260929_02"></script>
 
   <!-- Living Atlas Engine Entry -->
-  <script src="js/atlas-core.js?v=20260929_01"></script>
+  <script src="js/atlas-core.js?v=20260929_02"></script>
 
 </body>
 </html>

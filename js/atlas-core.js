@@ -398,6 +398,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const floatHideVisibilityBarBtn = document.getElementById('floatHideVisibilityBarBtn');
     const floatRestoreVisibilityBarBtn = document.getElementById('floatRestoreVisibilityBarBtn');
     const floatResetRotationBtn = document.getElementById('floatResetRotationBtn');
+    const floatDragModeBtn = document.getElementById('floatDragModeBtn');
+    const floatDragModeIcon = document.getElementById('floatDragModeIcon');
+    const floatDragModeText = document.getElementById('floatDragModeText');
+    const floatOpacityQuickSlider = document.getElementById('floatOpacityQuickSlider');
+    const floatOpacityQuickVal = document.getElementById('floatOpacityQuickVal');
+
+    const sidebarDragToggleBtn = document.getElementById('sidebarDragToggleBtn');
+    const sidebarDragToggleText = document.getElementById('sidebarDragToggleText');
+
+    const inputExactNorth = document.getElementById('inputExactNorth');
+    const inputExactSouth = document.getElementById('inputExactSouth');
+    const inputExactWest = document.getElementById('inputExactWest');
+    const inputExactEast = document.getElementById('inputExactEast');
+    const loadCurrentToInputsBtn = document.getElementById('loadCurrentToInputsBtn');
+    const applyExactCoordsBtn = document.getElementById('applyExactCoordsBtn');
+
+    let isDirectDragMode = true;
+    let isOverlayDragging = false;
+    let dragStartLatLng = null;
+    let dragStartBounds = null;
 
     const toggleImportedMapBtn = document.getElementById('toggleImportedMapBtn');
     const importedMapEyeIcon = document.getElementById('importedMapEyeIcon');
@@ -5316,8 +5336,8 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       // Create Leaflet Image Overlay
       overlay = L.imageOverlay(imageSrc, bounds, {
         opacity: visualState.opacity,
-        interactive: false,
-        className: 'calibrated-satellite-overlay'
+        interactive: true,
+        className: 'calibrated-satellite-overlay direct-drag-active'
       }).addTo(map);
 
       overlay.on('error', () => {
@@ -5325,6 +5345,12 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
         if (bounds && typeof getSatelliteServiceUrlForBounds === 'function') {
           overlay.setUrl(getSatelliteServiceUrlForBounds(bounds));
         }
+      });
+
+      overlay.on('load', () => {
+        attachOverlayDragEvents();
+        applyVisualFilters();
+        applyRotation();
       });
 
       window.calibOverlayInstance = overlay;
@@ -5363,6 +5389,14 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       applyVisualFilters();
       if (rotationDeg !== 0) {
         applyRotation();
+      }
+      attachOverlayDragEvents();
+      updateDragModeUI();
+      if (floatOpacityQuickSlider) {
+        floatOpacityQuickSlider.value = Math.round(visualState.opacity * 100);
+      }
+      if (floatOpacityQuickVal) {
+        floatOpacityQuickVal.textContent = `${Math.round(visualState.opacity * 100)}%`;
       }
       isOverlayVisible = true;
       if (floatingVisibilityBar) floatingVisibilityBar.classList.remove('hidden');
@@ -5480,6 +5514,130 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
         map.removeLayer(boundaryBox);
         boundaryBox = null;
       }
+    }
+
+    /**
+     * Direct Overlay Mouse Dragging Engine
+     */
+    function updateDragModeUI() {
+      if (floatDragModeBtn) {
+        if (isDirectDragMode && !isLocked) {
+          floatDragModeBtn.className = 'px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 border border-amber-300 transition-all flex items-center gap-1.5 shadow-md';
+          if (floatDragModeIcon) floatDragModeIcon.className = 'fa-solid fa-hand text-slate-950';
+          if (floatDragModeText) floatDragModeText.textContent = 'سحب الخارطة: نشط';
+        } else {
+          floatDragModeBtn.className = 'px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1.5 shadow-sm';
+          if (floatDragModeIcon) floatDragModeIcon.className = 'fa-solid fa-hand text-slate-400';
+          if (floatDragModeText) floatDragModeText.textContent = 'سحب الخارطة: معطل';
+        }
+      }
+      if (sidebarDragToggleBtn) {
+        if (isDirectDragMode && !isLocked) {
+          sidebarDragToggleBtn.className = 'px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 font-bold border border-amber-400 hover:bg-amber-400 text-[11px] transition-all shadow-sm';
+          if (sidebarDragToggleText) sidebarDragToggleText.textContent = 'مفعّل (انقر للتعطيل)';
+        } else {
+          sidebarDragToggleBtn.className = 'px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 text-[11px] transition-all';
+          if (sidebarDragToggleText) sidebarDragToggleText.textContent = 'معطل (تحريك الأساس)';
+        }
+      }
+    }
+
+    function toggleDirectDragMode() {
+      if (isLocked) {
+        showToast('المعايرة مقفلة حالياً. قم بفك القفل أولاً لتحريك الخريطة.', 'warning');
+        return;
+      }
+      isDirectDragMode = !isDirectDragMode;
+      updateDragModeUI();
+      attachOverlayDragEvents();
+      if (isDirectDragMode) {
+        showToast('🖐️ وضع السحب المباشر مفعّل: انقر على الخارطة المستوردة واسحبها بالماوس لمطابقتها مع الواقع فوراً', 'info');
+      } else {
+        showToast('🗺️ وضع تصفح خارطة الأساس مفعّل: يمكنك الآن سحب وتصفح خارطة الأساس بحرية', 'info');
+      }
+    }
+
+    function attachOverlayDragEvents() {
+      if (!overlay) return;
+      const el = overlay.getElement ? overlay.getElement() : overlay._image;
+      if (el) {
+        if (isDirectDragMode && !isLocked) {
+          el.style.pointerEvents = 'auto';
+          el.style.cursor = 'grab';
+          el.classList.add('direct-drag-active');
+        } else {
+          el.style.cursor = 'default';
+          el.classList.remove('direct-drag-active');
+          if (!isDirectDragMode) {
+            el.style.pointerEvents = 'none';
+          } else {
+            el.style.pointerEvents = 'auto';
+          }
+        }
+      }
+
+      overlay.off('mousedown', onOverlayMouseDown);
+      if (isDirectDragMode && !isLocked) {
+        overlay.on('mousedown', onOverlayMouseDown);
+      }
+    }
+
+    function onOverlayMouseDown(e) {
+      if (!isDirectDragMode || isLocked || !bounds) return;
+      if (e.originalEvent && e.originalEvent.button !== 0) return;
+
+      L.DomEvent.stopPropagation(e);
+      L.DomEvent.preventDefault(e);
+
+      isOverlayDragging = true;
+      dragStartLatLng = e.latlng;
+      dragStartBounds = L.latLngBounds(bounds.getSouthWest(), bounds.getNorthEast());
+
+      if (map.dragging) map.dragging.disable();
+      const el = overlay.getElement ? overlay.getElement() : overlay._image;
+      if (el) el.style.cursor = 'grabbing';
+      document.body.style.cursor = 'grabbing';
+
+      pushCalibHistory('سحب مباشر للخريطة بالماوس');
+
+      function onOverlayMouseMove(ev) {
+        if (!isOverlayDragging || !dragStartLatLng || !dragStartBounds) return;
+        const currentLatLng = ev.latlng;
+        if (!currentLatLng) return;
+
+        const dLat = currentLatLng.lat - dragStartLatLng.lat;
+        const dLng = currentLatLng.lng - dragStartLatLng.lng;
+
+        bounds = L.latLngBounds(
+          [dragStartBounds.getSouth() + dLat, dragStartBounds.getWest() + dLng],
+          [dragStartBounds.getNorth() + dLat, dragStartBounds.getEast() + dLng]
+        );
+        baseCenter = bounds.getCenter();
+        updateOverlayGeometry();
+      }
+
+      function onOverlayMouseUp() {
+        if (!isOverlayDragging) return;
+        isOverlayDragging = false;
+        dragStartLatLng = null;
+        dragStartBounds = null;
+
+        map.off('mousemove', onOverlayMouseMove);
+        map.off('mouseup', onOverlayMouseUp);
+        window.removeEventListener('mouseup', onOverlayMouseUp);
+
+        if (map.dragging) map.dragging.enable();
+        const curEl = overlay ? (overlay.getElement ? overlay.getElement() : overlay._image) : null;
+        if (curEl) curEl.style.cursor = isDirectDragMode && !isLocked ? 'grab' : 'default';
+        document.body.style.cursor = '';
+
+        createHandles();
+        updateReadout();
+      }
+
+      map.on('mousemove', onOverlayMouseMove);
+      map.on('mouseup', onOverlayMouseUp);
+      window.addEventListener('mouseup', onOverlayMouseUp, { once: true });
     }
 
     /**
@@ -5673,6 +5831,19 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       opacitySlider.addEventListener('input', (e) => {
         visualState.opacity = parseInt(e.target.value, 10) / 100;
         if (opacityLabel) opacityLabel.textContent = `${Math.round(visualState.opacity * 100)}%`;
+        if (floatOpacityQuickSlider) floatOpacityQuickSlider.value = e.target.value;
+        if (floatOpacityQuickVal) floatOpacityQuickVal.textContent = `${e.target.value}%`;
+        applyVisualFilters();
+      });
+    }
+
+    if (floatOpacityQuickSlider) {
+      floatOpacityQuickSlider.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value, 10);
+        visualState.opacity = val / 100;
+        if (floatOpacityQuickVal) floatOpacityQuickVal.textContent = `${val}%`;
+        if (opacitySlider) opacitySlider.value = val;
+        if (opacityLabel) opacityLabel.textContent = `${val}%`;
         applyVisualFilters();
       });
     }
@@ -5728,6 +5899,8 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
         };
         if (opacitySlider) opacitySlider.value = 85;
         if (opacityLabel) opacityLabel.textContent = '85%';
+        if (floatOpacityQuickSlider) floatOpacityQuickSlider.value = 85;
+        if (floatOpacityQuickVal) floatOpacityQuickVal.textContent = '85%';
         if (brightnessSlider) brightnessSlider.value = 100;
         if (brightnessLabel) brightnessLabel.textContent = '100%';
         if (contrastSlider) contrastSlider.value = 100;
@@ -5741,6 +5914,14 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       });
     }
 
+    // Direct Overlay Drag Mode Buttons
+    if (floatDragModeBtn) {
+      floatDragModeBtn.addEventListener('click', () => toggleDirectDragMode());
+    }
+    if (sidebarDragToggleBtn) {
+      sidebarDragToggleBtn.addEventListener('click', () => toggleDirectDragMode());
+    }
+
     // Toggle Lock Georeference
     if (lockBtn) {
       lockBtn.addEventListener('click', () => {
@@ -5751,6 +5932,8 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
           lockBtn.classList.add('bg-blue-600', 'text-white', 'border-blue-500');
           lockBtn.classList.remove('bg-slate-800', 'text-slate-300');
           lockBtn.querySelector('i').className = 'fa-solid fa-lock text-white';
+          updateDragModeUI();
+          attachOverlayDragEvents();
           showToast('تم قفل الإرجاع الجغرافي وتثبيت المعالم', 'success');
         } else {
           createHandles();
@@ -5758,12 +5941,14 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
           lockBtn.classList.remove('bg-blue-600', 'text-white', 'border-blue-500');
           lockBtn.classList.add('bg-slate-800', 'text-slate-300');
           lockBtn.querySelector('i').className = 'fa-solid fa-lock-open text-amber-400';
-          showToast('تم تفعيل مقابض المعايرة', 'info');
+          updateDragModeUI();
+          attachOverlayDragEvents();
+          showToast('تم تفعيل مقابض المعايرة والسحب المباشر', 'info');
         }
       });
     }
 
-    // Update readout coordinates
+    // Update readout coordinates & Graticule Placeholders
     function updateReadout() {
       if (!bounds) return;
       if (boundNorth) boundNorth.textContent = bounds.getNorth().toFixed(5) + '° N';
@@ -5771,6 +5956,67 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       if (boundEast) boundEast.textContent = bounds.getEast().toFixed(5) + '° E';
       if (boundWest) boundWest.textContent = bounds.getWest().toFixed(5) + '° W';
       if (boundRot) boundRot.textContent = `${rotationDeg}°`;
+
+      if (inputExactNorth && !inputExactNorth.value) inputExactNorth.placeholder = bounds.getNorth().toFixed(6);
+      if (inputExactSouth && !inputExactSouth.value) inputExactSouth.placeholder = bounds.getSouth().toFixed(6);
+      if (inputExactWest && !inputExactWest.value) inputExactWest.placeholder = bounds.getWest().toFixed(6);
+      if (inputExactEast && !inputExactEast.value) inputExactEast.placeholder = bounds.getEast().toFixed(6);
+    }
+
+    // Exact 4-Corner Coordinate Registration Buttons
+    if (loadCurrentToInputsBtn) {
+      loadCurrentToInputsBtn.addEventListener('click', () => {
+        if (!bounds) {
+          showToast('يرجى استيراد خارطة أولاً لجلب إحداثياتها', 'warning');
+          return;
+        }
+        if (inputExactNorth) inputExactNorth.value = bounds.getNorth().toFixed(6);
+        if (inputExactSouth) inputExactSouth.value = bounds.getSouth().toFixed(6);
+        if (inputExactWest) inputExactWest.value = bounds.getWest().toFixed(6);
+        if (inputExactEast) inputExactEast.value = bounds.getEast().toFixed(6);
+        showToast('📋 تم جلب إحداثيات الأركان الحالية لتعديلها بدقة', 'info');
+      });
+    }
+
+    if (applyExactCoordsBtn) {
+      applyExactCoordsBtn.addEventListener('click', () => {
+        if (!overlay) {
+          showToast('يرجى استيراد خارطة أولاً قبل تطبيق الإحداثيات', 'warning');
+          return;
+        }
+        const n = parseFloat(inputExactNorth ? inputExactNorth.value : NaN);
+        const s = parseFloat(inputExactSouth ? inputExactSouth.value : NaN);
+        const w = parseFloat(inputExactWest ? inputExactWest.value : NaN);
+        const e = parseFloat(inputExactEast ? inputExactEast.value : NaN);
+
+        if (isNaN(n) || isNaN(s) || isNaN(w) || isNaN(e)) {
+          showToast('⚠️ يرجى إدخال جميع إحداثيات الأركان الأربعة بصيغة أرقام عشرية صحيحة (مثال: 33.35)', 'error');
+          return;
+        }
+
+        if (s >= n) {
+          showToast('خطأ: خط العرض الشمالي (North) يجب أن يكون أكبر من الجنوبي (South)', 'error');
+          return;
+        }
+        if (w >= e) {
+          showToast('خطأ: خط الطول الشرقي (East) يجب أن يكون أكبر من الغربي (West)', 'error');
+          return;
+        }
+
+        pushCalibHistory('إسقاط وتثبيت الإحداثيات الدقيقة للأركان');
+        bounds = L.latLngBounds([s, w], [n, e]);
+        baseCenter = bounds.getCenter();
+        baseSpanLat = n - s;
+        baseSpanLng = e - w;
+        scalePercent = 100;
+        if (scaleSlider) scaleSlider.value = 100;
+        if (scaleLabel) scaleLabel.textContent = '100%';
+
+        updateOverlayGeometry();
+        createHandles();
+        map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 18, duration: 1.2 });
+        showToast('🎯 تم تطبيق الإحداثيات الدقيقة للأركان بنسبة 100.000% وتثبيت الخارطة في موقعها الجغرافي', 'success');
+      });
     }
 
     // Copy Calibration JSON
@@ -5843,6 +6089,9 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
         overlay = null;
         window.calibOverlayInstance = null;
       }
+      isOverlayDragging = false;
+      if (map && map.dragging) map.dragging.enable();
+      document.body.style.cursor = '';
       clearHandles();
       bounds = null;
       rotationDeg = 0;

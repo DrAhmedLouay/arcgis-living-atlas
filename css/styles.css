@@ -179,6 +179,18 @@ html, body {
   image-rendering: crisp-edges !important;
 }
 
+.calibrated-satellite-overlay.direct-drag-active,
+.leaflet-image-layer.calibrated-satellite-overlay.direct-drag-active {
+  cursor: grab !important;
+  cursor: -webkit-grab !important;
+}
+
+.calibrated-satellite-overlay.direct-drag-active:active,
+.leaflet-image-layer.calibrated-satellite-overlay.direct-drag-active:active {
+  cursor: grabbing !important;
+  cursor: -webkit-grabbing !important;
+}
+
 .calibrated-satellite-overlay.sharp-crisp,
 .leaflet-image-layer.calibrated-satellite-overlay.sharp-crisp {
   image-rendering: -webkit-optimize-contrast !important;
