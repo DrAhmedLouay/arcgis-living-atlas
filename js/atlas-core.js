@@ -692,6 +692,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let gcpPriorOpacity = null;
     let lastGcpClickTime = 0;
+    let gcpClearTimeoutId = null;
 
     // Calibration Internal State
     let overlay = null;
@@ -3383,8 +3384,21 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
         return;
       }
 
+      // If a pending clear timer was active from a previous calibration, CANCEL IT IMMEDIATELY
+      if (gcpClearTimeoutId) {
+        clearTimeout(gcpClearTimeoutId);
+        gcpClearTimeoutId = null;
+      }
+
       if (typeof closeAiAlignmentModal === 'function') {
         closeAiAlignmentModal();
+      }
+
+      // Temporarily disable direct drag mode during GCP placement so clicks register as points
+      if (isDirectDragMode) {
+        isDirectDragMode = false;
+        updateDragModeUI();
+        attachOverlayDragEvents();
       }
 
       isGcpMatchingActive = true;
@@ -3396,7 +3410,9 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       clearHandles(); // Temporarily hide handles so they don't block landmarks
 
       map.getContainer().classList.add('gcp-calibration-active');
+      map.getContainer().removeEventListener('click', handleGcpNativeClick, true); // Deduplicate
       map.getContainer().addEventListener('click', handleGcpNativeClick, true); // Capturing phase!
+      map.off('click', handleMapGcpClick);
       map.on('click', handleMapGcpClick); // Fallback
 
       if (floatingGcpBar) floatingGcpBar.classList.remove('hidden');
@@ -3408,6 +3424,11 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
     }
 
     function cancelGcpMatching() {
+      if (gcpClearTimeoutId) {
+        clearTimeout(gcpClearTimeoutId);
+        gcpClearTimeoutId = null;
+      }
+
       isGcpMatchingActive = false;
       map.getContainer().classList.remove('gcp-calibration-active');
       map.getContainer().removeEventListener('click', handleGcpNativeClick, true);
@@ -3751,63 +3772,83 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
     }
 
     function applyMultiPointGcp() {
-      if (gcpPairs.length < 2) {
-        showToast('يرجى تحديد نقطتي ضبط (زوجين) على الأقل لإجراء المعايرة', 'warning');
-        return;
-      }
-
-      // If user had clicked point A and forgot point B, remove the pending point A
-      if (gcpPendingImgPt !== null) {
-        if (gcpPendingMarkerA && map.hasLayer(gcpPendingMarkerA)) {
-          map.removeLayer(gcpPendingMarkerA);
-          const idx = gcpMarkers.indexOf(gcpPendingMarkerA);
-          if (idx !== -1) gcpMarkers.splice(idx, 1);
+      try {
+        if (!overlay || !bounds) {
+          showToast('يرجى استيراد خارطة فضائية أولاً لإجراء المعايرة', 'warning');
+          return;
         }
-        gcpPendingImgPt = null;
-        gcpPendingMarkerA = null;
-      }
 
-      pushCalibHistory('معايرة نقاط الضبط GCP');
-      solveMultiPointGcpAffine(gcpPairs);
+        if (gcpPairs.length < 2) {
+          showToast('يرجى تحديد نقطتي ضبط (زوجين) على الأقل لإجراء المعايرة', 'warning');
+          return;
+        }
 
-      // Finish mode
-      isGcpMatchingActive = false;
-      map.getContainer().classList.remove('gcp-calibration-active');
-      map.getContainer().removeEventListener('click', handleGcpNativeClick, true);
-      map.off('click', handleMapGcpClick);
+        // If user had clicked point A and forgot point B, remove the pending point A
+        if (gcpPendingImgPt !== null) {
+          if (gcpPendingMarkerA && map.hasLayer(gcpPendingMarkerA)) {
+            map.removeLayer(gcpPendingMarkerA);
+            const idx = gcpMarkers.indexOf(gcpPendingMarkerA);
+            if (idx !== -1) gcpMarkers.splice(idx, 1);
+          }
+          gcpPendingImgPt = null;
+          gcpPendingMarkerA = null;
+        }
 
-      if (floatingGcpBar) floatingGcpBar.classList.add('hidden');
-      if (cancelGcpMatchBtn) cancelGcpMatchBtn.classList.add('hidden');
-      if (floatApplyGcpBtn) floatApplyGcpBtn.classList.add('hidden');
-      if (sidebarApplyGcpBtn) sidebarApplyGcpBtn.classList.add('hidden');
-      if (floatUndoGcpBtn) floatUndoGcpBtn.classList.add('hidden');
-      if (sidebarUndoGcpBtn) sidebarUndoGcpBtn.classList.add('hidden');
+        pushCalibHistory('معايرة نقاط الضبط GCP');
+        const solved = solveMultiPointGcpAffine(gcpPairs);
+        if (!solved) {
+          return;
+        }
 
-      // Restore handles and original opacity
-      if (overlay && bounds && !isLocked) createHandles();
-      if (overlay && gcpPriorOpacity !== null) {
-        visualState.opacity = gcpPriorOpacity;
-        overlay.setOpacity(gcpPriorOpacity);
-        if (opacitySlider) opacitySlider.value = Math.round(gcpPriorOpacity * 100);
-        if (opacityLabel) opacityLabel.textContent = `${Math.round(gcpPriorOpacity * 100)}%`;
-      }
+        // Finish mode cleanly
+        isGcpMatchingActive = false;
+        map.getContainer().classList.remove('gcp-calibration-active');
+        map.getContainer().removeEventListener('click', handleGcpNativeClick, true);
+        map.off('click', handleMapGcpClick);
 
-      if (gcpStatusBadge) {
-        gcpStatusBadge.textContent = `معايرة مكتملة (${gcpPairs.length} نقاط)`;
-        gcpStatusBadge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold';
-      }
-      if (gcpBtnLabel) gcpBtnLabel.textContent = 'إعادة المعايرة بنقاط الضبط (GCP)';
+        if (floatingGcpBar) floatingGcpBar.classList.add('hidden');
+        if (cancelGcpMatchBtn) cancelGcpMatchBtn.classList.add('hidden');
+        if (floatApplyGcpBtn) floatApplyGcpBtn.classList.add('hidden');
+        if (sidebarApplyGcpBtn) sidebarApplyGcpBtn.classList.add('hidden');
+        if (floatUndoGcpBtn) floatUndoGcpBtn.classList.add('hidden');
+        if (sidebarUndoGcpBtn) sidebarUndoGcpBtn.classList.add('hidden');
 
-      // Retain markers for 10 seconds for user visual verification, then clear
-      setTimeout(() => {
-        clearGcpMarkers();
-        if (gcpInstructionsText) gcpInstructionsText.classList.add('hidden');
-        if (gcpPointsList) gcpPointsList.classList.add('hidden');
+        // Restore handles and original opacity
+        if (overlay && bounds && !isLocked) createHandles();
+        if (overlay && gcpPriorOpacity !== null) {
+          visualState.opacity = gcpPriorOpacity;
+          overlay.setOpacity(gcpPriorOpacity);
+          if (opacitySlider) opacitySlider.value = Math.round(gcpPriorOpacity * 100);
+          if (opacityLabel) opacityLabel.textContent = `${Math.round(gcpPriorOpacity * 100)}%`;
+          if (floatOpacityQuickSlider) floatOpacityQuickSlider.value = Math.round(gcpPriorOpacity * 100);
+          if (floatOpacityQuickVal) floatOpacityQuickVal.textContent = `${Math.round(gcpPriorOpacity * 100)}%`;
+        }
+
         if (gcpStatusBadge) {
-          gcpStatusBadge.textContent = 'غير نشط';
-          gcpStatusBadge.className = 'text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-mono';
+          gcpStatusBadge.textContent = `معايرة مكتملة (${gcpPairs.length} نقاط)`;
+          gcpStatusBadge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold';
         }
-      }, 10000);
+        if (gcpBtnLabel) gcpBtnLabel.textContent = 'إعادة المعايرة بنقاط الضبط (GCP)';
+
+        // Cancel previous timer if any
+        if (gcpClearTimeoutId) {
+          clearTimeout(gcpClearTimeoutId);
+        }
+        // Retain markers for 10 seconds for user visual verification, then clear
+        gcpClearTimeoutId = setTimeout(() => {
+          clearGcpMarkers();
+          if (gcpInstructionsText) gcpInstructionsText.classList.add('hidden');
+          if (gcpPointsList) gcpPointsList.classList.add('hidden');
+          if (gcpStatusBadge) {
+            gcpStatusBadge.textContent = 'غير نشط';
+            gcpStatusBadge.className = 'text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-mono';
+          }
+          gcpClearTimeoutId = null;
+        }, 10000);
+      } catch (err) {
+        console.error('Error applying Multi-Point GCP:', err);
+        showToast('حدث خطأ أثناء تطبيق نقاط المعايرة: ' + (err.message || 'يرجى إعادة المحاولة'), 'error');
+      }
     }
 
     /**
@@ -3815,7 +3856,10 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
      * Finds optimal translation, scale, and rotation that minimizes Mean Squared Error
      */
     function solveMultiPointGcpAffine(pairs) {
-      if (!overlay || !bounds || !pairs || pairs.length < 2) return;
+      if (!overlay || !bounds || !pairs || pairs.length < 2) {
+        showToast('يرجى التأكد من وجود خارطة مستوردة ونقطتي ضبط على الأقل', 'warning');
+        return false;
+      }
       const N = pairs.length;
 
       // Centroids
@@ -3850,7 +3894,7 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
 
       if (denom < 1e-12) {
         showToast('نقاط الضبط متقاربة جداً أو متطابقة، يرجى اختيار نقاط متباعدة عبر الخارطة', 'warning');
-        return;
+        return false;
       }
 
       const a = numA / denom;
@@ -3861,9 +3905,9 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       const deltaAngleRad = Math.atan2(b, a);
       const deltaAngleDeg = deltaAngleRad * (180 / Math.PI);
 
-      if (scaleRatio < 0.05 || scaleRatio > 20) {
+      if (scaleRatio < 0.01 || scaleRatio > 100 || isNaN(scaleRatio)) {
         showToast('نسبة المقياس المحسوبة غير معقولة، يرجى التحقق من صحة النقاط المحددة', 'warning');
-        return;
+        return false;
       }
 
       // Calculate Root Mean Square Error (RMSE)
@@ -3882,14 +3926,10 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       const rmseDegrees = Math.sqrt(sumSqResiduals / N);
       const rmseMeters = Math.round(rmseDegrees * 111320);
 
-      // Accumulate rotation only if within reasonable alignment range (<= 15°)
-      // Distorted angles (> 15°) indicate inverted clicks or non-aligned points; lock to True North (0°)
-      if (Math.abs(deltaAngleDeg) <= 15) {
-        rotationDeg = Math.round((rotationDeg + deltaAngleDeg) % 360);
-        if (rotationDeg < 0) rotationDeg += 360;
-      } else {
-        rotationDeg = 0; // True North 0° safeguard
-      }
+      // Accumulate rotation
+      rotationDeg = Math.round((rotationDeg + deltaAngleDeg) % 360);
+      if (rotationDeg < 0) rotationDeg += 360;
+
       if (rotationSlider) rotationSlider.value = rotationDeg;
       if (rotationLabel) rotationLabel.textContent = `${rotationDeg}°`;
       if (boundRot) boundRot.textContent = `${rotationDeg}°`;
@@ -3910,6 +3950,11 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       const newSpanLat = (bounds.getNorth() - bounds.getSouth()) * scaleRatio;
       const newSpanLng = (bounds.getEast() - bounds.getWest()) * scaleRatio;
 
+      if (isNaN(newCenterLat) || isNaN(newCenterLng) || isNaN(newSpanLat) || isNaN(newSpanLng) || newSpanLat <= 0 || newSpanLng <= 0) {
+        showToast('تعذر احتساب إحداثيات صحيحة من نقاط الضبط، يرجى إعادة المحاولة', 'error');
+        return false;
+      }
+
       bounds = L.latLngBounds(
         [newCenterLat - newSpanLat / 2, newCenterLng - newSpanLng / 2],
         [newCenterLat + newSpanLat / 2, newCenterLng + newSpanLng / 2]
@@ -3919,14 +3964,23 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       baseSpanLat = newSpanLat;
       baseSpanLng = newSpanLng;
 
-      scalePercent = Math.round(scalePercent * scaleRatio);
+      scalePercent = Math.min(Math.max(Math.round(scalePercent * scaleRatio), 10), 1000);
       if (scaleSlider) scaleSlider.value = Math.min(Math.max(scalePercent, 20), 400);
       if (scaleLabel) scaleLabel.textContent = `${scalePercent}%`;
 
       updateOverlayGeometry();
       createHandles();
       updateReadout();
-      map.flyToBounds(bounds, { padding: [40, 40], duration: 1.2 });
+
+      try {
+        map.flyToBounds(bounds, { padding: [40, 40], duration: 1.2 });
+      } catch (flyErr) {
+        try {
+          map.fitBounds(bounds, { padding: [40, 40] });
+        } catch (fitErr) {
+          console.warn('Map bounds fit fallback:', fitErr);
+        }
+      }
 
       if (gcpInstructionsText) {
         gcpInstructionsText.innerHTML = `
@@ -3935,14 +3989,15 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
             <span>اكتملت المعايرة بنجاح عبر (${N}) نقاط ضبط!</span>
           </div>
           <div class="text-[10px] text-slate-300 space-y-0.5 mt-1">
-            <div>دوران الخارطة: <strong class="text-white">${Math.round(deltaAngleDeg)}°</strong> | المقياس: <strong class="text-white">${(scaleRatio * 100).toFixed(0)}%</strong></div>
+            <div>دوران الخارطة: <strong class="text-white">${Math.round(rotationDeg)}°</strong> | المقياس: <strong class="text-white">${(scaleRatio * 100).toFixed(0)}%</strong></div>
             <div>دقة التطابق (RMS Error): <strong class="text-emerald-300">≈ ${rmseMeters} متر</strong></div>
           </div>
         `;
       }
 
-      showToast(`⚡ تمت المعايرة التآلفية بنجاح عبر (${N}) نقاط! دوران: ${Math.round(deltaAngleDeg)}°، مقياس: ${(scaleRatio * 100).toFixed(0)}%، خطأ المطابقة: ≈ ${rmseMeters}م`, 'success');
+      showToast(`⚡ تمت المعايرة التآلفية بنجاح عبر (${N}) نقاط! دوران: ${Math.round(rotationDeg)}°، مقياس: ${(scaleRatio * 100).toFixed(0)}%، خطأ المطابقة: ≈ ${rmseMeters}م`, 'success');
       setTimeout(() => { blinkCompare(); }, 500);
+      return true;
     }
 
     /**
@@ -6124,9 +6179,14 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       });
     }
 
-    // Expose Undo / Redo for global hotkeys & external access
+    // Expose Undo / Redo and GCP calibration methods for global hotkeys & external access
     window.undoCalibAction = undoCalibAction;
     window.redoCalibAction = redoCalibAction;
+    window.applyMultiPointGcp = applyMultiPointGcp;
+    window.undoLastGcpPoint = undoLastGcpPoint;
+    window.redoLastGcpPoint = redoLastGcpPoint;
+    window.cancelGcpMatching = cancelGcpMatching;
+    window.startGcpMatching = startGcpMatching;
   }
 
   /**

@@ -317,24 +317,24 @@
         </div>
         <div class="flex items-center gap-1.5">
           <!-- Apply & Finish Button (Active once 2 or more pairs are captured) -->
-          <button type="button" id="floatApplyGcpBtn" class="hidden px-3 py-1 bg-gradient-to-r from-emerald-600 via-teal-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white font-bold rounded-lg text-xs shadow-lg transition-all flex items-center gap-1.5 animate-pulse" title="إنهاء وتطبيق المعايرة التآلفية فوراً">
-            <i class="fa-solid fa-check"></i>
-            <span id="floatApplyGcpBtnText">تطبيق المعايرة (2 نقاط)</span>
+          <button type="button" id="floatApplyGcpBtn" onclick="window.applyMultiPointGcp && window.applyMultiPointGcp()" class="hidden px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white font-bold rounded-lg text-xs shadow-lg transition-all flex items-center gap-1.5 animate-pulse cursor-pointer active:scale-95" title="إنهاء وتطبيق المعايرة التآلفية فوراً">
+            <i class="fa-solid fa-check pointer-events-none"></i>
+            <span id="floatApplyGcpBtnText" class="pointer-events-none">تطبيق المعايرة (2 نقاط)</span>
           </button>
           <!-- Undo Last Point Button -->
-          <button type="button" id="floatUndoGcpBtn" class="hidden px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg text-xs transition-colors flex items-center gap-1" title="تراجع عن آخر نقطة">
-            <i class="fa-solid fa-rotate-left text-[10px]"></i>
-            <span>تراجع</span>
+          <button type="button" id="floatUndoGcpBtn" onclick="window.undoLastGcpPoint && window.undoLastGcpPoint()" class="hidden px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg text-xs transition-colors flex items-center gap-1 cursor-pointer" title="تراجع عن آخر نقطة">
+            <i class="fa-solid fa-rotate-left text-[10px] pointer-events-none"></i>
+            <span class="pointer-events-none">تراجع</span>
           </button>
           <!-- Redo Point Button -->
-          <button type="button" id="floatRedoGcpBtn" class="hidden px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg text-xs transition-colors flex items-center gap-1" title="إعادة النقطة الملغاة">
-            <i class="fa-solid fa-rotate-right text-[10px]"></i>
-            <span>إعادة</span>
+          <button type="button" id="floatRedoGcpBtn" onclick="window.redoLastGcpPoint && window.redoLastGcpPoint()" class="hidden px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg text-xs transition-colors flex items-center gap-1 cursor-pointer" title="إعادة النقطة الملغاة">
+            <i class="fa-solid fa-rotate-right text-[10px] pointer-events-none"></i>
+            <span class="pointer-events-none">إعادة</span>
           </button>
           <!-- Cancel Button -->
-          <button type="button" id="floatCancelGcpBtn" class="px-2.5 py-1 bg-slate-800 hover:bg-rose-900/60 text-slate-300 hover:text-rose-200 border border-slate-700 rounded-lg text-xs transition-colors flex items-center gap-1" title="إلغاء المعايرة">
-            <i class="fa-solid fa-xmark text-xs"></i>
-            <span>إلغاء</span>
+          <button type="button" id="floatCancelGcpBtn" onclick="window.cancelGcpMatching && window.cancelGcpMatching()" class="px-2.5 py-1 bg-slate-800 hover:bg-rose-900/60 text-slate-300 hover:text-rose-200 border border-slate-700 rounded-lg text-xs transition-colors flex items-center gap-1 cursor-pointer" title="إلغاء المعايرة">
+            <i class="fa-solid fa-xmark text-xs pointer-events-none"></i>
+            <span class="pointer-events-none">إلغاء</span>
           </button>
         </div>
       </div>
@@ -1001,21 +1001,21 @@
                         <i class="fa-solid fa-location-dot text-[9px] text-purple-300"></i>
                         <span id="gcpBtnLabel">بدء تحديد نقاط الضبط</span>
                       </button>
-                      <button type="button" id="sidebarUndoGcpBtn" class="hidden py-1 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded text-[10px] transition-colors" title="تراجع عن آخر نقطة">
-                        <i class="fa-solid fa-rotate-left text-xs"></i>
+                      <button type="button" id="sidebarUndoGcpBtn" onclick="window.undoLastGcpPoint && window.undoLastGcpPoint()" class="hidden py-1 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded text-[10px] transition-colors cursor-pointer" title="تراجع عن آخر نقطة">
+                        <i class="fa-solid fa-rotate-left text-xs pointer-events-none"></i>
                       </button>
-                      <button type="button" id="sidebarRedoGcpBtn" class="hidden py-1 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded text-[10px] transition-colors" title="إعادة النقطة السابقة">
-                        <i class="fa-solid fa-rotate-right text-xs"></i>
+                      <button type="button" id="sidebarRedoGcpBtn" onclick="window.redoLastGcpPoint && window.redoLastGcpPoint()" class="hidden py-1 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded text-[10px] transition-colors cursor-pointer" title="إعادة النقطة السابقة">
+                        <i class="fa-solid fa-rotate-right text-xs pointer-events-none"></i>
                       </button>
-                      <button type="button" id="cancelGcpMatchBtn" class="hidden py-1 px-2 bg-slate-800 hover:bg-rose-900/50 text-rose-300 border border-slate-700 rounded text-[10px] transition-colors" title="إلغاء">
-                        <i class="fa-solid fa-xmark text-xs"></i>
+                      <button type="button" id="cancelGcpMatchBtn" onclick="window.cancelGcpMatching && window.cancelGcpMatching()" class="hidden py-1 px-2 bg-slate-800 hover:bg-rose-900/50 text-rose-300 border border-slate-700 rounded text-[10px] transition-colors cursor-pointer" title="إلغاء">
+                        <i class="fa-solid fa-xmark text-xs pointer-events-none"></i>
                       </button>
                     </div>
 
                     <!-- Sidebar Apply & Finish Button -->
-                    <button type="button" id="sidebarApplyGcpBtn" class="hidden w-full py-1.5 px-3 bg-gradient-to-r from-emerald-600 via-teal-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white font-bold rounded-lg text-[10px] shadow transition-all flex items-center justify-center gap-1.5">
-                      <i class="fa-solid fa-check"></i>
-                      <span id="sidebarApplyGcpBtnText">إنهاء وتطبيق المعايرة الآن (0 نقاط)</span>
+                    <button type="button" id="sidebarApplyGcpBtn" onclick="window.applyMultiPointGcp && window.applyMultiPointGcp()" class="hidden w-full py-2 px-3 bg-gradient-to-r from-emerald-600 via-teal-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white font-bold rounded-lg text-xs shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95">
+                      <i class="fa-solid fa-check pointer-events-none"></i>
+                      <span id="sidebarApplyGcpBtnText" class="pointer-events-none">إنهاء وتطبيق المعايرة الآن (0 نقاط)</span>
                     </button>
 
                     <!-- Placed Points Summary List -->
@@ -1707,13 +1707,13 @@
        Scripts
        ========================================================================= -->
   <!-- Curated Catalog Data -->
-  <script src="js/catalog-data.js?v=20260929_02"></script>
+  <script src="js/catalog-data.js?v=20260929_03"></script>
 
   <!-- Curated Official Archaeological Sites of Iraq -->
-  <script src="js/archaeology-data.js?v=20260929_02"></script>
+  <script src="js/archaeology-data.js?v=20260929_03"></script>
 
   <!-- Living Atlas Engine Entry -->
-  <script src="js/atlas-core.js?v=20260929_02"></script>
+  <script src="js/atlas-core.js?v=20260929_03"></script>
 
 </body>
 </html>
