@@ -90,22 +90,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (scaleSpan) scaleSpan.textContent = 'مستوى ' + map.getZoom();
   });
 
-  // 4. Setup Search Geocoder (if available)
+  // 4. Setup Intelligent City & Place Search Engine (Gazetteer & Geocoder)
   try {
-    if (L.esri && L.esri.Geocoding) {
-      const searchControl = L.esri.Geocoding.geosearch({
-        position: 'topleft',
-        placeholder: 'ابحث عن مدينة، عنوان، أو معلم...',
-        useMapBounds: false
-      }).addTo(map);
-      
-      const searchContainer = document.getElementById('geosearchContainer');
-      if (searchContainer) {
-        searchContainer.appendChild(searchControl.getContainer());
-      }
+    if (window.AtlasCitySearch) {
+      window.AtlasCitySearch.init(map);
     }
   } catch (err) {
-    console.warn('Geocoding container notice:', err);
+    console.warn('City search setup notice:', err);
   }
 
   // 5. Register metadata

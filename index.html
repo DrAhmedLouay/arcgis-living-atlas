@@ -31,7 +31,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <!-- Custom Styling -->
-  <link rel="stylesheet" href="css/styles.css?v=20260930_05">
+  <link rel="stylesheet" href="css/styles.css?v=20260930_06">
 
   <script>
     // Immediate Synchronous Handlers for ArcView GIS & GeoTIFF Export Studio
@@ -107,9 +107,43 @@
       </div>
     </div>
 
-    <!-- Center Search Container (Docked ArcGIS Search Widget) -->
-    <div class="flex-1 max-w-md mx-2 hidden md:block">
-      <div id="geosearchContainer" class="w-full"></div>
+    <!-- Center Search Container (High-Contrast Intelligent City & Place Search Widget) -->
+    <div class="flex-1 max-w-lg mx-2 relative z-30">
+      <div id="geosearchContainer" class="w-full relative">
+        <div class="relative flex items-center w-full">
+          <!-- Search Icon on right for RTL -->
+          <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-sky-600">
+            <i class="fa-solid fa-magnifying-glass text-xs"></i>
+          </div>
+
+          <!-- High-Contrast Search Input with Bold Black Text -->
+          <input 
+            type="text" 
+            id="cityPlaceSearchInput" 
+            dir="rtl"
+            autocomplete="off"
+            placeholder="ابحث عن مدينة، قضاء، ناحية، أو معلم في العراق..." 
+            class="w-full bg-white text-black font-bold text-xs py-2 pr-9 pl-16 rounded-xl border-2 border-sky-400 focus:border-sky-600 shadow-md placeholder-slate-500 focus:outline-none transition-all"
+            style="color: #000000 !important; background-color: #ffffff !important; -webkit-text-fill-color: #000000 !important; font-weight: 700 !important;"
+          />
+
+          <!-- Action buttons inside search bar -->
+          <div class="absolute left-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            <button type="button" id="clearSearchInputBtn" class="hidden text-slate-400 hover:text-slate-700 w-5 h-5 rounded-full flex items-center justify-center text-xs transition-colors cursor-pointer" title="مسح حقل البحث">
+              <i class="fa-solid fa-circle-xmark"></i>
+            </button>
+            <div class="h-4 w-px bg-slate-200 mx-0.5"></div>
+            <button type="button" id="submitSearchInputBtn" class="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-bold shadow-sm transition-colors cursor-pointer flex items-center gap-1" title="بدء البحث">
+              <span>بحث</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Live Instant Suggestions Dropdown -->
+        <div id="citySearchResultsDropdown" class="hidden absolute top-full right-0 left-0 mt-1.5 bg-white border border-slate-300 rounded-xl shadow-2xl overflow-hidden z-50 max-h-80 overflow-y-auto divide-y divide-slate-100 text-right" dir="rtl">
+          <!-- Populated dynamically with high-contrast items (black text) -->
+        </div>
+      </div>
     </div>
 
     <!-- Header Actions -->
@@ -2868,19 +2902,22 @@
        Scripts
        ========================================================================= -->
   <!-- Curated Catalog Data -->
-  <script src="js/catalog-data.js?v=20260930_05"></script>
+  <script src="js/catalog-data.js?v=20260930_06"></script>
 
   <!-- Curated Official Archaeological Sites of Iraq -->
-  <script src="js/archaeology-data.js?v=20260930_05"></script>
+  <script src="js/archaeology-data.js?v=20260930_06"></script>
 
   <!-- Specialized GIS Drawing & Urban Digitization Engine -->
-  <script src="js/drawing-engine.js?v=20260930_05"></script>
+  <script src="js/drawing-engine.js?v=20260930_06"></script>
 
   <!-- Specialized Cartographic Map Layout & Print Studio (A0, A1, A2, A3, A4) -->
-  <script src="js/layout-engine.js?v=20260930_05"></script>
+  <script src="js/layout-engine.js?v=20260930_06"></script>
+
+  <!-- Intelligent City & Place Search Engine (Gazetteer & Geocoder) -->
+  <script src="js/city-search.js?v=20260930_06"></script>
 
   <!-- Living Atlas Engine Entry -->
-  <script src="js/atlas-core.js?v=20260930_05"></script>
+  <script src="js/atlas-core.js?v=20260930_06"></script>
 
 </body>
 </html>
