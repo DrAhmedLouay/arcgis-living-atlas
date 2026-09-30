@@ -4006,6 +4006,74 @@
         </div>
       </div>
 
+      <!-- =====================================================================
+           Order 62: Diagnosing & Resolving Drawing Tools Click & Zoom Interception
+           ===================================================================== -->
+      <div class="order-card bg-slate-900/60 rounded-2xl border border-emerald-500/40 p-4 lg:p-6 space-y-4 hover:border-emerald-500/70 transition-all shadow-md" data-category="features" data-index="62">
+        <div class="flex flex-col gap-3">
+          
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+              <span class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center font-mono font-bold text-xs">
+                #62
+              </span>
+              <span class="text-xs font-bold text-emerald-400 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30">
+                معالجة تفاعل أدوات الرسم وإلغاء حجب نقرات الخارطة المستوردة
+              </span>
+              <span class="text-[10px] text-slate-400 font-medium">
+                المرحلة 8: الرسم الهندسي والرقمنة والتخطيط العقاري
+              </span>
+            </div>
+
+            <div class="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
+              <i class="fa-regular fa-clock text-slate-500"></i>
+              <span>2026-09-30T13:35:00Z</span>
+            </div>
+          </div>
+
+          <!-- User Request Box -->
+          <div class="bg-slate-900/90 rounded-xl p-3.5 border border-slate-800/90 space-y-1">
+            <div class="text-[10px] font-bold text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
+              <i class="fa-solid fa-comment-dots text-xs"></i>
+              <span>نص طلب المستخدم / الأمر الموجه:</span>
+            </div>
+            <div class="text-sm font-semibold text-slate-100 leading-relaxed font-sans pr-1">
+              الادوات لا تعمل ، عالج الخلل
+            </div>
+          </div>
+
+          <!-- System Response & Technical Architecture -->
+          <div class="space-y-2 text-xs">
+            <div class="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+              <i class="fa-solid fa-code-commit text-xs"></i>
+              <span>تشخيص ومعالجة اعتراض النقرات وإتاحة الرسم المباشر فوق الخرائط المصححة مع أزرار الإنهاء والتراجع الفوري</span>
+            </div>
+            <p class="text-slate-300 leading-relaxed">
+              <strong>التشخيص الهندسي الدقيق:</strong>
+            </p>
+            <ul class="list-disc list-inside space-y-1 text-slate-300 pr-1 text-[11px]">
+              <li><strong>حجب نقرات الماوس (Pointer-Events Collision):</strong> كانت طبقة الخارطة المستوردة والمصححة تحمل خاصية <code>pointer-events: auto !important</code> مع دالة سحب بالماوس <code>onOverlayMouseDown</code> تقوم باستدعاء <code>stopPropagation()</code>؛ مما أدى لحجب أي نقرة للرسم فوق الخارطة ومنع وصول إحداثيات النقر إلى محرك الرسم.</li>
+              <li><strong>تداخل التكبير بالنقر المزدوج (Leaflet DoubleClickZoom):</strong> كان النقر المزدوج لإنهاء المضلع يؤدي إلى تكبير الخارطة وتشتيت المستخدم بدلاً من إنهاء الشكل.</li>
+              <li><strong>غياب أزرار الإنهاء والتراجع البصري:</strong> عدم وجود أزرار واضحة في الشريط العائم لحفظ المسار أو التراجع عن النقاط الخاطئة.</li>
+            </ul>
+            <div class="bg-slate-950/80 rounded-lg p-3 border border-slate-800 text-slate-300 leading-relaxed space-y-2">
+              <div class="font-semibold text-sky-400 flex items-center gap-1 text-[11px]">
+                <i class="fa-solid fa-gears"></i>
+                <span>الإجراءات البرمجية والحل المطبق:</span>
+              </div>
+              <ul class="list-disc list-inside space-y-1 text-slate-300 pr-1 text-[11px]">
+                <li><strong>تجاوز حجب طبقات الصور:</strong> إضافة قاعدة CSS وبرمجية تعطل أحداث المؤشر على الخارطة المستوردة تلقائياً أثناء وضع الرسم (<code>pointer-events: none !important</code>) لضمان نزول النقرات مباشرة على لوحة الرسم.</li>
+                <li><strong>إنشاء طبقة خاصة مستقلة (Dedicated Drawing Pane):</strong> إنشاء <code>drawingLayerPane</code> بمستوى <code>zIndex: 650</code> لضمان ظهور عناصر وشوارع وبلوكات الرسم فوق كافة الصور والطبقات.</li>
+                <li><strong>تعطيل التكبير التلقائي:</strong> استدعاء <code>map.doubleClickZoom.disable()</code> أثناء الرسم وإعادة تفعيله فور الانتهاء.</li>
+                <li><strong>أزرار التحكم الحية بالشريط العائم:</strong> إضافة مجموعة أزرار تفاعلية فورية تظهر عند وضع أول نقطة: <code>[✔️ إنهاء وحفظ (Enter)]</code> باللون الأخضر الوامض، <code>[↩️ تراجع (Backspace)]</code>، <code>[❌ إلغاء (Esc)]</code>، وعداد النقاط الحالي.</li>
+                <li><strong>دعم رسم المباني بنقطتين (2-Click Rectangle):</strong> إمكانية النقر على زاويتين متقابلتين لإنشاء مسقط المبنى المستطيل فوراً دون الحاجة لـ 4 نقرات.</li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
     </section>
 
   </main>

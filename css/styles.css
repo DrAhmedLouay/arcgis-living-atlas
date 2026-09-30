@@ -490,6 +490,15 @@ body.zen-mode-active #floatingQuickBasemapBar:hover {
   cursor: crosshair !important;
 }
 
+/* Crucial: Bypass calibrated and tile image overlays so drawing clicks always hit map canvas */
+.drawing-crosshair-mode .calibrated-satellite-overlay,
+.drawing-crosshair-mode .leaflet-image-layer,
+.drawing-crosshair-mode .leaflet-overlay-pane img,
+.drawing-crosshair-mode img.calibrated-satellite-overlay {
+  pointer-events: none !important;
+  cursor: crosshair !important;
+}
+
 .custom-poi-marker {
   display: flex;
   align-items: center;

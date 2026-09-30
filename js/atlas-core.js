@@ -6096,6 +6096,7 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
     }
 
     function onOverlayMouseDown(e) {
+      if (window.AtlasDrawingEngine && window.AtlasDrawingEngine.activeMode) return;
       if (!isDirectDragMode || isLocked || !bounds) return;
       if (e.originalEvent && e.originalEvent.button !== 0) return;
 

@@ -110,15 +110,42 @@
       if (!mapInstance || this.map) return;
       this.map = mapInstance;
 
+      // Create dedicated Leaflet map pane for drawing elements (z-index: 650)
+      if (!this.map.getPane('drawingLayerPane')) {
+        const pane = this.map.createPane('drawingLayerPane');
+        pane.style.zIndex = '650';
+      }
+
       // Create feature group for drawn elements
-      this.featureGroup = L.featureGroup().addTo(this.map);
-      this.tempLayerGroup = L.featureGroup().addTo(this.map);
+      this.featureGroup = L.featureGroup([], { pane: 'drawingLayerPane' }).addTo(this.map);
+      this.tempLayerGroup = L.featureGroup([], { pane: 'drawingLayerPane' }).addTo(this.map);
 
       // Bind Map Events
       this.map.on('click', this._onMapClick);
       this.map.on('mousemove', this._onMapMouseMove);
       this.map.on('dblclick', this._onMapDblClick);
       window.addEventListener('keydown', this._onKeyDown);
+
+      // Disable click propagation on toolbar so clicking buttons does not click map
+      const bar = document.getElementById('floatingDrawToolbar');
+      if (bar) {
+        L.DomEvent.disableClickPropagation(bar);
+        L.DomEvent.disableScrollPropagation(bar);
+      }
+
+      // Direct Container Click Listener with debouncing to guarantee clicks register on map
+      const container = this.map.getContainer();
+      if (container) {
+        container.addEventListener('click', (e) => {
+          if (!this.activeMode) return;
+          if (e.target.closest('#floatingDrawToolbar, #appSidebar, header, .leaflet-control, .glass-panel')) return;
+          if (this._lastHandledClickTime && (Date.now() - this._lastHandledClickTime < 150)) return;
+          const latlng = this.map.mouseEventToLatLng(e);
+          if (latlng) {
+            this._handleMapClick({ latlng, originalEvent: e });
+          }
+        });
+      }
 
       // Load saved features from LocalStorage
       this.loadFromStorage();
@@ -134,38 +161,56 @@
      * Start Drawing a specific feature type
      */
     setMode(mode) {
+      if (!this.map) {
+        const candidate = window.map || window.atlasMap;
+        if (candidate) this.init(candidate);
+      }
+
       this.cancelCurrentDrawing();
 
       if (this.activeMode === mode) {
-        // Toggle off if same mode clicked
         this.activeMode = null;
       } else {
         this.activeMode = mode;
       }
 
       this._updateToolbarUiState();
+      this._updateDrawingProgressUi();
 
-      if (this.activeMode) {
-        L.DomUtil.addClass(this.map.getContainer(), 'drawing-crosshair-mode');
-        this._showFloatingTip(this._getModeHelpText(this.activeMode));
-      } else {
-        L.DomUtil.removeClass(this.map.getContainer(), 'drawing-crosshair-mode');
-        this._hideFloatingTip();
+      if (this.map) {
+        const container = this.map.getContainer();
+        if (this.activeMode) {
+          if (this.map.doubleClickZoom) this.map.doubleClickZoom.disable();
+          if (container) L.DomUtil.addClass(container, 'drawing-crosshair-mode');
+          this._showFloatingTip(this._getModeHelpText(this.activeMode));
+          // Temporarily disable overlay pointer events to ensure click-through
+          document.querySelectorAll('.calibrated-satellite-overlay, .leaflet-image-layer').forEach(img => {
+            img.style.setProperty('pointer-events', 'none', 'important');
+          });
+        } else {
+          if (this.map.doubleClickZoom) this.map.doubleClickZoom.enable();
+          if (container) L.DomUtil.removeClass(container, 'drawing-crosshair-mode');
+          this._hideFloatingTip();
+          // Restore overlay pointer events
+          document.querySelectorAll('.calibrated-satellite-overlay, .leaflet-image-layer').forEach(img => {
+            img.style.removeProperty('pointer-events');
+          });
+        }
       }
     }
 
     _getModeHelpText(mode) {
       switch (mode) {
         case 'street':
-          return 'انقر على الخريطة لرسم مسار الشارع. انقر نقراً مزدوجاً لإنهاء المسار.';
+          return 'انقر على الخريطة لرسم مسار الشارع. انقر نقراً مزدوجاً أو اضغط [إنهاء وحفظ].';
         case 'block':
-          return 'انقر لتحديد زوايا البلوك السكني. انقر نقراً مزدوجاً لإغلاق المضلع وحساب المساحة.';
+          return 'انقر لتحديد زوايا البلوك السكني. انقر [إنهاء وحفظ] لحساب المساحة بالدونم.';
         case 'building':
-          return 'انقر لتحديد أركان المبنى (أو نقطتين لمستطيل). انقر نقراً مزدوجاً لإنهاء المبنى.';
+          return 'انقر لتحديد ركن المبنى ثم الركن المقابل (أو عدة أركان) لإنشاء المبنى.';
         case 'line':
-          return 'انقر لرسم المسار الخطي الخدمي. انقر نقراً مزدوجاً للإنهاء.';
+          return 'انقر لرسم المسار الخطي الخدمي، ثم انقر [إنهاء وحفظ].';
         case 'point':
-          return 'انقر على الخريطة لوضع علامة المعلم أو نقطة الاهتمام.';
+          return 'انقر على الخريطة لتثبيت المعلم أو نقطة الاهتمام مباشرة.';
         case 'label':
           return 'انقر على الخريطة لتثبيت نص توضيحي.';
         case 'edit':
@@ -180,7 +225,9 @@
      */
     _handleMapClick(e) {
       if (!this.activeMode) return;
+      this._lastHandledClickTime = Date.now();
       const latlng = e.latlng;
+      if (!latlng) return;
 
       if (this.activeMode === 'point') {
         this._createPointFeature(latlng);
@@ -196,27 +243,59 @@
         return;
       }
 
+      // Special 2-click box for building
+      if (this.activeMode === 'building' && this.drawingPoints.length === 1) {
+        const p1 = this.drawingPoints[0];
+        const p2 = latlng;
+        if (this.map.distance(p1, p2) > 1) {
+          const rectPoints = [
+            p1,
+            L.latLng(p1.lat, p2.lng),
+            p2,
+            L.latLng(p2.lat, p1.lng)
+          ];
+          this.drawingPoints = rectPoints;
+          this._finalizePolygonFeature();
+          return;
+        }
+      }
+
       // Polyline / Polygon Drawing Process
       this.drawingPoints.push(latlng);
 
       // Create vertex marker
       const vMarker = L.circleMarker(latlng, {
-        radius: 5,
+        pane: 'drawingLayerPane',
+        radius: 6,
         color: '#ffffff',
-        weight: 2,
+        weight: 2.5,
         fillColor: this.currentSettings.color,
-        fillOpacity: 1
+        fillOpacity: 1,
+        interactive: true
       }).addTo(this.tempLayerGroup);
+
+      // Clicking first vertex on a polygon can also close it
+      const currentIdx = this.drawingPoints.length - 1;
+      if (currentIdx === 0 && (this.activeMode === 'block' || this.activeMode === 'building')) {
+        vMarker.on('click', (ev) => {
+          if (this.drawingPoints.length >= 3) {
+            L.DomEvent.stopPropagation(ev);
+            this._finalizePolygonFeature();
+          }
+        });
+      }
+
       this.tempVertexMarkers.push(vMarker);
 
       // Update Temporary Layers
       if (this.activeMode === 'street' || this.activeMode === 'line') {
         if (!this.tempPolyline) {
           this.tempPolyline = L.polyline(this.drawingPoints, {
+            pane: 'drawingLayerPane',
             color: this.currentSettings.color,
             weight: this.activeMode === 'street' ? 6 : 3,
             dashArray: this.activeMode === 'line' ? '6,6' : null,
-            opacity: 0.9
+            opacity: 0.95
           }).addTo(this.tempLayerGroup);
         } else {
           this.tempPolyline.setLatLngs(this.drawingPoints);
@@ -224,6 +303,7 @@
       } else if (this.activeMode === 'block' || this.activeMode === 'building') {
         if (!this.tempPolygon) {
           this.tempPolygon = L.polygon(this.drawingPoints, {
+            pane: 'drawingLayerPane',
             color: this.currentSettings.color,
             weight: 3,
             fillColor: this.currentSettings.color,
@@ -234,23 +314,30 @@
           this.tempPolygon.setLatLngs(this.drawingPoints);
         }
       }
+
+      this._updateDrawingProgressUi();
     }
 
     /**
      * Map MouseMove Handler (Rubberband preview & dynamic readout)
      */
     _handleMapMouseMove(e) {
-      if (!this.activeMode || this.drawingPoints.length === 0) return;
+      if (!this.activeMode || this.drawingPoints.length === 0) {
+        this._hideLiveCursorTooltip();
+        return;
+      }
       const curLatLng = e.latlng;
+      if (!curLatLng) return;
       const lastPoint = this.drawingPoints[this.drawingPoints.length - 1];
 
       // Update Rubberband line from last placed point to mouse cursor
       if (!this.tempRubberband) {
         this.tempRubberband = L.polyline([lastPoint, curLatLng], {
+          pane: 'drawingLayerPane',
           color: this.currentSettings.color,
           weight: 2,
           dashArray: '4, 4',
-          opacity: 0.7
+          opacity: 0.8
         }).addTo(this.tempLayerGroup);
       } else {
         this.tempRubberband.setLatLngs([lastPoint, curLatLng]);
@@ -262,19 +349,22 @@
 
       if (this.activeMode === 'street' || this.activeMode === 'line') {
         const lengthM = this.computePolylineLength(ptsWithCursor);
-        readoutText = `الطول: ${this.formatLength(lengthM)}`;
+        readoutText = `الطول: ${this.formatLength(lengthM)}<br><span style="color:#6ee7b7">انقر لإضافة نقطة، أو Enter للإنهاء</span>`;
       } else if (this.activeMode === 'block' || this.activeMode === 'building') {
         if (ptsWithCursor.length >= 3) {
           const areaM2 = this.computePolygonArea(ptsWithCursor);
           const perimM = this.computePolylineLength([...ptsWithCursor, ptsWithCursor[0]]);
-          readoutText = `المساحة: ${this.formatArea(areaM2)}<br>المحيط: ${this.formatLength(perimM)}`;
+          readoutText = `المساحة: ${this.formatArea(areaM2)}<br>المحيط: ${this.formatLength(perimM)}<br><span style="color:#6ee7b7">Enter أو انقر [إنهاء] للإغلاق</span>`;
         } else {
           const segM = this.map.distance(lastPoint, curLatLng);
-          readoutText = `المسافة: ${this.formatLength(segM)}`;
+          readoutText = `المسافة: ${this.formatLength(segM)}<br><span style="color:#6ee7b7">انقر لتحديد النقطة التالية</span>`;
         }
       }
 
-      this._updateLiveCursorTooltip(e.containerPoint, readoutText);
+      const point = e.containerPoint || (this.map ? this.map.latLngToContainerPoint(curLatLng) : null);
+      if (point) {
+        this._updateLiveCursorTooltip(point, readoutText);
+      }
     }
 
     /**
@@ -283,20 +373,31 @@
     _handleMapDblClick(e) {
       if (!this.activeMode) return;
       L.DomEvent.stop(e); // Prevent map zoom on double click
+      this.finishCurrentDrawing();
+    }
 
+    /**
+     * Finish and save current ongoing line/polygon feature
+     */
+    finishCurrentDrawing() {
+      if (!this.activeMode) return;
       if (this.activeMode === 'street' || this.activeMode === 'line') {
         if (this.drawingPoints.length >= 2) {
           this._finalizeLineFeature();
+        } else {
+          this._showToast('⚠️ يرجى تحديد نقطتين على الأقل لإكمال رسم الشارع', 'warning');
         }
       } else if (this.activeMode === 'block' || this.activeMode === 'building') {
         if (this.drawingPoints.length >= 3) {
           this._finalizePolygonFeature();
+        } else {
+          this._showToast('⚠️ يرجى تحديد 3 نقاط على الأقل لإكمال رسم المضلع', 'warning');
         }
       }
     }
 
     /**
-     * Keyboard Shortcuts (Esc = Cancel, Backspace = Undo Last Point)
+     * Keyboard Shortcuts (Esc = Cancel, Backspace = Undo Last Point, Enter = Finish)
      */
     _handleKeyDown(e) {
       if (e.key === 'Escape') {
@@ -306,17 +407,19 @@
           this.setMode(null);
         }
       } else if (e.key === 'Backspace' && this.drawingPoints.length > 0) {
-        // Prevent browser navigation and remove last point
         e.preventDefault();
-        this._undoLastVertex();
+        this.undoLastVertex();
+      } else if (e.key === 'Enter' && this.drawingPoints.length > 0) {
+        e.preventDefault();
+        this.finishCurrentDrawing();
       }
     }
 
-    _undoLastVertex() {
+    undoLastVertex() {
       if (this.drawingPoints.length === 0) return;
       this.drawingPoints.pop();
       const lastMarker = this.tempVertexMarkers.pop();
-      if (lastMarker) this.tempLayerGroup.removeLayer(lastMarker);
+      if (lastMarker && this.tempLayerGroup) this.tempLayerGroup.removeLayer(lastMarker);
 
       if (this.drawingPoints.length === 0) {
         this.cancelCurrentDrawing();
@@ -325,9 +428,38 @@
 
       if (this.tempPolyline) this.tempPolyline.setLatLngs(this.drawingPoints);
       if (this.tempPolygon) this.tempPolygon.setLatLngs(this.drawingPoints);
-      if (this.tempRubberband) {
+      if (this.tempRubberband && this.tempLayerGroup) {
         this.tempLayerGroup.removeLayer(this.tempRubberband);
         this.tempRubberband = null;
+      }
+      this._updateDrawingProgressUi();
+    }
+
+    _updateDrawingProgressUi() {
+      const activeBar = document.getElementById('drawingActiveActions');
+      const countBadge = document.getElementById('drawingPointsCountBadge');
+      const count = this.drawingPoints.length;
+
+      if (!this.activeMode) {
+        if (activeBar) {
+          activeBar.classList.add('hidden');
+          activeBar.classList.remove('flex');
+        }
+        return;
+      }
+
+      if (activeBar) {
+        if (count > 0) {
+          activeBar.classList.remove('hidden');
+          activeBar.classList.add('flex');
+        } else {
+          activeBar.classList.add('hidden');
+          activeBar.classList.remove('flex');
+        }
+      }
+
+      if (countBadge) {
+        countBadge.textContent = `${count} ${count === 1 ? 'نقطة' : 'نقاط'}`;
       }
     }
 
@@ -471,6 +603,7 @@
       if (f.type === 'street' || f.type === 'line') {
         const latlngs = f.points.map(p => L.latLng(p.lat, p.lng));
         layer = L.polyline(latlngs, {
+          pane: 'drawingLayerPane',
           color: f.color || '#f59e0b',
           weight: f.weight || (f.type === 'street' ? 6 : 3),
           dashArray: f.dashArray || null,
@@ -480,6 +613,7 @@
       } else if (f.type === 'block' || f.type === 'building') {
         const latlngs = f.points.map(p => L.latLng(p.lat, p.lng));
         layer = L.polygon(latlngs, {
+          pane: 'drawingLayerPane',
           color: f.color || '#3b82f6',
           weight: f.weight || 2.5,
           fillColor: f.fillColor || f.color || '#3b82f6',
@@ -499,7 +633,7 @@
           iconSize: [28, 28],
           iconAnchor: [14, 28]
         });
-        layer = L.marker([p.lat, p.lng], { icon: customIcon });
+        layer = L.marker([p.lat, p.lng], { icon: customIcon, pane: 'drawingLayerPane' });
 
       } else if (f.type === 'label') {
         const p = f.points[0];
@@ -513,7 +647,7 @@
           className: 'custom-map-annotation',
           iconAnchor: [10, 10]
         });
-        layer = L.marker([p.lat, p.lng], { icon: labelIcon });
+        layer = L.marker([p.lat, p.lng], { icon: labelIcon, pane: 'drawingLayerPane' });
       }
 
       if (!layer) return;
@@ -526,6 +660,10 @@
 
       // Click event
       layer.on('click', (e) => {
+        if (this.activeMode) {
+          this._handleMapClick(e);
+          return;
+        }
         L.DomEvent.stopPropagation(e);
         this.selectedFeature = f;
         this._highlightFeatureInList(f.id);
@@ -1242,5 +1380,32 @@
       window.AtlasDrawingEngine.clearAllFeatures();
     }
   };
+
+  window.finishCurrentDrawing = function () {
+    if (window.AtlasDrawingEngine) {
+      window.AtlasDrawingEngine.finishCurrentDrawing();
+    }
+  };
+
+  window.undoLastDrawingVertex = function () {
+    if (window.AtlasDrawingEngine) {
+      window.AtlasDrawingEngine.undoLastVertex();
+    }
+  };
+
+  window.cancelActiveDrawing = function () {
+    if (window.AtlasDrawingEngine) {
+      window.AtlasDrawingEngine.cancelCurrentDrawing();
+    }
+  };
+
+  // Auto-init if map is already available on window
+  if (typeof window !== 'undefined') {
+    if (window.map) {
+      window.AtlasDrawingEngine.init(window.map);
+    } else if (window.atlasMap) {
+      window.AtlasDrawingEngine.init(window.atlasMap);
+    }
+  }
 
 })(window);
