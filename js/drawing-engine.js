@@ -933,91 +933,197 @@
         `;
       }
 
-      // Color Palette Swatches (تغيير لون الشيء)
+      // Color Palette Swatches (تغيير لون الشيء) — 9 colors
       const SWATCHES = [
-        { color: '#f59e0b', label: 'ذهبي / شوارع' },
-        { color: '#3b82f6', label: 'أزرق / بلوكات' },
-        { color: '#10b981', label: 'أخضر / مباني' },
-        { color: '#8b5cf6', label: 'بنفسجي / مسارات' },
-        { color: '#ef4444', label: 'أحمر / نقاط' },
-        { color: '#06b6d4', label: 'سماوي / نصوص' },
+        { color: '#ffffff', label: 'أبيض' },
         { color: '#ec4899', label: 'وردي' },
-        { color: '#ffffff', label: 'أبيض' }
+        { color: '#06b6d4', label: 'سماوي' },
+        { color: '#ef4444', label: 'أحمر' },
+        { color: '#8b5cf6', label: 'بنفسجي' },
+        { color: '#10b981', label: 'أخضر' },
+        { color: '#3b82f6', label: 'أزرق' },
+        { color: '#f59e0b', label: 'ذهبي' }
       ];
 
-      const swatchesHtml = SWATCHES.map(s => `
-        <button type="button" 
+      const swatchesHtml = SWATCHES.map(s => {
+        const isActive = s.color.toLowerCase() === currentColor.toLowerCase();
+        return `<button type="button"
           onclick="window.AtlasDrawingEngine.changeFeatureColor('${f.id}', '${s.color}')"
-          class="feature-color-swatch ${s.color.toLowerCase() === currentColor.toLowerCase() ? 'active' : ''}" 
-          style="background-color: ${s.color};" 
-          title="${s.label}">
-        </button>
-      `).join('');
+          class="feature-color-swatch ${isActive ? 'active' : ''}"
+          style="background-color:${s.color}; width:26px; height:26px; border-radius:50%; border:${isActive ? '3px solid #fff' : '2px solid rgba(255,255,255,0.25)'}; cursor:pointer; box-shadow:${isActive ? '0 0 0 2px #38bdf8' : 'none'}; transition:all 0.15s; flex-shrink:0;"
+          title="${s.label}"></button>`;
+      }).join('');
+
+      // Build editable property fields based on feature type
+      let editablePropsHtml = '';
+
+      if (f.type === 'street' || f.type === 'line') {
+        const sw = (f.properties && f.properties.streetWidth) ? f.properties.streetWidth : 15;
+        const st = (f.properties && f.properties.streetType) ? f.properties.streetType : 'رئيسي';
+        editablePropsHtml = `
+          <div class="space-y-1.5 pt-1 border-t border-slate-700/70">
+            <div class="text-[10px] font-bold text-sky-300 mb-1 flex items-center gap-1">
+              <i class="fa-solid fa-sliders text-[9px]"></i>
+              <span>تعديل خصائص الشارع</span>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <label class="text-[10px] text-slate-400 shrink-0">عرض الشارع:</label>
+              <div class="flex items-center gap-1">
+                <input type="number" min="1" max="200" step="1" value="${sw}"
+                  onchange="window.AtlasDrawingEngine.updateFeatureProperty('${f.id}','streetWidth',+this.value)"
+                  class="w-16 bg-slate-800 border border-slate-600 focus:border-sky-500 rounded-lg px-2 py-0.5 text-[11px] text-white font-mono text-center outline-none">
+                <span class="text-[10px] text-slate-400">متر</span>
+              </div>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <label class="text-[10px] text-slate-400 shrink-0">نوع الشارع:</label>
+              <select onchange="window.AtlasDrawingEngine.updateFeatureProperty('${f.id}','streetType',this.value)"
+                class="bg-slate-800 border border-slate-600 focus:border-sky-500 rounded-lg px-2 py-0.5 text-[11px] text-white outline-none cursor-pointer">
+                <option value="رئيسي" ${st==='رئيسي'?'selected':''}>رئيسي</option>
+                <option value="ثانوي" ${st==='ثانوي'?'selected':''}>ثانوي</option>
+                <option value="خدمي" ${st==='خدمي'?'selected':''}>خدمي</option>
+                <option value="سريع" ${st==='سريع'?'selected':''}>سريع</option>
+                <option value="محلي" ${st==='محلي'?'selected':''}>محلي</option>
+              </select>
+            </div>
+          </div>`;
+      } else if (f.type === 'building') {
+        const floors = (f.properties && f.properties.floors) ? f.properties.floors : 1;
+        const usage  = (f.properties && f.properties.usage)  ? f.properties.usage  : 'سكني';
+        editablePropsHtml = `
+          <div class="space-y-1.5 pt-1 border-t border-slate-700/70">
+            <div class="text-[10px] font-bold text-emerald-300 mb-1 flex items-center gap-1">
+              <i class="fa-solid fa-sliders text-[9px]"></i>
+              <span>تعديل خصائص المبنى</span>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <label class="text-[10px] text-slate-400 shrink-0">عدد الطوابق:</label>
+              <input type="number" min="1" max="200" step="1" value="${floors}"
+                onchange="window.AtlasDrawingEngine.updateFeatureProperty('${f.id}','floors',+this.value)"
+                class="w-16 bg-slate-800 border border-slate-600 focus:border-emerald-500 rounded-lg px-2 py-0.5 text-[11px] text-white font-mono text-center outline-none">
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <label class="text-[10px] text-slate-400 shrink-0">الاستخدام:</label>
+              <select onchange="window.AtlasDrawingEngine.updateFeatureProperty('${f.id}','usage',this.value)"
+                class="bg-slate-800 border border-slate-600 focus:border-emerald-500 rounded-lg px-2 py-0.5 text-[11px] text-white outline-none cursor-pointer">
+                <option value="سكني"    ${usage==='سكني'?'selected':''}>سكني</option>
+                <option value="تجاري"   ${usage==='تجاري'?'selected':''}>تجاري</option>
+                <option value="حكومي"   ${usage==='حكومي'?'selected':''}>حكومي</option>
+                <option value="صناعي"   ${usage==='صناعي'?'selected':''}>صناعي</option>
+                <option value="ديني"    ${usage==='ديني'?'selected':''}>ديني</option>
+                <option value="تعليمي"  ${usage==='تعليمي'?'selected':''}>تعليمي</option>
+                <option value="صحي"     ${usage==='صحي'?'selected':''}>صحي</option>
+              </select>
+            </div>
+          </div>`;
+      } else if (f.type === 'block') {
+        const zone = (f.properties && f.properties.zone) ? f.properties.zone : 'A';
+        editablePropsHtml = `
+          <div class="space-y-1.5 pt-1 border-t border-slate-700/70">
+            <div class="text-[10px] font-bold text-sky-300 mb-1 flex items-center gap-1">
+              <i class="fa-solid fa-sliders text-[9px]"></i>
+              <span>تعديل خصائص البلوك</span>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <label class="text-[10px] text-slate-400 shrink-0">رمز المنطقة:</label>
+              <input type="text" maxlength="10" value="${zone}"
+                onchange="window.AtlasDrawingEngine.updateFeatureProperty('${f.id}','zone',this.value)"
+                class="w-20 bg-slate-800 border border-slate-600 focus:border-sky-500 rounded-lg px-2 py-0.5 text-[11px] text-white font-mono text-center outline-none">
+            </div>
+          </div>`;
+      } else if (f.type === 'label') {
+        editablePropsHtml = `
+          <div class="space-y-1.5 pt-1 border-t border-slate-700/70">
+            <div class="text-[10px] font-bold text-cyan-300 mb-1 flex items-center gap-1">
+              <i class="fa-solid fa-font text-[9px]"></i>
+              <span>تعديل نص التسمية</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <input type="text" value="${f.name}"
+                id="labelInlineEditInput_${f.id}"
+                class="flex-1 bg-slate-800 border border-slate-600 focus:border-cyan-500 rounded-lg px-2 py-1 text-[11px] text-white outline-none">
+              <button type="button"
+                onclick="window.AtlasDrawingEngine.renameFeatureInline('${f.id}', document.getElementById('labelInlineEditInput_${f.id}').value)"
+                class="px-2 py-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-[10px] font-bold cursor-pointer shrink-0">
+                حفظ
+              </button>
+            </div>
+          </div>`;
+      }
 
       return `
-        <div class="p-2.5 space-y-2.5 text-right font-sans min-w-[270px] select-none" dir="rtl">
-          
-          <!-- Header with Drag Indicator (تحريك الشيء باليد) -->
+        <div class="p-2.5 space-y-2 text-right font-sans select-none" dir="rtl" style="min-width:290px; max-width:320px;">
+
+          <!-- Header -->
           <div class="border-b border-slate-700 pb-2">
             <div class="flex items-center justify-between gap-1.5">
-              <div class="flex items-center gap-1.5 font-bold text-white text-xs truncate">
+              <div class="flex items-center gap-1.5 font-bold text-white text-xs" style="max-width:65%;">
                 <i class="fa-solid ${typeInfo.icon} text-amber-400 shrink-0"></i>
-                <span class="truncate">${f.name}</span>
+                <span class="truncate" title="${f.name}">${f.name}</span>
               </div>
-              <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 shrink-0 font-medium">
-                ${typeInfo.name}
-              </span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 shrink-0">${typeInfo.name}</span>
             </div>
-            <!-- Hand Drag Hint -->
+            <!-- Drag Hint -->
             <div class="mt-1.5 flex items-center gap-1.5 text-[10px] font-bold text-cyan-300 bg-cyan-950/70 px-2 py-1 rounded-md border border-cyan-800/80">
-              <i class="fa-solid fa-hand text-xs text-cyan-400 animate-pulse"></i>
+              <i class="fa-solid fa-hand text-xs text-cyan-400"></i>
               <span>متاح للتحريك بالسحب المباشر بالماوس ✋</span>
             </div>
           </div>
 
-          <!-- Metrics info -->
-          <div class="space-y-1 text-slate-300">
-            ${metricsHtml}
-          </div>
+          <!-- Metrics -->
+          ${metricsHtml ? `<div class="space-y-1 text-slate-300">${metricsHtml}</div>` : ''}
 
-          <!-- Color Palette Picker (تغيير لون الشيء) -->
+          <!-- Editable Properties (per-type) -->
+          ${editablePropsHtml}
+
+          <!-- Color Palette Picker -->
           <div class="space-y-1.5 pt-1 border-t border-slate-700">
-            <div class="flex items-center justify-between text-[11px] font-bold text-slate-300">
+            <div class="flex items-center justify-between text-[11px] font-bold">
               <span class="flex items-center gap-1 text-amber-300">
                 <i class="fa-solid fa-palette text-xs"></i>
-                <span>تغيير لون الشيء:</span>
+                <span>🎨 تغيير لون الشيء:</span>
               </span>
-              <div class="flex items-center gap-1">
-                <label class="text-[10px] text-slate-400 cursor-pointer flex items-center gap-1 hover:text-white">
-                  <span>مخصص:</span>
-                  <input type="color" value="${currentColor}" onchange="window.AtlasDrawingEngine.changeFeatureColor('${f.id}', this.value)" class="w-5 h-5 rounded cursor-pointer border-0 bg-transparent">
-                </label>
-              </div>
+              <label class="text-[10px] text-slate-400 cursor-pointer flex items-center gap-1 hover:text-white">
+                <span>مخصص:</span>
+                <input type="color" value="${currentColor}"
+                  onchange="window.AtlasDrawingEngine.changeFeatureColor('${f.id}', this.value)"
+                  class="w-5 h-5 rounded cursor-pointer border-0 bg-transparent">
+              </label>
             </div>
-            <div class="flex items-center justify-between gap-1.5 pt-0.5">
+            <div class="flex items-center gap-1.5 flex-wrap pt-0.5">
               ${swatchesHtml}
             </div>
           </div>
 
-          <!-- Action Buttons (حذف / تعديل رؤوس / إعادة تسمية) -->
-          <div class="grid grid-cols-3 gap-1.5 pt-2 border-t border-slate-700">
-            <button type="button" onclick="window.AtlasDrawingEngine.deleteFeature('${f.id}')" class="px-2 py-1.5 bg-rose-600/25 hover:bg-rose-600/40 text-rose-300 border border-rose-500/50 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer shadow-sm" title="حذف هذا الشكل نهائياً">
-              <i class="fa-solid fa-trash text-xs"></i>
-              <span>حذف 🗑️</span>
+          <!-- Action Buttons -->
+          <div class="grid grid-cols-3 gap-1.5 pt-1.5 border-t border-slate-700">
+            <button type="button"
+              onclick="window.AtlasDrawingEngine.openRenameModal('${f.id}')"
+              class="py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-[11px] font-medium transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer"
+              title="تعديل اسم العنصر">
+              <i class="fa-solid fa-pen text-[10px] text-slate-300"></i>
+              <span>تسمية</span>
             </button>
-            <button type="button" onclick="window.AtlasDrawingEngine.enableFeatureEditing(window.AtlasDrawingEngine.features.find(x => x.id === '${f.id}'))" class="px-2 py-1.5 bg-emerald-600/25 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/50 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer shadow-sm" title="تعديل زوايا ورؤوس الشكل">
+            <button type="button"
+              onclick="window.AtlasDrawingEngine.enableFeatureEditingById('${f.id}')"
+              class="py-1.5 bg-emerald-600/25 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/50 rounded-lg text-[11px] font-bold transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer shadow-sm"
+              title="تعديل زوايا ورؤوس الشكل">
               <i class="fa-solid fa-draw-polygon text-xs"></i>
-              <span>تعديل 📐</span>
+              <span>تعديل</span>
             </button>
-            <button type="button" onclick="window.AtlasDrawingEngine.renameFeature('${f.id}')" class="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-[11px] font-medium transition-all flex items-center justify-center gap-1 cursor-pointer" title="تعديل اسم العنصر">
-              <i class="fa-solid fa-pen text-[10px]"></i>
-              <span>تسمية ✏️</span>
+            <button type="button"
+              onclick="window.AtlasDrawingEngine.deleteFeature('${f.id}')"
+              class="py-1.5 bg-rose-600/25 hover:bg-rose-600/50 text-rose-300 border border-rose-500/50 rounded-lg text-[11px] font-bold transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer shadow-sm"
+              title="حذف هذا الشكل نهائياً">
+              <i class="fa-solid fa-trash text-xs"></i>
+              <span>حذف</span>
             </button>
           </div>
 
         </div>
       `;
     }
+
 
     /**
      * Select Feature and Enable Hand Dragging, Color Change, and Deletion
@@ -1229,35 +1335,154 @@
     }
 
     /**
-     * Rename Feature
+     * Open In-App Rename Modal (replaces browser prompt)
      */
-    renameFeature(id) {
+    openRenameModal(id) {
       const feat = this.features.find(f => f.id === id);
       if (!feat) return;
-      const newName = prompt('تعديل اسم العنصر:', feat.name);
-      if (newName && newName.trim() !== '') {
-        feat.name = newName.trim();
-        if (feat.layer) {
-          if (feat.type === 'label') {
-            const labelHtml = `
-              <div class="px-2 py-0.5 rounded-md bg-slate-900/90 text-amber-300 font-bold text-xs border shadow-lg whitespace-nowrap" style="border-color: ${feat.color || '#38bdf8'}; color: ${feat.color || '#38bdf8'};">
-                ${feat.name}
-              </div>
-            `;
-            feat.layer.setIcon(L.divIcon({
-              html: labelHtml,
-              className: 'custom-map-annotation',
-              iconAnchor: [10, 10]
-            }));
-          }
-          if (feat.layer.getPopup && feat.layer.getPopup()) {
-            feat.layer.setPopupContent(this._generateFeaturePopup(feat));
-          }
-        }
-        this.saveToStorage();
-        this.updateStatsUi();
-        this._showToast(`✅ تم تحديث الاسم إلى: ${feat.name}`, 'success');
+
+      // Close popup so modal is visible
+      if (feat.layer && feat.layer.closePopup) feat.layer.closePopup();
+
+      const existing = document.getElementById('drawRenameModal');
+      if (existing) existing.remove();
+
+      const modal = document.createElement('div');
+      modal.id = 'drawRenameModal';
+      modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4';
+      modal.innerHTML = `
+        <div class="bg-slate-900 border border-sky-500/50 rounded-2xl shadow-2xl max-w-sm w-full p-4 space-y-3.5 text-right font-sans text-slate-100" dir="rtl">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+            <div class="flex items-center gap-2">
+              <span class="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-300 flex items-center justify-center border border-sky-500/30 text-xs">
+                <i class="fa-solid fa-pen"></i>
+              </span>
+              <h3 class="font-bold text-sm text-white">تعديل اسم العنصر</h3>
+            </div>
+            <button type="button" id="closeRenameModalBtn" class="text-slate-400 hover:text-white p-1 rounded-lg text-sm cursor-pointer">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+          <div class="space-y-1.5">
+            <label class="block text-xs font-medium text-slate-300">الاسم الجديد للعنصر:</label>
+            <input type="text" id="renameFeatureInput" value="${feat.name.replace(/"/g,'&quot;')}"
+              class="w-full bg-slate-950 border border-slate-700 focus:border-sky-500 rounded-xl px-3 py-2 text-sm text-white outline-none"
+              autofocus>
+          </div>
+          <div class="flex items-center gap-2 justify-end pt-1">
+            <button type="button" id="cancelRenameModalBtn"
+              class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 transition-colors cursor-pointer">
+              إلغاء
+            </button>
+            <button type="button" id="saveRenameModalBtn"
+              class="px-4 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-xs font-bold text-white transition-colors cursor-pointer flex items-center gap-1.5 shadow-md">
+              <i class="fa-solid fa-check"></i>
+              <span>حفظ الاسم</span>
+            </button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(modal);
+
+      const input = modal.querySelector('#renameFeatureInput');
+      if (input) {
+        input.focus();
+        input.select();
       }
+
+      const doSave = () => {
+        const val = input ? input.value.trim() : '';
+        if (val) {
+          this.renameFeatureInline(id, val);
+        }
+        modal.remove();
+      };
+
+      modal.querySelector('#saveRenameModalBtn').addEventListener('click', doSave);
+      modal.querySelector('#cancelRenameModalBtn').addEventListener('click', () => modal.remove());
+      modal.querySelector('#closeRenameModalBtn').addEventListener('click', () => modal.remove());
+      modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+      if (input) {
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') doSave();
+          if (e.key === 'Escape') modal.remove();
+        });
+      }
+    }
+
+    /**
+     * Rename Feature (inline or from modal) — applies name and updates map/popup
+     */
+    renameFeatureInline(id, newName) {
+      const feat = this.features.find(f => f.id === id);
+      if (!feat || !newName || !newName.trim()) return;
+      feat.name = newName.trim();
+
+      if (feat.layer) {
+        if (feat.type === 'label') {
+          const labelHtml = `
+            <div class="px-2 py-0.5 rounded-md bg-slate-900/90 font-bold text-xs border shadow-lg whitespace-nowrap"
+              style="border-color:${feat.color||'#38bdf8'}; color:${feat.color||'#38bdf8'};">
+              ${feat.name}
+            </div>`;
+          feat.layer.setIcon(L.divIcon({
+            html: labelHtml,
+            className: 'custom-map-annotation',
+            iconAnchor: [10, 10]
+          }));
+        }
+        if (feat.layer.getPopup && feat.layer.getPopup()) {
+          feat.layer.setPopupContent(this._generateFeaturePopup(feat));
+        }
+      }
+      this.saveToStorage();
+      this.updateStatsUi();
+      this._showToast(`✅ تم تحديث الاسم إلى: ${feat.name}`, 'success');
+    }
+
+    /**
+     * Rename Feature — legacy wrapper (kept for sidebar buttons)
+     */
+    renameFeature(id) {
+      this.openRenameModal(id);
+    }
+
+    /**
+     * Update a single property on a feature (called from popup inputs)
+     * e.g. streetWidth, streetType, floors, usage, zone
+     */
+    updateFeatureProperty(id, key, value) {
+      const feat = this.features.find(f => f.id === id);
+      if (!feat) return;
+      if (!feat.properties) feat.properties = {};
+      feat.properties[key] = value;
+
+      // If updating streetWidth, also update line weight visually
+      if ((key === 'streetWidth') && feat.layer && feat.layer.setStyle) {
+        const scaledWeight = Math.max(2, Math.min(20, Math.round(value / 3)));
+        feat.layer.setStyle({ weight: scaledWeight });
+        feat.weight = scaledWeight;
+      }
+
+      // Refresh popup immediately
+      if (feat.layer && feat.layer.getPopup && feat.layer.getPopup()) {
+        feat.layer.setPopupContent(this._generateFeaturePopup(feat));
+      }
+
+      this.saveToStorage();
+      this.updateStatsUi();
+    }
+
+    /**
+     * Enable vertex editing by feature ID (called from popup button)
+     */
+    enableFeatureEditingById(id) {
+      const feat = this.features.find(f => f.id === id);
+      if (!feat) return;
+      // Close popup first
+      if (feat.layer && feat.layer.closePopup) feat.layer.closePopup();
+      this.enableFeatureEditing(feat);
     }
 
     /**
@@ -1274,6 +1499,7 @@
       }
       feat.layer.openPopup();
     }
+
 
     /**
      * Delete Feature (حذف الشيء)
