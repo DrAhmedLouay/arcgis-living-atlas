@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="author" content="الدكتور المهندس احمد لؤي البجاري">
   <title>ArcGIS Living Atlas • أطلس البيانات المكانية التفاعلي</title>
   
   <!-- Tailwind CSS CDN -->
@@ -66,8 +67,15 @@
             <i class="fa-solid fa-location-dot text-[9px]"></i>
             جمهورية العراق
           </span>
+          <span class="hidden lg:inline-flex items-center gap-1.5 text-[10px] px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-amber-600/10 text-amber-300 border border-amber-500/40 font-semibold shadow-sm">
+            <i class="fa-solid fa-user-gear text-[9px] text-amber-400"></i>
+            <span>تصميم وتطوير الدكتور المهندس احمد لؤي البجاري</span>
+          </span>
         </div>
-        <div class="text-[10px] text-slate-400">بوابة الخرائط والبيانات المكانية الحية والموثوقة &bull; العراق والشرق الأوسط</div>
+        <div class="text-[10px] text-slate-400 flex items-center gap-1.5">
+          <span>بوابة الخرائط والبيانات المكانية الحية والموثوقة &bull; العراق والشرق الأوسط</span>
+          <span class="lg:hidden text-amber-300 font-medium">&bull; تصميم وتطوير الدكتور المهندس احمد لؤي البجاري</span>
+        </div>
       </div>
     </div>
 
@@ -1475,8 +1483,14 @@
       </div>
 
       <!-- Sidebar Footer -->
-      <div class="p-3 border-t border-slate-800 bg-slate-900/80 shrink-0 text-center text-[11px] text-slate-500">
-        مدعوم بتقنيات <span class="text-slate-300 font-semibold">Esri ArcGIS Maps SDK</span> &bull; Living Atlas
+      <div class="p-3 border-t border-slate-800 bg-slate-900/90 shrink-0 text-center text-[11px] text-slate-400 space-y-1.5">
+        <div class="text-amber-300 font-semibold flex items-center justify-center gap-1.5 bg-amber-500/10 py-1.5 px-3 rounded-lg border border-amber-500/25 shadow-sm">
+          <i class="fa-solid fa-user-gear text-amber-400 text-xs"></i>
+          <span>تصميم وتطوير الدكتور المهندس احمد لؤي البجاري</span>
+        </div>
+        <div class="text-[10px] text-slate-500">
+          مدعوم بتقنيات <span class="text-slate-300 font-semibold">Esri ArcGIS Maps SDK</span> &bull; Living Atlas
+        </div>
       </div>
     </aside>
   </div>
@@ -1974,8 +1988,15 @@
       </div>
 
       <!-- Modal Footer -->
-      <div class="p-3 border-t border-slate-800 bg-slate-950 flex items-center justify-between text-[11px]">
-        <span class="text-slate-400 font-mono">ESRI ArcView GIS 3.x / ArcGIS Pro / QGIS Compatible</span>
+      <div class="p-3 border-t border-slate-800 bg-slate-950 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+        <div class="flex items-center gap-2 text-slate-400">
+          <span class="font-mono">ESRI ArcView GIS 3.x / ArcGIS Pro / QGIS Compatible</span>
+          <span class="text-slate-600 hidden sm:inline">&bull;</span>
+          <span class="text-amber-300 font-medium hidden sm:inline flex items-center gap-1">
+            <i class="fa-solid fa-user-gear text-[10px] text-amber-400"></i>
+            <span>تصميم وتطوير الدكتور المهندس احمد لؤي البجاري</span>
+          </span>
+        </div>
         <button type="button" id="closeGisExportBottomBtn" onclick="window.closeGisExportModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors cursor-pointer">إغلاق</button>
       </div>
 
