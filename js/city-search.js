@@ -157,7 +157,18 @@
      * Initialize City Search Engine
      */
     init(mapInstance) {
-      this.map = mapInstance || window.map || window.atlasMap;
+      // Resolve map — caller may pass null if not yet ready; always refresh from window
+      this.map = mapInstance || window.map || window.atlasMap || null;
+
+      // Prevent double-binding events if already initialized
+      if (this._initialized) {
+        // Just refresh the map reference if it wasn't set before
+        if (!this.map) {
+          this.map = window.map || window.atlasMap || null;
+        }
+        return;
+      }
+
       this.searchInput = document.getElementById('cityPlaceSearchInput');
       this.dropdown = document.getElementById('citySearchResultsDropdown');
       this.clearBtn = document.getElementById('clearSearchInputBtn');
@@ -168,8 +179,9 @@
         return;
       }
 
+      this._initialized = true;
       this._bindEvents();
-      console.log('🔍 CitySearchEngine: Iraqi Cities & Places Intelligent Search Engine initialized with pure black text rendering.');
+      console.log('🔍 CitySearchEngine: Intelligent Iraqi City & Place Search Engine — ready (map:', this.map ? 'linked' : 'pending', ')');
     }
 
     /**
@@ -502,7 +514,12 @@
      * Select Result & Fly to Location
      */
     selectResult(item) {
-      if (!item || !this.map) return;
+      if (!item) return;
+
+      // Always attempt to refresh map reference at call-time in case it wasn't set at init
+      if (!this.map) {
+        this.map = window.map || window.atlasMap || null;
+      }
 
       this.closeDropdown();
       this.searchInput.value = item.nameAr;
@@ -512,37 +529,43 @@
       const targetLng = item.lng;
       const targetZoom = item.zoom || 13;
 
-      // 1. Smooth Fly-to Animation
-      this.map.flyTo([targetLat, targetLng], targetZoom, {
-        duration: 1.4,
-        easeLinearity: 0.25
-      });
-
-      // 2. High-Contrast Animated Pulse Beacon Pin
-      if (this.searchResultMarker) {
-        this.map.removeLayer(this.searchResultMarker);
+      // 1. Smooth Fly-to Animation (only if map is available)
+      if (this.map) {
+        this.map.flyTo([targetLat, targetLng], targetZoom, {
+          duration: 1.4,
+          easeLinearity: 0.25
+        });
       }
 
-      const beaconIcon = L.divIcon({
-        className: 'custom-search-beacon-icon',
-        html: `
-          <div class="relative flex items-center justify-center">
-            <div class="search-beacon-pin w-9 h-9 rounded-full bg-sky-500/30 border-2 border-sky-400 flex items-center justify-center shadow-2xl">
-              <div class="w-4 h-4 rounded-full bg-sky-600 border-2 border-white shadow-md"></div>
-            </div>
-            <div class="absolute -top-7 px-2 py-0.5 rounded-md bg-slate-950/90 text-white border border-sky-400 text-[10px] font-bold whitespace-nowrap shadow-lg">
-              ${item.nameAr}
-            </div>
-          </div>
-        `,
-        iconSize: [36, 36],
-        iconAnchor: [18, 18]
-      });
+      // 2. High-Contrast Animated Pulse Beacon Pin
+      if (this.searchResultMarker && this.map) {
+        this.map.removeLayer(this.searchResultMarker);
+        this.searchResultMarker = null;
+      }
 
-      this.searchResultMarker = L.marker([targetLat, targetLng], {
-        icon: beaconIcon,
-        zIndexOffset: 2000
-      }).addTo(this.map);
+      if (this.map) {
+        const beaconIcon = L.divIcon({
+          className: 'custom-search-beacon-icon',
+          html: `
+            <div class="relative flex items-center justify-center">
+              <div class="search-beacon-pin w-9 h-9 rounded-full bg-sky-500/30 border-2 border-sky-400 flex items-center justify-center shadow-2xl">
+                <div class="w-4 h-4 rounded-full bg-sky-600 border-2 border-white shadow-md"></div>
+              </div>
+              <div class="absolute -top-7 px-2 py-0.5 rounded-md bg-slate-950/90 text-white border border-sky-400 text-[10px] font-bold whitespace-nowrap shadow-lg">
+                ${item.nameAr}
+              </div>
+            </div>
+          `,
+          iconSize: [36, 36],
+          iconAnchor: [18, 18]
+        });
+
+        this.searchResultMarker = L.marker([targetLat, targetLng], {
+          icon: beaconIcon,
+          zIndexOffset: 2000
+        }).addTo(this.map);
+      }
+
 
       // 3. Coordinate Calculations for Display
       const latDms = this._formatDms(targetLat, true);
@@ -592,7 +615,9 @@
         </div>
       `;
 
-      this.searchResultMarker.bindPopup(popupContent, { maxWidth: 280 }).openPopup();
+      if (this.searchResultMarker) {
+        this.searchResultMarker.bindPopup(popupContent, { maxWidth: 280 }).openPopup();
+      }
 
       if (typeof window.showToast === 'function') {
         window.showToast(`🎯 تم الانتقال إلى: ${item.nameAr} (${item.gov})`, 'success');
@@ -625,12 +650,31 @@
   // Instantiate and expose globally
   window.AtlasCitySearch = new CitySearchEngine();
 
-  // Auto-init when map is ready
-  document.addEventListener('DOMContentLoaded', () => {
-    if (window.map || window.atlasMap) {
-      window.AtlasCitySearch.init(window.map || window.atlasMap);
+  /**
+   * Robust deferred initialization: retries until window.map is available.
+   * Solves the race condition where city-search.js loads before atlas-core.js
+   * creates the Leaflet map, causing DOMContentLoaded to fire with window.map = undefined.
+   */
+  function _tryInitCitySearch(attempts) {
+    const mapRef = window.map || window.atlasMap;
+    if (mapRef) {
+      window.AtlasCitySearch.init(mapRef);
+      return;
     }
-  });
+    if (attempts > 0) {
+      setTimeout(() => _tryInitCitySearch(attempts - 1), 200);
+    } else {
+      console.warn('CitySearchEngine: map not available after max retries — will init without map (input events only).');
+      window.AtlasCitySearch.init(null);
+    }
+  }
+
+  // Start polling after DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => _tryInitCitySearch(25)); // up to 5 sec
+  } else {
+    _tryInitCitySearch(25);
+  }
 
   // Global helper
   window.searchCityOrPlace = function (query) {
