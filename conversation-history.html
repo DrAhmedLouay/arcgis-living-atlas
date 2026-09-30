@@ -144,11 +144,11 @@
           <!-- Quick Stat Counters -->
           <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-2 gap-3 shrink-0">
             <div class="glass-card rounded-xl p-3 text-center border-slate-700/60 shadow">
-              <div class="text-2xl font-black text-sky-400 font-mono">60</div>
+              <div class="text-2xl font-black text-sky-400 font-mono">63</div>
               <div class="text-[11px] text-slate-400 font-medium">أمراً واستشارة موثقة</div>
             </div>
             <div class="glass-card rounded-xl p-3 text-center border-slate-700/60 shadow">
-              <div class="text-2xl font-black text-emerald-400 font-mono">7</div>
+              <div class="text-2xl font-black text-emerald-400 font-mono">8</div>
               <div class="text-[11px] text-slate-400 font-medium">مراحل هندسية كبرى</div>
             </div>
             <div class="glass-card rounded-xl p-3 text-center border-slate-700/60 shadow">
@@ -4074,6 +4074,75 @@
         </div>
       </div>
 
+      <!-- =====================================================================
+           Order 63: Resolving Drawing Tools at Real Scale & High Zoom over Calibrated Maps
+           ===================================================================== -->
+      <div class="order-card bg-slate-900/60 rounded-2xl border border-emerald-500/40 p-4 lg:p-6 space-y-4 hover:border-emerald-500/70 transition-all shadow-md" data-category="features" data-index="63">
+        <div class="flex flex-col gap-3">
+          
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+              <span class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center font-mono font-bold text-xs">
+                #63
+              </span>
+              <span class="text-xs font-bold text-emerald-400 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30">
+                معالجة عمل أدوات الرسم بالمقياس الحقيقي (Urban Real Scale) وإلغاء حجب نقرات الطبقة المصححة
+              </span>
+              <span class="text-[10px] text-slate-400 font-medium">
+                المرحلة 8: الرسم الهندسي والرقمنة والتخطيط العقاري
+              </span>
+            </div>
+
+            <div class="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
+              <i class="fa-regular fa-clock text-slate-500"></i>
+              <span>2026-09-30T16:45:00Z</span>
+            </div>
+          </div>
+
+          <!-- User Request Box -->
+          <div class="bg-slate-900/90 rounded-xl p-3.5 border border-slate-800/90 space-y-1">
+            <div class="text-[10px] font-bold text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
+              <i class="fa-solid fa-comment-dots text-xs"></i>
+              <span>نص طلب المستخدم / الأمر الموجه:</span>
+            </div>
+            <div class="text-sm font-semibold text-slate-100 leading-relaxed font-sans pr-1">
+              ادوات الرسم تعمل فقط عند الابتعاد zoom out عدة كيلومترات، عالج الخلل بالمقياس الحقيقي
+            </div>
+          </div>
+
+          <!-- System Response & Technical Architecture -->
+          <div class="space-y-2 text-xs">
+            <div class="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+              <i class="fa-solid fa-code-commit text-xs"></i>
+              <span>التشخيص الجيوديسي للحدث الحركي وتطبيق مرحلة الالتقاط الفوري (Capturing Phase) والتمرير المباشر للنقرات</span>
+            </div>
+            <p class="text-slate-300 leading-relaxed">
+              <strong>التشخيص الفيزيائي والهندسي للخلل:</strong>
+            </p>
+            <ul class="list-disc list-inside space-y-1 text-slate-300 pr-1 text-[11px]">
+              <li><strong>تباين النطاق المكاني وتغطية الشاشة:</strong> عند الابتعاد عدة كيلومترات (Regional Zoom Out)، تكون الخارطة المصححة عبارة عن مستطيل صغير وسط الشاشة، وكان المستخدم ينقر بالصدفة خارج حدودها فوق بلاطات خارطة الأساس (Base Tiles) التي لا تحجب النقرات فتصل إلى حدث <code>map.on('click')</code> ويعمل الرسم. أما عند الاقتراب للمقياس الحقيقي (Urban Real Scale 1:500 أو 1:1,000)، فإن الخارطة المصححة تغطي 100% من مساحة الشاشة.</li>
+              <li><strong>ابتلاع أحداث الماوس داخل طبقة الصورة التفاعلية (ImageOverlay Click Absorption):</strong> كائن <code>L.imageOverlay</code> كان منشأً بخاصية <code>interactive: true</code>، وعند النقر عليه في مقياس الحقيقة تلتقط مكتبة Leaflet النقرة وتوجهها للطبقة حصراً وتستدعي <code>stopPropagation()</code> مانعةً وصولها لحدث <code>map.on('click')</code> أو أحداث الـ Bubble في حاوية الخارطة.</li>
+              <li><strong>حجب الكاش لملف CSS القديم:</strong> كان ملف التنسيقات محملاً بإصدار قديم من الكاش يفرض <code>pointer-events: auto !important</code> على الخارطة المصححة.</li>
+            </ul>
+            <div class="bg-slate-950/80 rounded-lg p-3 border border-slate-800 text-slate-300 leading-relaxed space-y-2">
+              <div class="font-semibold text-sky-400 flex items-center gap-1 text-[11px]">
+                <i class="fa-solid fa-gears"></i>
+                <span>الحل الهندسي الشامل والنهائي المطبق:</span>
+              </div>
+              <ul class="list-disc list-inside space-y-1 text-slate-300 pr-1 text-[11px]">
+                <li><strong>التقاط أحداث DOM في مرحلة الانحدار (DOM Capturing Phase: <code>useCapture = true</code>):</strong> إضافة مستمعات نقرات وحركة الماوس على <code>map.getContainer()</code> في مرحلة الـ Capturing، مما يضمن اعتراض النقرة فور نزولها من نافذة المتصفح وقبل أن تتمكن أي طبقة داخلية أو عنصر Leaflet من إيقاف انتشارها بـ <code>stopPropagation()</code>.</li>
+                <li><strong>التمرير المباشر من طبقة الخارطة المصححة (Direct Overlay Event Forwarding):</strong> ربط أحداث <code>click</code> و <code>mousemove</code> و <code>dblclick</code> على كائن <code>overlay</code> ذاته لتقوم بتمرير الإحداثيات الجغرافية فوراً لمحرك الرسم <code>AtlasDrawingEngine</code>.</li>
+                <li><strong>عزل المؤشرات التفاعلية أثناء وضع الرسم:</strong> تطبيق <code>pointer-events: none !important</code> على مستوى <code>body.drawing-mode-active</code> لطبقات الصور ومقابض المعايرة ليتحول الماوس إلى مؤشر تصويب دقيق (Crosshair) يخترق كافة الطبقات مباشرة.</li>
+                <li><strong>إلغاء حجب رؤوس المسار المؤقتة (Non-blocking Vertex Markers):</strong> جعل علامات الرؤوس الدائرية المؤقتة أثناء الرسم بخاصية <code>interactive: false</code> باستثناء النقطة الأولى للمضلع، لضمان عدم اعتراض الدوائر لنقرات الرؤوس المتجاورة عند المقاييس الحضرية شديدة الدقة.</li>
+                <li><strong>مرونة رسم المباني:</strong> دعم الرقمنة الحرة للمباني متعدّدة الأركان أو إنشائها بمستطيل سريع من نقطتين مع خوارزمية ذكية لا تغلق المسار قسراً إلا بأمر المستخدم.</li>
+                <li><strong>تحديث معرفات منع التخزين المؤقت (Cache Busters):</strong> تحديث روابط <code>styles.css?v=20260930_03</code> و <code>drawing-engine.js?v=20260930_03</code> و <code>atlas-core.js?v=20260930_03</code> لضمان تحميل التحديثات للمستخدم فوراً دون الحاجة لمسح يدوي للكاش.</li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
     </section>
 
   </main>
@@ -4090,7 +4159,7 @@
       منظومة ArcGIS Living Atlas Iraq • أطلس البيانات المكانية التفاعلي واستوديو تصدير الخرائط الفضائية المصححة لبرامج ArcView GIS و GeoTIFF
     </div>
     <div class="text-[10px] text-slate-600 font-mono">
-      Generated automatically on 2026-09-30 • Full Historical Archive • 60 Engineering Commands
+      Generated automatically on 2026-09-30 • Full Historical Archive • 63 Engineering Commands
     </div>
   </footer>
 

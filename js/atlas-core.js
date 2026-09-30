@@ -5761,6 +5761,25 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
         className: 'calibrated-satellite-overlay direct-drag-active'
       }).addTo(map);
 
+      // Direct Event Forwarding for GIS Drawing Engine at Real Scale (High Zoom)
+      overlay.on('click', (e) => {
+        if (window.AtlasDrawingEngine && window.AtlasDrawingEngine.activeMode) {
+          window.AtlasDrawingEngine._handleMapClick(e);
+        }
+      });
+      overlay.on('mousemove', (e) => {
+        if (window.AtlasDrawingEngine && window.AtlasDrawingEngine.activeMode) {
+          window.AtlasDrawingEngine._handleMapMouseMove(e);
+        }
+      });
+      overlay.on('dblclick', (e) => {
+        if (window.AtlasDrawingEngine && window.AtlasDrawingEngine.activeMode) {
+          L.DomEvent.stopPropagation(e);
+          L.DomEvent.preventDefault(e);
+          window.AtlasDrawingEngine._handleMapDblClick(e);
+        }
+      });
+
       overlay._isGeoreferencedStrict = !!customBounds;
 
       // Safeguard: ensure Leaflet zoom animations never strip CSS rotation
@@ -6074,6 +6093,14 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       if (!overlay) return;
       const el = overlay.getElement ? overlay.getElement() : overlay._image;
       if (el) {
+        if (window.AtlasDrawingEngine && window.AtlasDrawingEngine.activeMode) {
+          el.style.setProperty('pointer-events', 'none', 'important');
+          el.style.cursor = 'crosshair';
+          el.classList.remove('direct-drag-active');
+          overlay.off('mousedown', onOverlayMouseDown);
+          return;
+        }
+
         if (isDirectDragMode && !isLocked) {
           el.style.pointerEvents = 'auto';
           el.style.cursor = 'grab';
@@ -6090,10 +6117,12 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
       }
 
       overlay.off('mousedown', onOverlayMouseDown);
-      if (isDirectDragMode && !isLocked) {
+      if (isDirectDragMode && !isLocked && (!window.AtlasDrawingEngine || !window.AtlasDrawingEngine.activeMode)) {
         overlay.on('mousedown', onOverlayMouseDown);
       }
     }
+
+    window.attachOverlayDragEvents = attachOverlayDragEvents;
 
     function onOverlayMouseDown(e) {
       if (window.AtlasDrawingEngine && window.AtlasDrawingEngine.activeMode) return;

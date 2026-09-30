@@ -174,7 +174,7 @@ html, body {
 .leaflet-image-layer.calibrated-satellite-overlay {
   transition: filter 0.15s ease-out;
   transform-origin: center center;
-  pointer-events: auto !important;
+  pointer-events: auto;
   image-rendering: -webkit-optimize-contrast !important;
   image-rendering: crisp-edges !important;
 }
@@ -490,11 +490,21 @@ body.zen-mode-active #floatingQuickBasemapBar:hover {
   cursor: crosshair !important;
 }
 
-/* Crucial: Bypass calibrated and tile image overlays so drawing clicks always hit map canvas */
+/* Crucial: Bypass calibrated and tile image overlays so drawing clicks always hit map canvas at real scale */
+body.drawing-mode-active .calibrated-satellite-overlay,
+body.drawing-mode-active .leaflet-image-layer,
+body.drawing-mode-active .leaflet-overlay-pane img,
+body.drawing-mode-active img.calibrated-satellite-overlay,
+body.drawing-mode-active .calib-handle-icon,
+body.drawing-mode-active .calib-center-icon,
+body.drawing-mode-active .leaflet-marker-pane .calib-handle-icon,
+body.drawing-mode-active .leaflet-marker-pane .calib-center-icon,
 .drawing-crosshair-mode .calibrated-satellite-overlay,
 .drawing-crosshair-mode .leaflet-image-layer,
 .drawing-crosshair-mode .leaflet-overlay-pane img,
-.drawing-crosshair-mode img.calibrated-satellite-overlay {
+.drawing-crosshair-mode img.calibrated-satellite-overlay,
+.drawing-crosshair-mode .calib-handle-icon,
+.drawing-crosshair-mode .calib-center-icon {
   pointer-events: none !important;
   cursor: crosshair !important;
 }

@@ -133,18 +133,38 @@
         L.DomEvent.disableScrollPropagation(bar);
       }
 
-      // Direct Container Click Listener with debouncing to guarantee clicks register on map
+      // Direct Container Capturing Listeners to GUARANTEE all mouse events register at real scale,
+      // even when clicking directly on interactive image overlays (ECW, satellite, GeoTIFF)
       const container = this.map.getContainer();
       if (container) {
+        // Capturing click listener
         container.addEventListener('click', (e) => {
           if (!this.activeMode) return;
-          if (e.target.closest('#floatingDrawToolbar, #appSidebar, header, .leaflet-control, .glass-panel')) return;
-          if (this._lastHandledClickTime && (Date.now() - this._lastHandledClickTime < 150)) return;
+          if (e.target.closest('#floatingDrawToolbar, #appSidebar, header, .leaflet-control, .glass-panel, #gisExportModal, #chatHistoryModal, .swal2-container')) return;
           const latlng = this.map.mouseEventToLatLng(e);
           if (latlng) {
             this._handleMapClick({ latlng, originalEvent: e });
           }
-        });
+        }, true); // useCapture: true
+
+        // Capturing mousemove listener for live rubberbanding & tooltips over overlay
+        container.addEventListener('mousemove', (e) => {
+          if (!this.activeMode || this.drawingPoints.length === 0) return;
+          if (e.target.closest('#floatingDrawToolbar, #appSidebar, header, .leaflet-control, .glass-panel, #gisExportModal, #chatHistoryModal, .swal2-container')) return;
+          const latlng = this.map.mouseEventToLatLng(e);
+          if (latlng) {
+            this._handleMapMouseMove({ latlng, originalEvent: e, containerPoint: L.point(e.clientX, e.clientY) });
+          }
+        }, true); // useCapture: true
+
+        // Capturing dblclick listener
+        container.addEventListener('dblclick', (e) => {
+          if (!this.activeMode) return;
+          if (e.target.closest('#floatingDrawToolbar, #appSidebar, header, .leaflet-control, .glass-panel')) return;
+          e.stopPropagation();
+          e.preventDefault();
+          this._handleMapDblClick(e);
+        }, true); // useCapture: true
       }
 
       // Load saved features from LocalStorage
@@ -181,20 +201,29 @@
         const container = this.map.getContainer();
         if (this.activeMode) {
           if (this.map.doubleClickZoom) this.map.doubleClickZoom.disable();
+          document.body.classList.add('drawing-mode-active');
           if (container) L.DomUtil.addClass(container, 'drawing-crosshair-mode');
           this._showFloatingTip(this._getModeHelpText(this.activeMode));
-          // Temporarily disable overlay pointer events to ensure click-through
-          document.querySelectorAll('.calibrated-satellite-overlay, .leaflet-image-layer').forEach(img => {
+          // Temporarily disable overlay pointer events to ensure click-through at real scale
+          document.querySelectorAll('.calibrated-satellite-overlay, .leaflet-image-layer, .leaflet-overlay-pane img, .calib-handle-icon, .calib-center-icon').forEach(img => {
             img.style.setProperty('pointer-events', 'none', 'important');
           });
+          if (window.calibOverlayInstance) {
+            const oEl = window.calibOverlayInstance.getElement ? window.calibOverlayInstance.getElement() : window.calibOverlayInstance._image;
+            if (oEl) oEl.style.setProperty('pointer-events', 'none', 'important');
+          }
         } else {
           if (this.map.doubleClickZoom) this.map.doubleClickZoom.enable();
+          document.body.classList.remove('drawing-mode-active');
           if (container) L.DomUtil.removeClass(container, 'drawing-crosshair-mode');
           this._hideFloatingTip();
           // Restore overlay pointer events
-          document.querySelectorAll('.calibrated-satellite-overlay, .leaflet-image-layer').forEach(img => {
+          document.querySelectorAll('.calibrated-satellite-overlay, .leaflet-image-layer, .leaflet-overlay-pane img, .calib-handle-icon, .calib-center-icon').forEach(img => {
             img.style.removeProperty('pointer-events');
           });
+          if (typeof window.attachOverlayDragEvents === 'function') {
+            window.attachOverlayDragEvents();
+          }
         }
       }
     }
@@ -225,7 +254,10 @@
      */
     _handleMapClick(e) {
       if (!this.activeMode) return;
-      this._lastHandledClickTime = Date.now();
+      const now = Date.now();
+      if (this._lastHandledClickTime && (now - this._lastHandledClickTime < 180)) return;
+      this._lastHandledClickTime = now;
+
       const latlng = e.latlng;
       if (!latlng) return;
 
@@ -243,40 +275,24 @@
         return;
       }
 
-      // Special 2-click box for building
-      if (this.activeMode === 'building' && this.drawingPoints.length === 1) {
-        const p1 = this.drawingPoints[0];
-        const p2 = latlng;
-        if (this.map.distance(p1, p2) > 1) {
-          const rectPoints = [
-            p1,
-            L.latLng(p1.lat, p2.lng),
-            p2,
-            L.latLng(p2.lat, p1.lng)
-          ];
-          this.drawingPoints = rectPoints;
-          this._finalizePolygonFeature();
-          return;
-        }
-      }
-
       // Polyline / Polygon Drawing Process
       this.drawingPoints.push(latlng);
 
-      // Create vertex marker
+      // Create vertex marker with interactive: false so clicks at close range are NEVER blocked
+      const isFirst = (this.drawingPoints.length === 1);
       const vMarker = L.circleMarker(latlng, {
         pane: 'drawingLayerPane',
-        radius: 6,
+        radius: 5,
         color: '#ffffff',
-        weight: 2.5,
+        weight: 2,
         fillColor: this.currentSettings.color,
         fillOpacity: 1,
-        interactive: true
+        interactive: isFirst && (this.activeMode === 'block' || this.activeMode === 'building'),
+        className: isFirst ? 'drawing-interactive-target' : ''
       }).addTo(this.tempLayerGroup);
 
       // Clicking first vertex on a polygon can also close it
-      const currentIdx = this.drawingPoints.length - 1;
-      if (currentIdx === 0 && (this.activeMode === 'block' || this.activeMode === 'building')) {
+      if (isFirst && (this.activeMode === 'block' || this.activeMode === 'building')) {
         vMarker.on('click', (ev) => {
           if (this.drawingPoints.length >= 3) {
             L.DomEvent.stopPropagation(ev);
@@ -390,8 +406,19 @@
       } else if (this.activeMode === 'block' || this.activeMode === 'building') {
         if (this.drawingPoints.length >= 3) {
           this._finalizePolygonFeature();
+        } else if (this.activeMode === 'building' && this.drawingPoints.length === 2) {
+          // If building has 2 points, automatically expand opposite corners to 4-point rectangle
+          const p1 = this.drawingPoints[0];
+          const p2 = this.drawingPoints[1];
+          this.drawingPoints = [
+            p1,
+            L.latLng(p1.lat, p2.lng),
+            p2,
+            L.latLng(p2.lat, p1.lng)
+          ];
+          this._finalizePolygonFeature();
         } else {
-          this._showToast('⚠️ يرجى تحديد 3 نقاط على الأقل لإكمال رسم المضلع', 'warning');
+          this._showToast('⚠️ يرجى تحديد 3 نقاط على الأقل للمضلع (أو نقطتين لرسم مستطيل المبنى)', 'warning');
         }
       }
     }
