@@ -793,16 +793,22 @@
       ctx.fillRect(x, y, w, h);
 
       const b = this.frameBounds;
-      const minX = b.getWest().toFixed(6);
-      const minY = b.getSouth().toFixed(6);
-      const maxX = b.getEast().toFixed(6);
-      const maxY = b.getNorth().toFixed(6);
 
       // 2. Fetch and Draw High-Resolution Satellite Map Image from ArcGIS Living Atlas
+      // We request in Web Mercator (3857) so the returned image is in the same
+      // projection used by _latLngToCanvas → perfect pixel alignment with drawn features.
       const reqW = Math.min(1600, Math.max(400, Math.round(w)));
       const reqH = Math.min(1200, Math.max(300, Math.round(h)));
-      const bboxStr = `${minX},${minY},${maxX},${maxY}`;
-      const exportUrl = `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bboxStr}&bboxSR=4326&imageSR=4326&size=${reqW},${reqH}&f=image`;
+
+      // Convert frame bounds from geographic to Web Mercator (EPSG:3857)
+      const EARTH_RADIUS = 6378137;
+      const mercXmin = b.getWest()  * Math.PI / 180 * EARTH_RADIUS;
+      const mercXmax = b.getEast()  * Math.PI / 180 * EARTH_RADIUS;
+      const mercYmin = Math.log(Math.tan(Math.PI / 4 + b.getSouth() * Math.PI / 360)) * EARTH_RADIUS;
+      const mercYmax = Math.log(Math.tan(Math.PI / 4 + b.getNorth() * Math.PI / 360)) * EARTH_RADIUS;
+
+      const bboxStr = `${mercXmin.toFixed(2)},${mercYmin.toFixed(2)},${mercXmax.toFixed(2)},${mercYmax.toFixed(2)}`;
+      const exportUrl = `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bboxStr}&bboxSR=3857&imageSR=3857&size=${reqW},${reqH}&f=image`;
 
       let satImgLoaded = false;
       if (this._cachedSatImg && this._cachedSatBbox === bboxStr) {
@@ -816,16 +822,17 @@
 
       if (!satImgLoaded) {
         try {
-          const satImg = await this._loadImageWithTimeout(exportUrl, 5000);
+          const satImg = await this._loadImageWithTimeout(exportUrl, 8000);
           ctx.drawImage(satImg, x, y, w, h);
           this._cachedSatImg = satImg;
           this._cachedSatBbox = bboxStr;
           satImgLoaded = true;
         } catch (err) {
-          console.warn('AtlasLayoutStudio: Notice: ArcGIS satellite imagery offline or timeout, rendering high-contrast cartographic grid:', err);
+          console.warn('AtlasLayoutStudio: ArcGIS satellite imagery offline or timeout, using cartographic grid fallback:', err);
           this._drawFallbackCartographicGrid(ctx, x, y, w, h, b, mmToPx);
         }
       }
+
 
       // 3. Draw Rectified/Calibrated Overlay if active and visible
       if (window.calibOverlayInstance && window.isCalibOverlayVisible && window.isCalibOverlayVisible()) {
@@ -932,16 +939,40 @@
     }
 
     /**
-     * Project Lat/Lng to Canvas Pixels inside Map Window
+     * Convert latitude in degrees to Web Mercator Y (same formula Leaflet/ArcGIS use)
+     * This is critical: the satellite basemap image is fetched in EPSG:4326 bbox but
+     * rendered by ArcGIS in Web Mercator projection internally, so drawn feature
+     * coordinates MUST be projected through the same Mercator formula to align correctly.
+     */
+    _latToMercatorY(lat) {
+      const latRad = lat * Math.PI / 180;
+      return Math.log(Math.tan(Math.PI / 4 + latRad / 2));
+    }
+
+    /**
+     * Project Lat/Lng to Canvas Pixels inside Map Window using Web Mercator projection.
+     * Matches Leaflet + ArcGIS World Imagery rendering exactly, preventing feature offset.
      */
     _latLngToCanvas(lat, lng, b, mapX, mapY, mapW, mapH) {
-      const west = b.getWest();
-      const east = b.getEast();
+      const west  = b.getWest();
+      const east  = b.getEast();
       const north = b.getNorth();
       const south = b.getSouth();
 
+      // Longitude: linear in both geographic and Mercator — no correction needed
       const x = mapX + ((lng - west) / (east - west)) * mapW;
-      const y = mapY + ((north - lat) / (north - south)) * mapH;
+
+      // Latitude: must use Mercator Y to match the basemap image projection
+      const mercN = this._latToMercatorY(north);
+      const mercS = this._latToMercatorY(south);
+      const mercP = this._latToMercatorY(lat);
+
+      // Clamp to avoid NaN at exactly ±90°
+      const mercRange = mercN - mercS;
+      const y = mercRange > 0
+        ? mapY + ((mercN - mercP) / mercRange) * mapH
+        : mapY + ((north - lat) / (north - south || 1)) * mapH;
+
       return { x, y };
     }
 
