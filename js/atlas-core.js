@@ -47,6 +47,181 @@ document.addEventListener('DOMContentLoaded', () => {
   L.control.zoom({ position: 'topleft' }).addTo(map);
   L.control.scale({ metric: true, imperial: false, position: 'bottomright' }).addTo(map);
 
+  // =========================================================================
+  // GPS — زر الموقع الحالي (Current Location Engine)
+  // =========================================================================
+  (function setupGpsLocateMe() {
+    const btn = document.getElementById('gpsLocateMeBtn');
+    if (!btn) return;
+
+    let gpsMarker        = null;   // نقطة الموقع
+    let gpsAccuracyCircle = null;  // دائرة الدقة
+    let isLocating       = false;
+    let isActive         = false;
+
+    // ── مساعد: تنسيق DMS ──────────────────────────────────────────
+    function toDms(val, isLat) {
+      const d   = Math.floor(Math.abs(val));
+      const min = Math.floor((Math.abs(val) - d) * 60);
+      const sec = ((Math.abs(val) - d - min / 60) * 3600).toFixed(1);
+      const dir = isLat ? (val >= 0 ? 'N' : 'S') : (val >= 0 ? 'E' : 'W');
+      return `${d}°${min}'${sec}"${dir}`;
+    }
+
+    // ── مساعد: تحويل WGS84 → UTM (مبسط) ──────────────────────────
+    function toUtm(lat, lng) {
+      const a   = 6378137.0, f = 1 / 298.257223563;
+      const e2  = 2 * f - f * f, ep2 = e2 / (1 - e2);
+      const k0  = 0.9996;
+      const zone = Math.floor((lng + 180) / 6) + 1;
+      const cm   = (zone - 1) * 6 - 180 + 3;
+      const lr   = lat * Math.PI / 180, lnr = lng * Math.PI / 180, cmr = cm * Math.PI / 180;
+      const N    = a / Math.sqrt(1 - e2 * Math.sin(lr) ** 2);
+      const T    = Math.tan(lr) ** 2, C = ep2 * Math.cos(lr) ** 2, A = Math.cos(lr) * (lnr - cmr);
+      const M    = a * ((1 - e2/4 - 3*e2**2/64 - 5*e2**3/256)*lr
+                   - (3*e2/8+3*e2**2/32+45*e2**3/1024)*Math.sin(2*lr)
+                   + (15*e2**2/256+45*e2**3/1024)*Math.sin(4*lr)
+                   - (35*e2**3/3072)*Math.sin(6*lr));
+      const E = k0*N*(A+(1-T+C)*A**3/6+(5-18*T+T**2+72*C-58*ep2)*A**5/120) + 500000;
+      let Nv = k0*(M+N*Math.tan(lr)*(A**2/2+(5-T+9*C+4*C**2)*A**4/24+(61-58*T+T**2+600*C-330*ep2)*A**6/720));
+      if (lat < 0) Nv += 10000000;
+      return { zone: zone + 'N', E: Math.round(E), N: Math.round(Nv) };
+    }
+
+    // ── إنشاء/تحديث marker + دائرة الدقة ─────────────────────────
+    function placeGpsMarker(lat, lng, accuracyM) {
+      // أيقونة النبضة
+      const icon = L.divIcon({
+        className: 'gps-location-icon-outer',
+        html: `<div class="gps-location-icon-ring"></div><div class="gps-location-icon-dot"></div>`,
+        iconSize:   [20, 20],
+        iconAnchor: [10, 10]
+      });
+
+      if (gpsMarker) {
+        gpsMarker.setLatLng([lat, lng]);
+        gpsMarker.setIcon(icon);
+      } else {
+        gpsMarker = L.marker([lat, lng], { icon, zIndexOffset: 3000 }).addTo(map);
+      }
+
+      // دائرة دقة الموقع
+      if (gpsAccuracyCircle) {
+        gpsAccuracyCircle.setLatLng([lat, lng]);
+        gpsAccuracyCircle.setRadius(accuracyM);
+      } else {
+        gpsAccuracyCircle = L.circle([lat, lng], {
+          radius: accuracyM,
+          className: 'gps-accuracy-circle',
+          interactive: false
+        }).addTo(map);
+      }
+
+      // popup بالإحداثيات
+      const dms = `${toDms(lat, true)} | ${toDms(lng, false)}`;
+      const utm = toUtm(lat, lng);
+      const accStr = accuracyM < 1000
+        ? `${Math.round(accuracyM)} م`
+        : `${(accuracyM / 1000).toFixed(2)} كم`;
+
+      gpsMarker.bindPopup(`
+        <div class="p-2 space-y-1.5 text-right font-sans" dir="rtl" style="min-width:220px;">
+          <div class="flex items-center gap-1.5 font-bold text-sky-300 border-b border-slate-700 pb-1.5 text-xs">
+            <i class="fa-solid fa-location-crosshairs text-sky-400"></i>
+            <span>موقعي الحالي (GPS)</span>
+          </div>
+          <div class="space-y-1 text-[11px] font-mono text-slate-200">
+            <div class="flex justify-between"><span class="text-slate-400">WGS84:</span><span class="font-bold">${lat.toFixed(6)}°, ${lng.toFixed(6)}°</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">DMS:</span><span>${dms}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">UTM Z${utm.zone}:</span><span>E ${utm.E.toLocaleString()} | N ${utm.N.toLocaleString()}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">دقة الموقع:</span><span class="text-emerald-400 font-bold">±${accStr}</span></div>
+          </div>
+          <button type="button"
+            onclick="if(window.map)window.map.setView([${lat},${lng}],17)"
+            class="w-full mt-1 py-1 bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-bold rounded-lg cursor-pointer transition-colors">
+            <i class="fa-solid fa-expand text-[10px]"></i> تكبير إلى الموقع
+          </button>
+        </div>
+      `, { maxWidth: 260, className: 'gps-popup' }).openPopup();
+
+      isActive = true;
+      btn.classList.add('gps-active');
+    }
+
+    // ── نجاح تحديد الموقع ─────────────────────────────────────────
+    function onSuccess(pos) {
+      isLocating = false;
+      btn.classList.remove('gps-loading');
+
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      const acc = pos.coords.accuracy;
+
+      placeGpsMarker(lat, lng, acc);
+
+      // انتقل انسيابي إلى الموقع
+      map.flyTo([lat, lng], 16, { duration: 1.5, easeLinearity: 0.25 });
+
+      if (typeof showToast === 'function') {
+        showToast(`📍 تم تحديد موقعك بدقة ±${acc < 1000 ? Math.round(acc) + ' م' : (acc/1000).toFixed(1) + ' كم'}`, 'success');
+      }
+    }
+
+    // ── فشل تحديد الموقع ──────────────────────────────────────────
+    function onError(err) {
+      isLocating = false;
+      btn.classList.remove('gps-loading');
+      btn.classList.remove('gps-active');
+      isActive = false;
+
+      const msgs = {
+        1: 'تم رفض الوصول إلى الموقع. يرجى السماح للمتصفح بالوصول إلى بيانات الموقع الجغرافي.',
+        2: 'تعذر تحديد الموقع الجغرافي. تحقق من تفعيل خاصية GPS في الجهاز.',
+        3: 'انتهت مهلة تحديد الموقع. حاول مرة أخرى.'
+      };
+
+      if (typeof showToast === 'function') {
+        showToast(`⚠️ ${msgs[err.code] || 'خطأ في تحديد الموقع'}`, 'warning');
+      }
+    }
+
+    // ── النقر على الزر ────────────────────────────────────────────
+    btn.addEventListener('click', () => {
+      // إذا كان نشطاً → إلغاء التتبع وإزالة الماركر
+      if (isActive) {
+        if (gpsMarker)         { map.removeLayer(gpsMarker);         gpsMarker = null; }
+        if (gpsAccuracyCircle) { map.removeLayer(gpsAccuracyCircle); gpsAccuracyCircle = null; }
+        btn.classList.remove('gps-active', 'gps-loading');
+        isActive   = false;
+        isLocating = false;
+        if (typeof showToast === 'function') showToast('تم إلغاء تتبع الموقع الحالي', 'info');
+        return;
+      }
+
+      if (isLocating) return;
+
+      if (!navigator.geolocation) {
+        if (typeof showToast === 'function') {
+          showToast('⚠️ المتصفح لا يدعم خاصية تحديد الموقع الجغرافي', 'error');
+        }
+        return;
+      }
+
+      isLocating = true;
+      btn.classList.add('gps-loading');
+      if (typeof showToast === 'function') showToast('🛰️ جارٍ تحديد موقعك الجغرافي...', 'info');
+
+      navigator.geolocation.getCurrentPosition(onSuccess, onError, {
+        enableHighAccuracy: true,
+        timeout: 12000,
+        maximumAge: 0
+      });
+    });
+
+    // اجعل الدالة متاحة عالمياً لإعادة الاستخدام
+    window.gpsLocateMe = () => btn.click();
+  })();
+
   // 2. Initialize Extended Public Keyless Basemaps
   state.basemapLayers = {
     'dark-gray': L.layerGroup([

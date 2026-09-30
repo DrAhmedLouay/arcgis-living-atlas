@@ -31,7 +31,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <!-- Custom Styling -->
-  <link rel="stylesheet" href="css/styles.css?v=20260930_08">
+  <link rel="stylesheet" href="css/styles.css?v=20261001_01">
 
   <script>
     // Immediate Synchronous Handlers for ArcView GIS & GeoTIFF Export Studio
@@ -236,6 +236,11 @@
     <!-- Map Container -->
     <main class="flex-1 relative h-full" style="flex: 1 1 0%; position: relative; width: 100%; height: 100%;">
       <div id="viewDiv"></div>
+
+      <!-- زر الموقع الحالي (GPS Geolocation) -->
+      <button id="gpsLocateMeBtn" title="موقعي الحالي — الانتقال إلى موقعك الجغرافي الفعلي" aria-label="الموقع الحالي">
+        <i class="fa-solid fa-location-crosshairs"></i>
+      </button>
 
       <!-- Floating Restore Top Bar Button (Visible only in Zen Mode) -->
       <button id="restoreZenModeBtn" class="hidden absolute top-3 left-1/2 -translate-x-1/2 z-40 px-3.5 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-cyan-500/60 shadow-2xl text-xs font-semibold text-cyan-300 hover:text-white flex items-center gap-2 backdrop-blur-md transition-all cursor-pointer">
@@ -2925,7 +2930,7 @@
   <script src="js/city-search.js?v=20260930_09"></script>
 
   <!-- Living Atlas Engine Entry -->
-  <script src="js/atlas-core.js?v=20260930_08"></script>
+  <script src="js/atlas-core.js?v=20261001_01"></script>
 
 </body>
 </html>
