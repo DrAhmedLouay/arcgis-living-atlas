@@ -827,3 +827,29 @@ body.dragging-feature-active * {
   fill: rgba(56,189,248,0.08) !important;
   fill-opacity: 1 !important;
 }
+
+/* =========================================================================
+   OSM Extractor — Tooltip & Area Selection Button Styles
+   ========================================================================= */
+.osm-tooltip {
+  background-color: rgba(15, 23, 42, 0.92) !important;
+  border: 1px solid rgba(51, 65, 85, 0.8) !important;
+  color: #e2e8f0 !important;
+  font-family: 'Cairo', sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+  padding: 4px 10px !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
+  white-space: nowrap !important;
+  direction: rtl !important;
+}
+
+.osm-tooltip::before {
+  border-top-color: rgba(51, 65, 85, 0.8) !important;
+}
+
+/* Active area selection button highlight */
+.active-area-btn {
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.4) !important;
+}

@@ -352,6 +352,13 @@
           <i class="fa-solid fa-file-export"></i>
         </button>
 
+        <!-- OSM Building & Block Extractor Button -->
+        <button type="button" onclick="window.openOsmExtractor && window.openOsmExtractor()"
+          class="p-1.5 rounded-lg text-orange-400 hover:text-white hover:bg-slate-800 text-xs transition-colors cursor-pointer"
+          title="استخراج أشكال الأبنية والبلوكات من OpenStreetMap بعد تحديد نافذة على الخارطة">
+          <i class="fa-brands fa-openstreetmap"></i>
+        </button>
+
         <!-- Layout Studio Button inside Drawing Toolbar -->
         <button type="button" onclick="window.openMapLayoutStudio()" class="p-1.5 rounded-lg text-cyan-400 hover:text-white hover:bg-slate-800 text-xs transition-colors cursor-pointer" title="تصدير لوحة خرائطية وطباعة قياسية (A0-A4)">
           <i class="fa-solid fa-print"></i>
@@ -2928,6 +2935,9 @@
 
   <!-- Intelligent City & Place Search Engine (Gazetteer & Geocoder) -->
   <script src="js/city-search.js?v=20260930_09"></script>
+
+  <!-- OSM Building & Block Vector Extractor (Overpass API) -->
+  <script src="js/osm-extractor.js?v=20261001_01"></script>
 
   <!-- Living Atlas Engine Entry -->
   <script src="js/atlas-core.js?v=20261001_01"></script>
