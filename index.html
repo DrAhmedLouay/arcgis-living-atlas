@@ -141,6 +141,12 @@
         <span class="hidden sm:inline">لقطة</span>
       </button>
 
+      <!-- Urban Drawing & CAD Layer Button -->
+      <button id="headerDrawingToggleBtn" onclick="window.toggleDrawingMode()" type="button" class="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-xs font-bold text-emerald-200 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm" title="أدوات الرسم والتخطيط العمراني (شوارع، بلوكات سكنية، أبنية، مسارات)">
+        <i class="fa-solid fa-pen-ruler text-emerald-400"></i>
+        <span>أدوات الرسم</span>
+      </button>
+
       <!-- Conversation & Engineering History Link / Button -->
       <a href="conversation-history.html" target="_blank" id="headerHistoryLogBtn" class="px-3 py-1.5 rounded-lg bg-sky-500/25 hover:bg-sky-500/35 border border-sky-400/60 text-xs font-bold text-sky-200 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm" title="فتح سجل المحادثات والأوامر الهندسية والمخططات والجداول (صفحة HTML)">
         <i class="fa-solid fa-clock-rotate-left text-sky-400"></i>
@@ -215,6 +221,75 @@
         </div>
         <div class="absolute top-1/2 left-0 right-0 h-px bg-amber-400/40"></div>
         <div class="absolute top-0 bottom-0 left-1/2 w-px bg-amber-400/40"></div>
+      </div>
+
+      <!-- Floating Urban & Cadastral Drawing Toolbar -->
+      <div id="floatingDrawToolbar" class="hidden absolute top-3 left-14 z-30 flex items-center gap-1.5 p-1.5 bg-slate-900/95 backdrop-blur-md border border-emerald-500/60 rounded-2xl shadow-2xl transition-all flex-wrap">
+        <div class="flex items-center gap-1.5 pl-1.5 border-l border-slate-700/80">
+          <span class="text-xs font-bold text-emerald-300 flex items-center gap-1">
+            <i class="fa-solid fa-pen-ruler text-emerald-400"></i>
+            <span class="hidden md:inline">الرسم:</span>
+          </span>
+          <span id="toolbarDrawnCountBadge" class="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold">0</span>
+        </div>
+
+        <!-- Street Button -->
+        <button type="button" onclick="window.setDrawingMode('street')" class="draw-tool-btn px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer" data-draw-mode="street" title="رسم شوارع وطرق مع حساب الطول الإجمالي">
+          <i class="fa-solid fa-road text-amber-400"></i>
+          <span>شارع</span>
+        </button>
+
+        <!-- Residential Block Button -->
+        <button type="button" onclick="window.setDrawingMode('block')" class="draw-tool-btn px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer" data-draw-mode="block" title="رسم بلوك سكني / مقاطعة مع حساب المساحة بالدونم العراقي والمتر المربع">
+          <i class="fa-solid fa-city text-sky-400"></i>
+          <span>بلوك سكني</span>
+        </button>
+
+        <!-- Building Button -->
+        <button type="button" onclick="window.setDrawingMode('building')" class="draw-tool-btn px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer" data-draw-mode="building" title="رسم مبنى أو منشأة مع مساحة البناء وعدد الطوابق">
+          <i class="fa-solid fa-building text-emerald-400"></i>
+          <span>مبنى</span>
+        </button>
+
+        <!-- Line Button -->
+        <button type="button" onclick="window.setDrawingMode('line')" class="draw-tool-btn px-2 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1 cursor-pointer" data-draw-mode="line" title="رسم خط أو مسار شبكات">
+          <i class="fa-solid fa-route text-purple-400"></i>
+          <span class="hidden md:inline">خط</span>
+        </button>
+
+        <!-- Point POI Button -->
+        <button type="button" onclick="window.setDrawingMode('point')" class="draw-tool-btn px-2 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1 cursor-pointer" data-draw-mode="point" title="تثبيت نقطة أو معلم جغرافي">
+          <i class="fa-solid fa-location-dot text-rose-400"></i>
+          <span class="hidden md:inline">نقطة</span>
+        </button>
+
+        <!-- Text Label Button -->
+        <button type="button" onclick="window.setDrawingMode('label')" class="draw-tool-btn px-2 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1 cursor-pointer" data-draw-mode="label" title="كتابة نص توضيحي على الخارطة">
+          <i class="fa-solid fa-font text-cyan-400"></i>
+          <span class="hidden md:inline">نص</span>
+        </button>
+
+        <div class="h-4 w-px bg-slate-700/80 mx-0.5"></div>
+
+        <!-- Toggle Layer Visibility -->
+        <button type="button" onclick="window.toggleDrawingLayerVisibility()" class="toggle-drawing-layer-btn p-1.5 rounded-lg text-emerald-400 hover:text-white hover:bg-slate-800 text-xs transition-colors cursor-pointer" title="إظهار / إخفاء طبقة الرسوم">
+          <i class="fa-solid fa-eye"></i>
+        </button>
+
+        <!-- Export GeoJSON Button -->
+        <button type="button" onclick="window.exportDrawnFeatures()" class="p-1.5 rounded-lg text-sky-400 hover:text-white hover:bg-slate-800 text-xs transition-colors cursor-pointer" title="تصدير الرسوم بصيغة GeoJSON">
+          <i class="fa-solid fa-file-export"></i>
+        </button>
+
+        <!-- Clear All Button -->
+        <button type="button" onclick="window.clearAllDrawnFeatures()" class="p-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-slate-800 text-xs transition-colors cursor-pointer" title="مسح كافة الرسوم">
+          <i class="fa-solid fa-trash-can"></i>
+        </button>
+
+        <!-- Close Toolbar -->
+        <button type="button" onclick="document.getElementById('floatingDrawToolbar').classList.add('hidden')" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-xs transition-colors cursor-pointer" title="إغلاق شريط أدوات الرسم">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
       </div>
 
       <!-- Floating Map Comparison & Visibility Controls -->
@@ -540,6 +615,11 @@
           <i class="fa-solid fa-satellite-dish text-[11px] text-amber-400"></i>
           <span>معايرة واستيراد ECW</span>
           <span class="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded-full font-mono border border-amber-500/30">ECW</span>
+        </button>
+        <button class="sidebar-tab-btn px-3 py-2 text-xs font-bold border-b-2 border-transparent text-emerald-400 hover:text-emerald-300 flex items-center gap-1.5 transition-colors shrink-0" data-tab="draw" id="sidebarDrawTabBtn">
+          <i class="fa-solid fa-pen-ruler text-[11px] text-emerald-400"></i>
+          <span>الرسم والتخطيط</span>
+          <span id="drawnFeaturesBadge" class="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded-full font-mono border border-emerald-500/30">0</span>
         </button>
         <button class="sidebar-tab-btn px-3 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="tools">
           <i class="fa-solid fa-ruler-combined text-[11px]"></i>
@@ -1605,6 +1685,272 @@
                 <span><strong>أدوات البحث والفلترة:</strong> بحث فوري وطباعة وتصدير PDF.</span>
               </div>
             </div>
+        <!-- =================== Panel: GIS Drawing & Urban Digitization =================== -->
+        <div class="tab-panel hidden space-y-4" data-panel="draw">
+          <!-- Overview Card with Dr. Eng. Ahmed Louay Al-Bajari credit -->
+          <div class="bg-gradient-to-br from-emerald-950/40 via-slate-900 to-slate-900 border border-emerald-500/40 rounded-xl p-3.5 space-y-2.5 shadow-lg">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30 text-sm shadow-inner">
+                  <i class="fa-solid fa-pen-ruler"></i>
+                </span>
+                <div>
+                  <h4 class="font-bold text-xs text-white">الرسم والتخطيط والمسح العقاري الجيوديسي</h4>
+                  <div class="text-[10px] text-emerald-300 font-semibold flex items-center gap-1 mt-0.5">
+                    <i class="fa-solid fa-user-gear text-[9px] text-amber-400"></i>
+                    <span>تصميم وتطوير الدكتور المهندس احمد لؤي البجاري</span>
+                  </div>
+                </div>
+              </div>
+              <span class="text-[9px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-mono border border-emerald-500/30 font-bold">GIS CAD</span>
+            </div>
+            <p class="text-[11px] text-slate-300 leading-relaxed">
+              طبقة رقمية متكاملة لرقمنة وتخطيط المدن: رسم الشوارع والطرق، البلوكات السكنية مع حساب المساحة التلقائي بالـ <strong class="text-amber-300">دونم العراقي (2,500 م²)</strong>، الأبنية والمنشآت مع تصنيف الطوابق والاستخدام، والخطوط الخدمية ونقاط الاهتمام والتسميات المكانية.
+            </p>
+          </div>
+
+          <!-- Drawing Tools Selector -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-semibold text-slate-200 flex items-center gap-1.5">
+                <i class="fa-solid fa-shapes text-emerald-400"></i>
+                <span>أدوات الرسم والتخطيط:</span>
+              </span>
+              <span class="text-[10px] text-slate-400">اختر أداة وانقر على الخريطة</span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <!-- Street Button -->
+              <button type="button" class="draw-tool-btn p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-right transition-all group cursor-pointer" data-draw-mode="street" onclick="window.setDrawingMode('street')">
+                <div class="flex items-center justify-between text-amber-400 mb-1">
+                  <i class="fa-solid fa-road text-sm group-hover:scale-110 transition-transform"></i>
+                  <span class="text-[9px] bg-amber-500/20 text-amber-300 px-1 rounded font-mono">طريق</span>
+                </div>
+                <div class="font-bold text-white text-[11px]">شارع / طريق</div>
+                <div class="text-[9px] text-slate-400">أطوال حقيقية وعرض مخصص</div>
+              </button>
+
+              <!-- Block Button -->
+              <button type="button" class="draw-tool-btn p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-right transition-all group cursor-pointer" data-draw-mode="block" onclick="window.setDrawingMode('block')">
+                <div class="flex items-center justify-between text-blue-400 mb-1">
+                  <i class="fa-solid fa-city text-sm group-hover:scale-110 transition-transform"></i>
+                  <span class="text-[9px] bg-blue-500/20 text-blue-300 px-1 rounded font-mono">مضلع</span>
+                </div>
+                <div class="font-bold text-white text-[11px]">بلوك سكني / مقاطعة</div>
+                <div class="text-[9px] text-slate-400">حساب المساحة بالدونم العراقي</div>
+              </button>
+
+              <!-- Building Button -->
+              <button type="button" class="draw-tool-btn p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-right transition-all group cursor-pointer" data-draw-mode="building" onclick="window.setDrawingMode('building')">
+                <div class="flex items-center justify-between text-emerald-400 mb-1">
+                  <i class="fa-solid fa-building text-sm group-hover:scale-110 transition-transform"></i>
+                  <span class="text-[9px] bg-emerald-500/20 text-emerald-300 px-1 rounded font-mono">منشأة</span>
+                </div>
+                <div class="font-bold text-white text-[11px]">مبنى / منشأة</div>
+                <div class="text-[9px] text-slate-400">طوابق وتصنيف الاستخدام</div>
+              </button>
+
+              <!-- Line Button -->
+              <button type="button" class="draw-tool-btn p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-right transition-all group cursor-pointer" data-draw-mode="line" onclick="window.setDrawingMode('line')">
+                <div class="flex items-center justify-between text-purple-400 mb-1">
+                  <i class="fa-solid fa-route text-sm group-hover:scale-110 transition-transform"></i>
+                  <span class="text-[9px] bg-purple-500/20 text-purple-300 px-1 rounded font-mono">خط</span>
+                </div>
+                <div class="font-bold text-white text-[11px]">خط مسار خدمي</div>
+                <div class="text-[9px] text-slate-400">مياه، كهرباء، مجاري، حدود</div>
+              </button>
+
+              <!-- Point Button -->
+              <button type="button" class="draw-tool-btn p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-right transition-all group cursor-pointer" data-draw-mode="point" onclick="window.setDrawingMode('point')">
+                <div class="flex items-center justify-between text-rose-400 mb-1">
+                  <i class="fa-solid fa-location-dot text-sm group-hover:scale-110 transition-transform"></i>
+                  <span class="text-[9px] bg-rose-500/20 text-rose-300 px-1 rounded font-mono">نقطة</span>
+                </div>
+                <div class="font-bold text-white text-[11px]">نقطة / معلم جغرافي</div>
+                <div class="text-[9px] text-slate-400">مسجد، مدرسة، مستوصف...</div>
+              </button>
+
+              <!-- Label Button -->
+              <button type="button" class="draw-tool-btn p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-right transition-all group cursor-pointer" data-draw-mode="label" onclick="window.setDrawingMode('label')">
+                <div class="flex items-center justify-between text-cyan-400 mb-1">
+                  <i class="fa-solid fa-font text-sm group-hover:scale-110 transition-transform"></i>
+                  <span class="text-[9px] bg-cyan-500/20 text-cyan-300 px-1 rounded font-mono">نص</span>
+                </div>
+                <div class="font-bold text-white text-[11px]">تسمية وملاحظة مكانية</div>
+                <div class="text-[9px] text-slate-400">كتابة نصوص على الخارطة</div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Actions & Modes Row -->
+          <div class="flex items-center gap-1.5 p-2 bg-slate-900/90 rounded-xl border border-slate-800">
+            <button type="button" class="draw-tool-btn flex-1 py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer" data-draw-mode="edit" onclick="window.setDrawingMode('edit')" title="تعديل زوايا ورؤوس الأشكال المرسومة">
+              <i class="fa-solid fa-draw-polygon text-emerald-400 text-xs"></i>
+              <span>تعديل الرؤوس</span>
+            </button>
+            <button type="button" class="flex-1 py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer" onclick="window.toggleDrawingLayerVisibility()" title="إظهار / إخفاء طبقة الرسم">
+              <i class="fa-solid fa-eye text-sky-400 text-xs"></i>
+              <span>الرؤية</span>
+            </button>
+            <button type="button" class="flex-1 py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-400 border border-transparent hover:border-rose-500/30 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer" onclick="window.clearAllDrawnFeatures()" title="مسح كافة العناصر المرسومة">
+              <i class="fa-solid fa-trash-can text-xs"></i>
+              <span>مسح الكل</span>
+            </button>
+          </div>
+
+          <!-- Planning Settings Accordion / Card -->
+          <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3 space-y-3 text-xs">
+            <div class="font-bold text-slate-200 flex items-center justify-between">
+              <span class="flex items-center gap-1.5">
+                <i class="fa-solid fa-sliders text-amber-400"></i>
+                <span>خصائص ومعايير التخطيط العمراني:</span>
+              </span>
+              <span class="text-[10px] text-slate-500">معايير التصميم</span>
+            </div>
+
+            <!-- Color Palette Swatches -->
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between text-[11px] text-slate-400">
+                <span>لون الرسم والتحديد:</span>
+                <input type="color" id="drawActiveColor" value="#f59e0b" class="w-6 h-6 rounded border-0 bg-transparent cursor-pointer">
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" class="draw-color-swatch w-6 h-6 rounded-full bg-amber-500 border border-slate-600 ring-2 ring-white scale-110 transition-transform cursor-pointer" data-color="#f59e0b" title="كهرماني (شوارع)"></button>
+                <button type="button" class="draw-color-swatch w-6 h-6 rounded-full bg-blue-500 border border-slate-600 transition-transform cursor-pointer" data-color="#3b82f6" title="أزرق (بلوكات سكنية)"></button>
+                <button type="button" class="draw-color-swatch w-6 h-6 rounded-full bg-emerald-500 border border-slate-600 transition-transform cursor-pointer" data-color="#10b981" title="أخضر (أبنية وحدائق)"></button>
+                <button type="button" class="draw-color-swatch w-6 h-6 rounded-full bg-purple-500 border border-slate-600 transition-transform cursor-pointer" data-color="#8b5cf6" title="بنفسجي (مسارات خدمية)"></button>
+                <button type="button" class="draw-color-swatch w-6 h-6 rounded-full bg-rose-500 border border-slate-600 transition-transform cursor-pointer" data-color="#ef4444" title="أحمر (معالم رئيسية)"></button>
+                <button type="button" class="draw-color-swatch w-6 h-6 rounded-full bg-cyan-400 border border-slate-600 transition-transform cursor-pointer" data-color="#38bdf8" title="سماوي (نصوص ومسميات)"></button>
+              </div>
+            </div>
+
+            <!-- Road Width & Type -->
+            <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800/80">
+              <div>
+                <label class="block text-[10px] text-slate-400 mb-1">عرض الشارع المقترح:</label>
+                <select id="drawStreetWidthSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500">
+                  <option value="10">10 متر (شارع فرعي)</option>
+                  <option value="12">12 متر (شارع سكني)</option>
+                  <option value="15" selected>15 متر (شارع محلي)</option>
+                  <option value="20">20 متر (شارع تجميعي)</option>
+                  <option value="30">30 متر (شارع رئيسي شرياني)</option>
+                  <option value="40">40 متر (بوليفارد مزدوج)</option>
+                  <option value="60">60 متر (طريق سريع / حولي)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] text-slate-400 mb-1">تصنيف الطريق:</label>
+                <select id="drawStreetTypeSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500">
+                  <option value="محلي" selected>طريق محلي (Local)</option>
+                  <option value="تجميعي">طريق تجميعي (Collector)</option>
+                  <option value="شرياني">طريق شرياني (Arterial)</option>
+                  <option value="سريع">طريق سريع (Highway)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Building Floors & Usage -->
+            <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800/80">
+              <div>
+                <label class="block text-[10px] text-slate-400 mb-1">استخدام المبنى:</label>
+                <select id="drawBuildingUsageSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500">
+                  <option value="سكني" selected>سكني (Residential)</option>
+                  <option value="تجاري">تجاري (Commercial)</option>
+                  <option value="تعليمي">تعليمي (مدرسة / جامعة)</option>
+                  <option value="صحي">صحي (مستشفى / عيادة)</option>
+                  <option value="حكومي">مبنى حكومي / إداري</option>
+                  <option value="صناعي">صناعي / مستودع</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] text-slate-400 mb-1">عدد الطوابق:</label>
+                <input type="number" id="drawBuildingFloorsInput" min="1" max="100" value="2" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono">
+              </div>
+            </div>
+
+            <!-- Block Zone & POI -->
+            <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800/80">
+              <div>
+                <label class="block text-[10px] text-slate-400 mb-1">تصنيف البلوك (Zoning):</label>
+                <select id="drawBlockZoneSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500">
+                  <option value="سكني" selected>منطقة سكنية (R1)</option>
+                  <option value="تجاري">منطقة تجارية (C1)</option>
+                  <option value="استثماري">مجمع استثماري متكامل</option>
+                  <option value="زراعي">أراضي زراعية / بساتين</option>
+                  <option value="صناعي">منطقة صناعية وحرفية</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] text-slate-400 mb-1">نوع المعلم النقطي:</label>
+                <select id="drawPoiCategorySelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-rose-500">
+                  <option value="مسجد" selected>مسجد / جامع</option>
+                  <option value="مدرسة">مدرسة / روضة</option>
+                  <option value="مستوصف">مستوصف / مركز صحي</option>
+                  <option value="حديقة">حديقة عامة / منتزه</option>
+                  <option value="دائرة حكومية">دائرة حكومية</option>
+                  <option value="مركز تجاري">سوق / مركز تسوق</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Live Planning Statistics Card -->
+          <div class="bg-gradient-to-r from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-xs text-white flex items-center gap-1.5">
+                <i class="fa-solid fa-chart-pie text-emerald-400"></i>
+                <span>الإحصائيات المساحية والتخطيطية الحية:</span>
+              </span>
+              <span id="drawnFeaturesCountBadge" class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-mono font-bold border border-emerald-500/30">0</span>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 text-center text-xs">
+              <div class="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
+                <div class="text-[10px] text-slate-400 mb-0.5">الشوارع والمسارات</div>
+                <div id="drawStatsStreetsCount" class="font-bold text-amber-400 font-mono text-[11px]">0 (0.00 كم)</div>
+              </div>
+              <div class="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
+                <div class="text-[10px] text-slate-400 mb-0.5">البلوكات (دونم)</div>
+                <div id="drawStatsBlocksCount" class="font-bold text-blue-400 font-mono text-[11px]">0 (0.0 دونم)</div>
+              </div>
+              <div class="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
+                <div class="text-[10px] text-slate-400 mb-0.5">المباني والمنشآت</div>
+                <div id="drawStatsBuildingsCount" class="font-bold text-emerald-400 font-mono text-[11px]">0</div>
+              </div>
+            </div>
+
+            <div class="text-[10px] text-slate-400 bg-slate-950/60 p-2 rounded-lg border border-slate-800/80 flex items-center justify-between">
+              <span>المعادلة المعتمدة: <strong>1 دونم عراقي = 2,500 م²</strong></span>
+              <span class="font-mono text-emerald-400">WGS84 Geodesic</span>
+            </div>
+          </div>
+
+          <!-- Import & Export Controls -->
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" onclick="window.exportDrawnFeatures()" class="py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-md text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-emerald-950/50">
+              <i class="fa-solid fa-file-export text-xs"></i>
+              <span>تصدير GeoJSON</span>
+            </button>
+            <label class="py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold rounded-xl border border-slate-700 text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer text-center">
+              <i class="fa-solid fa-file-import text-sky-400 text-xs"></i>
+              <span>استيراد ملف</span>
+              <input type="file" id="drawGeoJsonFileInput" accept=".geojson,.json" class="hidden">
+            </label>
+          </div>
+
+          <!-- Drawn Features List Manager -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between text-xs font-semibold text-slate-200">
+              <span class="flex items-center gap-1.5">
+                <i class="fa-solid fa-list-check text-sky-400"></i>
+                <span>قائمة الكائنات المرسومة:</span>
+              </span>
+              <span class="text-[10px] text-slate-400">انقر للتركيز أو الحذف</span>
+            </div>
+
+            <div id="drawnFeaturesListContainer" class="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+              <!-- Dynamically populated -->
+            </div>
           </div>
         </div>
 
@@ -2207,6 +2553,9 @@
 
   <!-- Curated Official Archaeological Sites of Iraq -->
   <script src="js/archaeology-data.js?v=20260929_08"></script>
+
+  <!-- Specialized GIS Drawing & Urban Digitization Engine -->
+  <script src="js/drawing-engine.js?v=20260930_01"></script>
 
   <!-- Living Atlas Engine Entry -->
   <script src="js/atlas-core.js?v=20260929_08"></script>

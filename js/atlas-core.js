@@ -36,6 +36,12 @@ document.addEventListener('DOMContentLoaded', () => {
     attributionControl: false
   });
   state.map = map;
+  window.map = map;
+  window.atlasMap = map;
+  window.atlasState = state;
+  if (window.AtlasDrawingEngine) {
+    window.AtlasDrawingEngine.init(map);
+  }
 
   // Add Custom Position Controls
   L.control.zoom({ position: 'topleft' }).addTo(map);
@@ -8946,9 +8952,68 @@ Date: ${new Date().toLocaleString('ar-IQ')} / ${new Date().toISOString()}
       `;
     }).join('');
 
-    container.innerHTML = calibHtml + basemapHtml + layersHtml;
+    let drawingHtml = '';
+    if (window.AtlasDrawingEngine) {
+      const featCount = window.AtlasDrawingEngine.features ? window.AtlasDrawingEngine.features.length : 0;
+      const isDrawVis = window.AtlasDrawingEngine.isLayerVisible;
+      drawingHtml = `
+        <div class="bg-gradient-to-r from-emerald-950/40 via-slate-800 to-slate-800 border border-emerald-500/50 rounded-xl p-3 flex flex-col gap-2 shadow-lg">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full ${isDrawVis ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50' : 'bg-slate-600'}"></span>
+              <h5 class="text-xs font-bold text-emerald-200">طبقة الرسم والتخطيط العمراني</h5>
+              <span class="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded font-mono">${featCount} عنصر</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <button class="toggle-draw-active-btn p-1 text-xs ${isDrawVis ? 'text-emerald-400 hover:text-emerald-300' : 'text-slate-500 hover:text-slate-300'}" title="${isDrawVis ? 'إخفاء عناصر الرسم' : 'إظهار عناصر الرسم'}">
+                <i class="fa-solid ${isDrawVis ? 'fa-eye' : 'fa-eye-slash'}"></i>
+              </button>
+              <button class="export-draw-active-btn p-1 text-sky-400 hover:text-sky-300 text-xs" title="تصدير كملف GeoJSON">
+                <i class="fa-solid fa-file-export"></i>
+              </button>
+            </div>
+          </div>
+          <div class="flex items-center justify-between text-[11px] text-slate-300">
+            <span>الحالة: <strong class="${isDrawVis ? 'text-emerald-400' : 'text-slate-400'}">${isDrawVis ? 'معروضة على الخريطة' : 'مخفية مؤقتاً'}</strong></span>
+            <button class="open-draw-tab-active-btn text-emerald-400 hover:text-emerald-300 text-[11px] flex items-center gap-1">
+              <i class="fa-solid fa-pen-ruler text-[10px]"></i>
+              <span>لوحة أدوات الرسم</span>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    container.innerHTML = calibHtml + drawingHtml + basemapHtml + layersHtml;
 
     // Attach Active Layers listeners
+    const toggleDrawBtn = container.querySelector('.toggle-draw-active-btn');
+    if (toggleDrawBtn) {
+      toggleDrawBtn.addEventListener('click', () => {
+        if (window.AtlasDrawingEngine) {
+          window.AtlasDrawingEngine.toggleLayerVisibility();
+          renderActiveLayersTab();
+        }
+      });
+    }
+
+    const exportDrawBtn = container.querySelector('.export-draw-active-btn');
+    if (exportDrawBtn) {
+      exportDrawBtn.addEventListener('click', () => {
+        if (window.AtlasDrawingEngine) {
+          window.AtlasDrawingEngine.exportGeoJson();
+        }
+      });
+    }
+
+    const openDrawTabBtn = container.querySelector('.open-draw-tab-active-btn');
+    if (openDrawTabBtn) {
+      openDrawTabBtn.addEventListener('click', () => {
+        const drawTabBtn = document.querySelector('.sidebar-tab-btn[data-tab="draw"]');
+        if (drawTabBtn) drawTabBtn.click();
+      });
+    }
+
     const toggleImportedBtn = container.querySelector('.toggle-imported-layer-btn');
     if (toggleImportedBtn) {
       toggleImportedBtn.addEventListener('click', () => {

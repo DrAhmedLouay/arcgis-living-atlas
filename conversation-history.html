@@ -3943,6 +3943,69 @@
         </div>
       </div>
 
+      <!-- =====================================================================
+           Order 61: Adding GIS Drawing & Urban Planning Layer
+           ===================================================================== -->
+      <div class="order-card bg-slate-900/60 rounded-2xl border border-emerald-500/40 p-4 lg:p-6 space-y-4 hover:border-emerald-500/70 transition-all shadow-md" data-category="features" data-index="61">
+        <div class="flex flex-col gap-3">
+          
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+              <span class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center font-mono font-bold text-xs">
+                #61
+              </span>
+              <span class="text-xs font-bold text-emerald-400 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30">
+                إضافة طبقة الرسم والتخطيط العمراني (GIS Digitization)
+              </span>
+              <span class="text-[10px] text-slate-400 font-medium">
+                المرحلة 8: الرسم الهندسي والرقمنة والتخطيط العقاري
+              </span>
+            </div>
+
+            <div class="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
+              <i class="fa-regular fa-clock text-slate-500"></i>
+              <span>2026-09-30T13:18:00Z</span>
+            </div>
+          </div>
+
+          <!-- User Request Box -->
+          <div class="bg-slate-900/90 rounded-xl p-3.5 border border-slate-800/90 space-y-1">
+            <div class="text-[10px] font-bold text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
+              <i class="fa-solid fa-comment-dots text-xs"></i>
+              <span>نص طلب المستخدم / الأمر الموجه:</span>
+            </div>
+            <div class="text-sm font-semibold text-slate-100 leading-relaxed font-sans pr-1">
+              اضف طبقة امكانية الرسم على الخرائط (خطوط، شوارع، بلوكات سكنية، ابنية، ....)
+            </div>
+          </div>
+
+          <!-- System Response & Technical Architecture -->
+          <div class="space-y-2 text-xs">
+            <div class="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+              <i class="fa-solid fa-code-commit text-xs"></i>
+              <span>تطوير محرك المسح والرسم والتخطيط العمراني الجيوديسي المتكامل (GIS Urban Digitization Engine)</span>
+            </div>
+            <p class="text-slate-300 leading-relaxed">
+              <strong>التشخيص والهدف:</strong> بناء طبقة رسم وتحليل عمراني وهندسي متخصصة تتيح للمخطط والمهندس رسم وتوثيق الشوارع، البلوكات السكنية، المنشآت والأبنية، المسارات الخدمية، والمعالم المكانية مع الحساب الدقيق للمساحات الجيوديسية بـ <strong>الدونم العراقي (2,500 م²)</strong> والأمتار المربعة والهكتار، وحساب أطوال الشوارع الحقيقية بالمتر والكيلومتر.
+            </p>
+            <div class="bg-slate-950/80 rounded-lg p-3 border border-slate-800 text-slate-300 leading-relaxed space-y-2">
+              <div class="font-semibold text-sky-400 flex items-center gap-1 text-[11px]">
+                <i class="fa-solid fa-gears"></i>
+                <span>الإجراءات البرمجية والحل المطبق:</span>
+              </div>
+              <ul class="list-disc list-inside space-y-1 text-slate-300 pr-1 text-[11px]">
+                <li><strong>محرك الرسم المستقل (`js/drawing-engine.js`):</strong> مبني بتقنيات Leaflet المتجهة ويدعم الرسم التفاعلي المباشر، المطاطي (Rubberband preview)، مع حساب فوري للأطوال والمساحات أثناء تحريك المؤشر.</li>
+                <li><strong>حساب المساحة الجيوديسية الحقيقية بالدونم العراقي:</strong> تطبيق معادلة الكروية الجيوديسية الدقيقة دون تشويه مسقط ميركاتور لحساب مساحات البلوكات السكنية بالدونم العراقي (1 دونم = 2500 م²).</li>
+                <li><strong>أنواع العناصر المدعومة:</strong> شوارع مع تحديد العرض (10-60م) والتصنيف، بلوكات سكنية وزوننغ (R1, C1, I1, A1)، مباني ومنشآت مع عدد الطوابق ونوع الاستخدام، خطوط شبكات تحتية، نقاط اهتمام (POI)، وتسميات نصية.</li>
+                <li><strong>واجهات التحكم الثلاثية:</strong> زر علوي رئيسي في شريط التطبيق، شريط أدوات عائم فوق الخارطة، ولوحة جانبية مخصصة (`data-panel="draw"`) تحتوي على لوحة تحكم، إحصائيات فورية، إدارة الكائنات، وتصدير/استيراد GeoJSON.</li>
+                <li><strong>التكامل الكامل مع الطبقات النشطة:</strong> إدراج طبقة الرسم ضمن تبويب الطبقات النشطة مع إمكانية إظهارها/إخفائها وتصديرها وتعديل رؤوسها.</li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
     </section>
 
   </main>
