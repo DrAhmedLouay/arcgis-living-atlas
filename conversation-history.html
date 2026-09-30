@@ -144,7 +144,7 @@
           <!-- Quick Stat Counters -->
           <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-2 gap-3 shrink-0">
             <div class="glass-card rounded-xl p-3 text-center border-slate-700/60 shadow">
-              <div class="text-2xl font-black text-sky-400 font-mono">66</div>
+              <div class="text-2xl font-black text-sky-400 font-mono">68</div>
               <div class="text-[11px] text-slate-400 font-medium">أمراً واستشارة موثقة</div>
             </div>
             <div class="glass-card rounded-xl p-3 text-center border-slate-700/60 shadow">
@@ -4331,6 +4331,118 @@
         </div>
       </div>
 
+      <!-- =====================================================================
+           Order 67: Interactive Feature Manipulation (Hand Move, Palette Recolor, Deletion)
+           ===================================================================== -->
+      <div class="order-card bg-slate-900/60 rounded-2xl border border-sky-500/40 p-4 lg:p-6 space-y-4 hover:border-sky-500/70 transition-all shadow-md" data-category="features" data-index="67">
+        <div class="flex flex-col gap-3">
+          
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+              <span class="w-8 h-8 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/40 flex items-center justify-center font-mono font-bold text-xs">
+                #67
+              </span>
+              <span class="text-xs font-bold text-sky-400 px-2 py-0.5 rounded-full bg-sky-500/10 border border-sky-500/30">
+                التحكم التفاعلي المباشر بالرسوم (تحريك بالسحب باليد، لوحة ألوان سريعة، وحذف فوري)
+              </span>
+              <span class="text-[10px] text-slate-400 font-medium">
+                المرحلة 11: التحرير التفاعلي والمعالجة المكانية للرسم الرقمي
+              </span>
+            </div>
+
+            <div class="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
+              <i class="fa-regular fa-clock text-slate-500"></i>
+              <span>2026-09-30T18:15:00Z</span>
+            </div>
+          </div>
+
+          <!-- User Request Box -->
+          <div class="bg-slate-900/90 rounded-xl p-3.5 border border-slate-800/90 space-y-1">
+            <div class="text-[10px] font-bold text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
+              <i class="fa-solid fa-comment-dots text-xs"></i>
+              <span>نص طلب المستخدم / الأمر الموجه:</span>
+            </div>
+            <div class="text-sm font-semibold text-slate-100 leading-relaxed font-sans pr-1">
+              عند الضغط على اشياء تم رسمها ، تتحول اليد الى امكانية حذف او تحريك او تغيير لون الشيء
+            </div>
+          </div>
+
+          <!-- System Response & Technical Architecture -->
+          <div class="space-y-2 text-xs">
+            <div class="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+              <i class="fa-solid fa-code-commit text-xs"></i>
+              <span>تطوير محرك التحديد والتحريك اليدوي وتغيير الألوان اللحظي في AtlasDrawingEngine</span>
+            </div>
+            <p class="text-slate-300 leading-relaxed">
+              <strong>التشخيص والحلول الهندسية المنفذة:</strong>
+            </p>
+            <ul class="list-disc list-inside space-y-1 text-slate-300 pr-1 text-[11px]">
+              <li><strong>تحول المؤشر إلى يد السحب (Hand / Grab Cursor):</strong> بمجرد النقر على أي عنصر مرسوم (بلوك، مبنى، شارع، مسار، نقطة)، يتم تفعيل فئة <code>.drawn-feature-selected</code> التي تحول مؤشر الماوس فوراً إلى شكل اليد المفتوحة (Grab) مع إطار وميضي سماوي مميز.</li>
+              <li><strong>التحريك المباشر بالسحب بالماوس (Feature Dragging & Move):</strong> إمكانية إمساك العنصر وسحبه باليد عبر الخريطة بسلاسة تامة، مع إزاحة كافة الإحداثيات الجغرافية (Delta Lat/Lng Translation) وإعادة حساب المساحة المترية والدونم العراقي والأطوال فور الإفلات.</li>
+              <li><strong>لوحة الألوان التفاعلية السريعة (Interactive Color Palette):</strong> إضافة شريط يحتوي 8 عينات لونية معيارية مع أداة انتقاء مخصصة (Native Color Picker) لتغيير ألوان المضلعات والخطوط والنقاط والتسميات فورياً مع الحفظ التلقائي في التخزين والتصدير.</li>
+              <li><strong>أزرار الحذف وإعادة التسمية واختصارات المفاتيح:</strong> نافذة منبثقة مدمجة توفر زر الحذف الفوري (🗑️ حذف) مع دعم أزرار <code>Delete</code> و <code>Backspace</code> من لوحة المفاتيح وزر <code>Escape</code> لإلغاء التحديد.</li>
+            </ul>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- =====================================================================
+           Order 68: Clean Slate Default Main Page (Remove Drawn Features & Default Layers)
+           ===================================================================== -->
+      <div class="order-card bg-slate-900/60 rounded-2xl border border-sky-500/40 p-4 lg:p-6 space-y-4 hover:border-sky-500/70 transition-all shadow-md" data-category="features" data-index="68">
+        <div class="flex flex-col gap-3">
+          
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+              <span class="w-8 h-8 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/40 flex items-center justify-center font-mono font-bold text-xs">
+                #68
+              </span>
+              <span class="text-xs font-bold text-sky-400 px-2 py-0.5 rounded-full bg-sky-500/10 border border-sky-500/30">
+                حذف وتصفير كافة الأشياء المرسومة من الصفحة الافتراضية الرئيسية
+              </span>
+              <span class="text-[10px] text-slate-400 font-medium">
+                المرحلة 12: تهيئة الواجهة الافتراضية النقية وتصفير الذاكرة التخزينية
+              </span>
+            </div>
+
+            <div class="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
+              <i class="fa-regular fa-clock text-slate-500"></i>
+              <span>2026-09-30T18:40:00Z</span>
+            </div>
+          </div>
+
+          <!-- User Request Box -->
+          <div class="bg-slate-900/90 rounded-xl p-3.5 border border-slate-800/90 space-y-1">
+            <div class="text-[10px] font-bold text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
+              <i class="fa-solid fa-comment-dots text-xs"></i>
+              <span>نص طلب المستخدم / الأمر الموجه:</span>
+            </div>
+            <div class="text-sm font-semibold text-slate-100 leading-relaxed font-sans pr-1">
+              احذف الاشياء المرسومة بالصفحة الافتراضية الرئيسية
+            </div>
+          </div>
+
+          <!-- System Response & Technical Architecture -->
+          <div class="space-y-2 text-xs">
+            <div class="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+              <i class="fa-solid fa-code-commit text-xs"></i>
+              <span>تنظيف الخارطة الافتراضية بالكامل وإلغاء تحميل أي طبقات أو رسوم مسبقة تلقائياً</span>
+            </div>
+            <p class="text-slate-300 leading-relaxed">
+              <strong>التشخيص والحلول الهندسية المنفذة:</strong>
+            </p>
+            <ul class="list-disc list-inside space-y-1 text-slate-300 pr-1 text-[11px]">
+              <li><strong>إلغاء التحميل التلقائي للطبقات الموجهة (No Default Layers):</strong> تعديل خاصية <code>defaultVisible: false</code> في <code>js/catalog-data.js</code> لكافة الطبقات (حدود المحافظات الـ 18، الحدود الدولية، النقاط الزلزالية)، لتفتح الصفحة الرئيسية بصورة فضائية نقية بدون أي خطوط أو مضلعات تغطي الخريطة.</li>
+              <li><strong>تطهير ذاكرة التخزين المحلي للرسومات (LocalStorage Purge):</strong> حذف وتصفير أي رسومات سابقة كانت مخزنة في متصفح المستخدم تلقائياً، وضمان بدء محرك الرسم بذاكرة فارغة تماماً (0 كائنات مرسومة).</li>
+              <li><strong>إضافة زر مسح وحذف شامل في الواجهة الجانبية والشريط العائم:</strong> توفير زر واضح (مسح وحذف كافة الرسوم من الخارطة) في الشريط الجانبي والشريط العائم لإتاحة تفريغ وتصفير الخارطة بنقرة واحدة في أي وقت.</li>
+              <li><strong>بقاء كافة الطبقات متاحة عند الطلب:</strong> تبقى كافة الطبقات الإدارية والجيولوجية والأثرية متاحة فورياً داخل الفهرس لتفعيلها بنقرة زر واحدة عند الرغبة.</li>
+            </ul>
+          </div>
+
+        </div>
+      </div>
+
     </section>
 
   </main>
@@ -4347,7 +4459,7 @@
       منظومة ArcGIS Living Atlas Iraq • أطلس البيانات المكانية التفاعلي واستوديو تصدير الخرائط الفضائية المصححة لبرامج ArcView GIS و GeoTIFF
     </div>
     <div class="text-[10px] text-slate-600 font-mono">
-      Generated automatically on 2026-09-30 • Full Historical Archive • 66 Engineering Commands
+      Generated automatically on 2026-09-30 • Full Historical Archive • 68 Engineering Commands
     </div>
   </footer>
 

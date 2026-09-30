@@ -12,7 +12,16 @@
   // Constants & Measurements
   const IRAQI_DUNAM_SQM = 2500; // 1 دونم عراقي = 2500 متر مربع
   const HECTARE_SQM = 10000;    // 1 هكتار = 10,000 متر مربع
-  const STORAGE_KEY = 'ATLAS_URBAN_DRAWING_FEATURES_V2';
+  const STORAGE_KEY = 'ATLAS_URBAN_DRAWING_FEATURES_V3';
+
+  // Automatically purge legacy test drawings so default main page opens completely clean
+  try {
+    localStorage.removeItem('ATLAS_URBAN_DRAWING_FEATURES');
+    localStorage.removeItem('ATLAS_URBAN_DRAWING_FEATURES_V2');
+    localStorage.removeItem('ATLAS_URBAN_DRAWING_FEATURES_V3');
+  } catch (e) {
+    // Restricted or sandboxed storage
+  }
 
   // Palette & Feature Type Presets
   const FEATURE_TYPES = {
@@ -449,7 +458,7 @@
     }
 
     /**
-     * Keyboard Shortcuts (Esc = Cancel, Backspace = Undo Last Point, Enter = Finish)
+     * Keyboard Shortcuts (Esc = Cancel/Deselect, Backspace/Delete = Undo or Delete selected, Enter = Finish)
      */
     _handleKeyDown(e) {
       if (e.key === 'Escape') {
@@ -457,10 +466,17 @@
           this.cancelCurrentDrawing();
         } else if (this.activeMode) {
           this.setMode(null);
+        } else if (this.selectedFeature) {
+          this.deselectFeature();
         }
       } else if (e.key === 'Backspace' && this.drawingPoints.length > 0) {
         e.preventDefault();
         this.undoLastVertex();
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && this.selectedFeature && !this.activeMode && this.drawingPoints.length === 0) {
+        if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
+        e.preventDefault();
+        const featToDelete = this.selectedFeature;
+        this.deleteFeature(featToDelete.id);
       } else if (e.key === 'Enter' && this.drawingPoints.length > 0) {
         e.preventDefault();
         this.finishCurrentDrawing();
@@ -854,8 +870,7 @@
           return;
         }
         L.DomEvent.stopPropagation(e);
-        this.selectedFeature = f;
-        this._highlightFeatureInList(f.id);
+        this.selectFeature(f);
       });
 
       this.featureGroup.addLayer(layer);
@@ -865,25 +880,26 @@
     }
 
     /**
-     * Generate ESRI-styled Popup for Feature
+     * Generate Interactive Feature Popup with Drag Indicator, Color Swatches, and Delete
+     * "عند الضغط على اشياء تم رسمها ، تتحول اليد الى امكانية حذف او تحريك او تغيير لون الشيء"
      */
     _generateFeaturePopup(f) {
       const typeInfo = FEATURE_TYPES[f.type] || { name: f.type, icon: 'fa-vector-square' };
+      const currentColor = f.color || f.fillColor || '#3b82f6';
       let metricsHtml = '';
 
       if (f.areaM2) {
         const dunams = (f.areaM2 / IRAQI_DUNAM_SQM).toFixed(2);
-        const hectares = (f.areaM2 / HECTARE_SQM).toFixed(2);
         metricsHtml += `
-          <div class="flex items-center justify-between border-b border-slate-700/60 pb-1">
+          <div class="flex items-center justify-between border-b border-slate-700/60 pb-1 text-[11px]">
             <span class="text-slate-400">المساحة السطحية:</span>
             <span class="font-bold text-emerald-400 font-mono">${f.areaM2.toLocaleString('ar-IQ', { maximumFractionDigits: 1 })} م²</span>
           </div>
-          <div class="flex items-center justify-between border-b border-slate-700/60 pb-1">
+          <div class="flex items-center justify-between border-b border-slate-700/60 pb-1 text-[11px]">
             <span class="text-slate-400">بالدونم العراقي:</span>
             <span class="font-bold text-amber-300 font-mono">${dunams} دونم</span>
           </div>
-          <div class="flex items-center justify-between border-b border-slate-700/60 pb-1">
+          <div class="flex items-center justify-between border-b border-slate-700/60 pb-1 text-[11px]">
             <span class="text-slate-400">المحيط الخارجي:</span>
             <span class="font-bold text-sky-300 font-mono">${this.formatLength(f.perimeterM)}</span>
           </div>
@@ -892,7 +908,7 @@
 
       if (f.lengthM) {
         metricsHtml += `
-          <div class="flex items-center justify-between border-b border-slate-700/60 pb-1">
+          <div class="flex items-center justify-between border-b border-slate-700/60 pb-1 text-[11px]">
             <span class="text-slate-400">الطول الإجمالي:</span>
             <span class="font-bold text-amber-300 font-mono">${this.formatLength(f.lengthM)}</span>
           </div>
@@ -901,7 +917,7 @@
 
       if (f.properties && f.properties.streetWidth) {
         metricsHtml += `
-          <div class="flex items-center justify-between border-b border-slate-700/60 pb-1">
+          <div class="flex items-center justify-between border-b border-slate-700/60 pb-1 text-[11px]">
             <span class="text-slate-400">عرض الشارع:</span>
             <span class="font-bold text-slate-200 font-mono">${f.properties.streetWidth} متر</span>
           </div>
@@ -910,45 +926,306 @@
 
       if (f.properties && f.properties.floors) {
         metricsHtml += `
-          <div class="flex items-center justify-between border-b border-slate-700/60 pb-1">
+          <div class="flex items-center justify-between border-b border-slate-700/60 pb-1 text-[11px]">
             <span class="text-slate-400">عدد الطوابق:</span>
             <span class="font-bold text-slate-200 font-mono">${f.properties.floors} طابق</span>
           </div>
         `;
       }
 
+      // Color Palette Swatches (تغيير لون الشيء)
+      const SWATCHES = [
+        { color: '#f59e0b', label: 'ذهبي / شوارع' },
+        { color: '#3b82f6', label: 'أزرق / بلوكات' },
+        { color: '#10b981', label: 'أخضر / مباني' },
+        { color: '#8b5cf6', label: 'بنفسجي / مسارات' },
+        { color: '#ef4444', label: 'أحمر / نقاط' },
+        { color: '#06b6d4', label: 'سماوي / نصوص' },
+        { color: '#ec4899', label: 'وردي' },
+        { color: '#ffffff', label: 'أبيض' }
+      ];
+
+      const swatchesHtml = SWATCHES.map(s => `
+        <button type="button" 
+          onclick="window.AtlasDrawingEngine.changeFeatureColor('${f.id}', '${s.color}')"
+          class="feature-color-swatch ${s.color.toLowerCase() === currentColor.toLowerCase() ? 'active' : ''}" 
+          style="background-color: ${s.color};" 
+          title="${s.label}">
+        </button>
+      `).join('');
+
       return `
-        <div class="p-2 space-y-2.5 text-right font-sans min-w-[240px]">
-          <div class="flex items-center justify-between border-b border-slate-700 pb-2">
-            <div class="flex items-center gap-1.5 font-bold text-white text-xs">
-              <i class="fa-solid ${typeInfo.icon} text-amber-400"></i>
-              <span>${f.name}</span>
+        <div class="p-2.5 space-y-2.5 text-right font-sans min-w-[270px] select-none" dir="rtl">
+          
+          <!-- Header with Drag Indicator (تحريك الشيء باليد) -->
+          <div class="border-b border-slate-700 pb-2">
+            <div class="flex items-center justify-between gap-1.5">
+              <div class="flex items-center gap-1.5 font-bold text-white text-xs truncate">
+                <i class="fa-solid ${typeInfo.icon} text-amber-400 shrink-0"></i>
+                <span class="truncate">${f.name}</span>
+              </div>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 shrink-0 font-medium">
+                ${typeInfo.name}
+              </span>
             </div>
-            <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-              ${typeInfo.name}
-            </span>
+            <!-- Hand Drag Hint -->
+            <div class="mt-1.5 flex items-center gap-1.5 text-[10px] font-bold text-cyan-300 bg-cyan-950/70 px-2 py-1 rounded-md border border-cyan-800/80">
+              <i class="fa-solid fa-hand text-xs text-cyan-400 animate-pulse"></i>
+              <span>متاح للتحريك بالسحب المباشر بالماوس ✋</span>
+            </div>
           </div>
 
-          <div class="space-y-1.5 text-xs text-slate-300">
+          <!-- Metrics info -->
+          <div class="space-y-1 text-slate-300">
             ${metricsHtml}
           </div>
 
-          <div class="flex items-center gap-1.5 pt-1 border-t border-slate-700">
-            <button onclick="window.AtlasDrawingEngine.renameFeature('${f.id}')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-[11px] font-medium transition-colors flex items-center gap-1">
+          <!-- Color Palette Picker (تغيير لون الشيء) -->
+          <div class="space-y-1.5 pt-1 border-t border-slate-700">
+            <div class="flex items-center justify-between text-[11px] font-bold text-slate-300">
+              <span class="flex items-center gap-1 text-amber-300">
+                <i class="fa-solid fa-palette text-xs"></i>
+                <span>تغيير لون الشيء:</span>
+              </span>
+              <div class="flex items-center gap-1">
+                <label class="text-[10px] text-slate-400 cursor-pointer flex items-center gap-1 hover:text-white">
+                  <span>مخصص:</span>
+                  <input type="color" value="${currentColor}" onchange="window.AtlasDrawingEngine.changeFeatureColor('${f.id}', this.value)" class="w-5 h-5 rounded cursor-pointer border-0 bg-transparent">
+                </label>
+              </div>
+            </div>
+            <div class="flex items-center justify-between gap-1.5 pt-0.5">
+              ${swatchesHtml}
+            </div>
+          </div>
+
+          <!-- Action Buttons (حذف / تعديل رؤوس / إعادة تسمية) -->
+          <div class="grid grid-cols-3 gap-1.5 pt-2 border-t border-slate-700">
+            <button type="button" onclick="window.AtlasDrawingEngine.deleteFeature('${f.id}')" class="px-2 py-1.5 bg-rose-600/25 hover:bg-rose-600/40 text-rose-300 border border-rose-500/50 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer shadow-sm" title="حذف هذا الشكل نهائياً">
+              <i class="fa-solid fa-trash text-xs"></i>
+              <span>حذف 🗑️</span>
+            </button>
+            <button type="button" onclick="window.AtlasDrawingEngine.enableFeatureEditing(window.AtlasDrawingEngine.features.find(x => x.id === '${f.id}'))" class="px-2 py-1.5 bg-emerald-600/25 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/50 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer shadow-sm" title="تعديل زوايا ورؤوس الشكل">
+              <i class="fa-solid fa-draw-polygon text-xs"></i>
+              <span>تعديل 📐</span>
+            </button>
+            <button type="button" onclick="window.AtlasDrawingEngine.renameFeature('${f.id}')" class="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-[11px] font-medium transition-all flex items-center justify-center gap-1 cursor-pointer" title="تعديل اسم العنصر">
               <i class="fa-solid fa-pen text-[10px]"></i>
-              <span>تسمية</span>
-            </button>
-            <button onclick="window.AtlasDrawingEngine.zoomToFeature('${f.id}')" class="px-2.5 py-1 bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 rounded text-[11px] font-medium transition-colors flex items-center gap-1">
-              <i class="fa-solid fa-crosshairs text-[10px]"></i>
-              <span>تركيز</span>
-            </button>
-            <button onclick="window.AtlasDrawingEngine.deleteFeature('${f.id}')" class="px-2.5 py-1 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 rounded text-[11px] font-medium transition-colors mr-auto flex items-center gap-1">
-              <i class="fa-solid fa-trash text-[10px]"></i>
-              <span>حذف</span>
+              <span>تسمية ✏️</span>
             </button>
           </div>
+
         </div>
       `;
+    }
+
+    /**
+     * Select Feature and Enable Hand Dragging, Color Change, and Deletion
+     * "عند الضغط على اشياء تم رسمها ، تتحول اليد الى امكانية حذف او تحريك او تغيير لون الشيء"
+     */
+    selectFeature(f) {
+      if (!f || !f.layer) return;
+
+      // Deselect previously selected
+      this.deselectFeature();
+
+      this.selectedFeature = f;
+      this._highlightFeatureInList(f.id);
+
+      // Add visual selection style to layer and set cursor to grab/hand
+      if (f.layer.getElement) {
+        const el = f.layer.getElement();
+        if (el) {
+          L.DomUtil.addClass(el, 'drawn-feature-selected');
+        }
+      }
+
+      // Enable Hand Dragging on Feature
+      this.enableFeatureDragging(f);
+
+      // Open interactive action popup
+      f.layer.openPopup();
+
+      this._showToast(`✋ تم تحديد "${f.name}" • يمكنك سحبه بالماوس أو تغيير لونه أو حذفه`, 'info');
+    }
+
+    /**
+     * Deselect currently selected feature
+     */
+    deselectFeature() {
+      if (this.selectedFeature && this.selectedFeature.layer) {
+        if (this.selectedFeature.layer.getElement) {
+          const el = this.selectedFeature.layer.getElement();
+          if (el) {
+            L.DomUtil.removeClass(el, 'drawn-feature-selected');
+          }
+        }
+        this.disableFeatureDragging(this.selectedFeature);
+      }
+      this.selectedFeature = null;
+    }
+
+    /**
+     * Enable Whole-Feature Move / Dragging (تحريك الشيء بالسحب باليد)
+     */
+    enableFeatureDragging(f) {
+      if (!f || !f.layer) return;
+
+      if (f.type === 'point') {
+        if (f.layer.dragging) {
+          f.layer.dragging.enable();
+          f.layer.off('dragend');
+          f.layer.on('dragend', () => {
+            const newPos = f.layer.getLatLng();
+            f.points = [{ lat: newPos.lat, lng: newPos.lng }];
+            this.saveToStorage();
+            this.updateStatsUi();
+            this._showToast(`✋ تم تحريك ${f.name} إلى موقعه الجديد`, 'success');
+          });
+        }
+        return;
+      }
+
+      // Ensure cursor is grab
+      if (f.layer.getElement) {
+        const el = f.layer.getElement();
+        if (el) L.DomUtil.addClass(el, 'drawn-feature-selected');
+      }
+
+      // Attach mouse/touch drag for Polygons & Polylines
+      if (!f._dragHandlersAttached) {
+        f._dragHandlersAttached = true;
+        let isDragging = false;
+        let startLatLng = null;
+        let initialPoints = null;
+
+        const onMouseDown = (e) => {
+          if (this.activeMode === 'edit') return;
+          // Ignore clicks inside popup or controls
+          if (e.originalEvent && e.originalEvent.target && e.originalEvent.target.closest('button, input, a, .leaflet-popup, .draw-vertex-handle-icon')) return;
+
+          isDragging = true;
+          startLatLng = e.latlng;
+          // Deep copy initial points
+          initialPoints = f.points.map(p => ({ lat: p.lat, lng: p.lng }));
+          this.map.dragging.disable();
+          document.body.classList.add('dragging-feature-active');
+          L.DomEvent.stopPropagation(e);
+
+          const onMouseMove = (moveEvt) => {
+            if (!isDragging || !startLatLng || !initialPoints) return;
+            const deltaLat = moveEvt.latlng.lat - startLatLng.lat;
+            const deltaLng = moveEvt.latlng.lng - startLatLng.lng;
+
+            const shifted = initialPoints.map(p => L.latLng(p.lat + deltaLat, p.lng + deltaLng));
+            f.layer.setLatLngs(shifted);
+          };
+
+          const onMouseUp = () => {
+            if (!isDragging) return;
+            isDragging = false;
+            this.map.dragging.enable();
+            document.body.classList.remove('dragging-feature-active');
+
+            this.map.off('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+
+            // Update f.points & f.geometry
+            const currentLatLngs = f.layer.getLatLngs();
+            const flatPts = Array.isArray(currentLatLngs[0]) ? currentLatLngs[0] : currentLatLngs;
+            f.points = flatPts.map(ll => ({ lat: ll.lat, lng: ll.lng }));
+
+            // Recalculate metrics
+            if (f.type === 'block' || f.type === 'building') {
+              f.areaM2 = this.computePolygonArea(f.points);
+              f.perimeterM = this.computePolylineLength([...f.points, f.points[0]]);
+              if (f.properties) {
+                f.properties.dunam = (f.areaM2 / IRAQI_DUNAM_SQM).toFixed(3);
+              }
+            } else if (f.type === 'street' || f.type === 'line') {
+              f.lengthM = this.computePolylineLength(f.points);
+            }
+
+            this.saveToStorage();
+            this.updateStatsUi();
+            // Refresh popup with new metrics if open
+            if (f.layer.getPopup && f.layer.getPopup().isOpen && f.layer.getPopup().isOpen()) {
+              f.layer.setPopupContent(this._generateFeaturePopup(f));
+            }
+            this._showToast(`✋ تم تحريك "${f.name}" بنجاح`, 'success');
+          };
+
+          this.map.on('mousemove', onMouseMove);
+          window.addEventListener('mouseup', onMouseUp, { once: true });
+        };
+
+        f.layer.on('mousedown', onMouseDown);
+      }
+    }
+
+    /**
+     * Disable Feature Dragging
+     */
+    disableFeatureDragging(f) {
+      if (!f || !f.layer) return;
+      if (f.type === 'point' && f.layer.dragging) {
+        f.layer.dragging.disable();
+      }
+    }
+
+    /**
+     * Change Feature Color (تغيير لون الشيء)
+     */
+    changeFeatureColor(id, newColor) {
+      const f = this.features.find(item => item.id === id);
+      if (!f || !f.layer) return;
+
+      f.color = newColor;
+      f.fillColor = newColor;
+      if (!f.properties) f.properties = {};
+      f.properties.color = newColor;
+
+      if (f.type === 'street' || f.type === 'line') {
+        f.layer.setStyle({ color: newColor });
+      } else if (f.type === 'block' || f.type === 'building') {
+        f.layer.setStyle({
+          color: newColor,
+          fillColor: newColor
+        });
+      } else if (f.type === 'point') {
+        const iconHtml = `
+          <div style="background-color: ${newColor}; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; border: 2px solid white; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);">
+            <i class="fa-solid fa-location-dot" style="font-size: 13px;"></i>
+          </div>
+        `;
+        f.layer.setIcon(L.divIcon({
+          html: iconHtml,
+          className: 'custom-poi-marker',
+          iconSize: [28, 28],
+          iconAnchor: [14, 28]
+        }));
+      } else if (f.type === 'label') {
+        const labelHtml = `
+          <div class="px-2 py-0.5 rounded-md bg-slate-900/90 text-amber-300 font-bold text-xs border shadow-lg whitespace-nowrap" style="border-color: ${newColor}; color: ${newColor};">
+            ${f.name}
+          </div>
+        `;
+        f.layer.setIcon(L.divIcon({
+          html: labelHtml,
+          className: 'custom-map-annotation',
+          iconAnchor: [10, 10]
+        }));
+      }
+
+      this.saveToStorage();
+      this.updateStatsUi();
+
+      // Refresh popup content so active color swatch is highlighted
+      if (f.layer.getPopup && f.layer.getPopup()) {
+        f.layer.setPopupContent(this._generateFeaturePopup(f));
+      }
+
+      this._showToast(`🎨 تم تغيير لون "${f.name}" بنجاح`, 'success');
     }
 
     /**
@@ -961,7 +1238,21 @@
       if (newName && newName.trim() !== '') {
         feat.name = newName.trim();
         if (feat.layer) {
-          feat.layer.closePopup();
+          if (feat.type === 'label') {
+            const labelHtml = `
+              <div class="px-2 py-0.5 rounded-md bg-slate-900/90 text-amber-300 font-bold text-xs border shadow-lg whitespace-nowrap" style="border-color: ${feat.color || '#38bdf8'}; color: ${feat.color || '#38bdf8'};">
+                ${feat.name}
+              </div>
+            `;
+            feat.layer.setIcon(L.divIcon({
+              html: labelHtml,
+              className: 'custom-map-annotation',
+              iconAnchor: [10, 10]
+            }));
+          }
+          if (feat.layer.getPopup && feat.layer.getPopup()) {
+            feat.layer.setPopupContent(this._generateFeaturePopup(feat));
+          }
         }
         this.saveToStorage();
         this.updateStatsUi();
@@ -985,37 +1276,47 @@
     }
 
     /**
-     * Delete Feature
+     * Delete Feature (حذف الشيء)
      */
     deleteFeature(id) {
       const idx = this.features.findIndex(f => f.id === id);
       if (idx === -1) return;
       const feat = this.features[idx];
 
+      if (this.editingFeature && this.editingFeature.id === id) {
+        this.disableFeatureEditing();
+      }
+
       if (feat.layer) {
         this.featureGroup.removeLayer(feat.layer);
       }
       this.features.splice(idx, 1);
+      this.selectedFeature = null;
+
       this.saveToStorage();
       this.updateStatsUi();
-      this._showToast('🗑️ تم حذف العنصر بنجاح', 'info');
+      this._updateToolbarCount();
+      this._showToast(`🗑️ تم حذف "${feat.name}" بنجاح`, 'info');
     }
 
     /**
-     * Clear all drawn features with confirmation
+     * Clear all drawn features with confirmation or programmatically
      */
-    clearAllFeatures() {
+    clearAllFeatures(skipConfirm = false) {
       if (this.features.length === 0 && this.drawingPoints.length === 0) return;
-      if (!confirm('هل أنت متأكد من رغبتك في حذف جميع الرسوم والشوارع والبلوكات والمباني؟')) return;
+      if (!skipConfirm && !confirm('هل أنت متأكد من رغبتك في حذف جميع الرسوم والشوارع والبلوكات والمباني؟')) return;
 
-      this.featureGroup.clearLayers();
+      if (this.featureGroup) this.featureGroup.clearLayers();
+      if (this.tempLayerGroup) this.tempLayerGroup.clearLayers();
       this.features = [];
       this.cancelCurrentDrawing();
       this.disableFeatureEditing();
+      this.selectedFeature = null;
       this.saveToStorage();
       this.updateStatsUi();
+      this._updateToolbarCount();
       this.setMode(null);
-      this._showToast('🗑️ تم مسح كافة الرسوم من الخارطة', 'warning');
+      this._showToast('🗑️ تم مسح وحذف كافة الرسوم من الخارطة', 'warning');
     }
 
     /**

@@ -63,7 +63,7 @@ const ATLAS_LAYERS = [
     badge: 'العراق • Iraq',
     badgeColor: 'emerald',
     defaultOpacity: 0.85,
-    defaultVisible: true,
+    defaultVisible: false,
     popupTemplate: {
       title: 'محافظة: {ADM1_AR} ({ADM1_EN})',
       content: [
@@ -94,7 +94,7 @@ const ATLAS_LAYERS = [
     badge: 'الحدود • National',
     badgeColor: 'blue',
     defaultOpacity: 0.95,
-    defaultVisible: true,
+    defaultVisible: false,
     popupTemplate: {
       title: 'جمهورية العراق - {ADM0_EN}',
       content: [
@@ -128,7 +128,7 @@ const ATLAS_LAYERS = [
     badge: 'مباشر • Live',
     badgeColor: 'red',
     defaultOpacity: 0.9,
-    defaultVisible: true,
+    defaultVisible: false,
     popupTemplate: {
       title: 'زلزال بقوة {mag} - {place}',
       content: [
