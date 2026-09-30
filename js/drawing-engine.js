@@ -62,6 +62,12 @@
       name: 'نص / تسمية مكانية',
       icon: 'fa-font',
       color: '#38bdf8'
+    },
+    edit: {
+      id: 'edit',
+      name: 'تعديل الرؤوس والمسار',
+      icon: 'fa-draw-polygon',
+      color: '#10b981'
     }
   };
 
@@ -79,6 +85,7 @@
       this.tempVertexMarkers = [];
       this.liveTooltip = null;
       this.selectedFeature = null;
+      this.editingFeature = null;
       this.isLayerVisible = true;
       this.isEditingVertices = false;
       this.activeVertexHandles = [];
@@ -194,6 +201,20 @@
         this.activeMode = mode;
       }
 
+      // Automatically adopt tool color & style presets
+      if (this.activeMode && FEATURE_TYPES[this.activeMode]) {
+        const ft = FEATURE_TYPES[this.activeMode];
+        if (ft.color) this.currentSettings.color = ft.color;
+        if (ft.fillOpacity !== undefined) this.currentSettings.fillOpacity = ft.fillOpacity;
+        if (ft.weight !== undefined) this.currentSettings.weight = ft.weight;
+        const colorPicker = document.getElementById('drawActiveColor');
+        if (colorPicker && ft.color) colorPicker.value = ft.color;
+      }
+
+      if (this.activeMode !== 'edit') {
+        this.disableFeatureEditing();
+      }
+
       this._updateToolbarUiState();
       this._updateDrawingProgressUi();
 
@@ -233,17 +254,17 @@
         case 'street':
           return 'انقر على الخريطة لرسم مسار الشارع. انقر نقراً مزدوجاً أو اضغط [إنهاء وحفظ].';
         case 'block':
-          return 'انقر لتحديد زوايا البلوك السكني. انقر [إنهاء وحفظ] لحساب المساحة بالدونم.';
+          return 'انقر لتحديد زوايا البلوك السكني. انقر على نقطة البداية أو [إنهاء وحفظ] للإغلاق وحساب الدونم.';
         case 'building':
-          return 'انقر لتحديد ركن المبنى ثم الركن المقابل (أو عدة أركان) لإنشاء المبنى.';
+          return 'انقر لتحديد أركان المبنى. انقر على نقطة البداية أو اضغط [إنهاء وحفظ] لإنشاء المبنى.';
         case 'line':
           return 'انقر لرسم المسار الخطي الخدمي، ثم انقر [إنهاء وحفظ].';
         case 'point':
           return 'انقر على الخريطة لتثبيت المعلم أو نقطة الاهتمام مباشرة.';
         case 'label':
-          return 'انقر على الخريطة لتثبيت نص توضيحي.';
+          return 'انقر على الخريطة لكتابة وتثبيت نص توضيحي.';
         case 'edit':
-          return 'انقر على أي عنصر مرسوم لتعديل رؤوسه ومساره.';
+          return 'وضع تعديل الرؤوس: انقر على أي شكل مرسوم على الخارطة لإظهار مقابض التعديل وسحبها.';
         default:
           return '';
       }
@@ -272,14 +293,28 @@
       }
 
       if (this.activeMode === 'edit') {
+        this.disableFeatureEditing();
         return;
+      }
+
+      // Check if closing polygon by clicking near the first vertex (when >= 3 points)
+      if ((this.activeMode === 'block' || this.activeMode === 'building') && this.drawingPoints.length >= 3) {
+        const firstPt = this.drawingPoints[0];
+        const distM = this.map.distance(latlng, firstPt);
+        const p1 = this.map.latLngToContainerPoint(latlng);
+        const p0 = this.map.latLngToContainerPoint(firstPt);
+        const distPx = p1.distanceTo(p0);
+        if (distM < 5 || distPx < 25) {
+          // Close and finish polygon immediately
+          this._finalizePolygonFeature();
+          return;
+        }
       }
 
       // Polyline / Polygon Drawing Process
       this.drawingPoints.push(latlng);
 
       // Create vertex marker with interactive: false so clicks at close range are NEVER blocked
-      const isFirst = (this.drawingPoints.length === 1);
       const vMarker = L.circleMarker(latlng, {
         pane: 'drawingLayerPane',
         radius: 5,
@@ -287,19 +322,9 @@
         weight: 2,
         fillColor: this.currentSettings.color,
         fillOpacity: 1,
-        interactive: isFirst && (this.activeMode === 'block' || this.activeMode === 'building'),
-        className: isFirst ? 'drawing-interactive-target' : ''
+        interactive: false,
+        className: 'drawing-vertex-marker'
       }).addTo(this.tempLayerGroup);
-
-      // Clicking first vertex on a polygon can also close it
-      if (isFirst && (this.activeMode === 'block' || this.activeMode === 'building')) {
-        vMarker.on('click', (ev) => {
-          if (this.drawingPoints.length >= 3) {
-            L.DomEvent.stopPropagation(ev);
-            this._finalizePolygonFeature();
-          }
-        });
-      }
 
       this.tempVertexMarkers.push(vMarker);
 
@@ -524,6 +549,7 @@
       this.cancelCurrentDrawing();
       this.saveToStorage();
       this.updateStatsUi();
+      this.setMode(null);
       this._showToast(`✅ تم إنشاء ${name} بطول ${this.formatLength(lengthM)}`, 'success');
     }
 
@@ -566,6 +592,7 @@
       this.cancelCurrentDrawing();
       this.saveToStorage();
       this.updateStatsUi();
+      this.setMode(null);
       this._showToast(`✅ تم إنشاء ${name} بمساحة ${this.formatArea(areaM2)}`, 'success');
     }
 
@@ -575,16 +602,17 @@
     _createPointFeature(latlng) {
       const id = 'feat_' + Date.now();
       const count = this.features.filter(f => f.type === 'point').length + 1;
-      const name = `${this.currentSettings.poiCategory} رقم ${count}`;
+      const category = this.currentSettings.poiCategory || 'معلم جغرافي';
+      const name = `${category} رقم ${count}`;
 
       const featureData = {
         id,
         type: 'point',
         name,
-        color: this.currentSettings.color,
+        color: '#ef4444',
         points: [{ lat: latlng.lat, lng: latlng.lng }],
         properties: {
-          category: this.currentSettings.poiCategory,
+          category,
           createdDate: new Date().toISOString()
         }
       };
@@ -596,29 +624,158 @@
     }
 
     /**
-     * Create Label Feature
+     * Create Label Feature with Guaranteed In-App Modal Dialog
      */
     _createLabelFeature(latlng) {
-      const text = prompt('أدخل النص التوضيحي أو اسم المعلم:', 'حي القادسية');
-      if (!text || text.trim() === '') return;
+      this.openAddLabelDialog(latlng);
+    }
 
-      const id = 'feat_' + Date.now();
-      const featureData = {
-        id,
-        type: 'label',
-        name: text.trim(),
-        color: this.currentSettings.color,
-        points: [{ lat: latlng.lat, lng: latlng.lng }],
-        properties: {
-          text: text.trim(),
-          createdDate: new Date().toISOString()
-        }
+    openAddLabelDialog(latlng) {
+      const existing = document.getElementById('drawLabelModal');
+      if (existing) existing.remove();
+
+      const modal = document.createElement('div');
+      modal.id = 'drawLabelModal';
+      modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-4';
+      modal.innerHTML = `
+        <div class="bg-slate-900 border border-cyan-500/50 rounded-2xl shadow-2xl max-w-sm w-full p-4 space-y-3.5 text-right font-sans text-slate-100 animate-in fade-in zoom-in-95 duration-150">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+            <div class="flex items-center gap-2">
+              <span class="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-300 flex items-center justify-center border border-cyan-500/30 text-xs font-bold">
+                <i class="fa-solid fa-font"></i>
+              </span>
+              <h3 class="font-bold text-sm text-white">إضافة تسمية مكانية</h3>
+            </div>
+            <button type="button" id="closeLabelModalBtn" class="text-slate-400 hover:text-white p-1 rounded-lg text-sm cursor-pointer">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+
+          <div class="space-y-1.5">
+            <label class="block text-xs font-medium text-slate-300">نص التسمية أو اسم المعلم:</label>
+            <input type="text" id="labelTextInput" value="حي القادسية" class="w-full bg-slate-950 border border-slate-700 focus:border-cyan-500 rounded-xl px-3 py-2 text-sm text-white outline-none" autofocus placeholder="أدخل اسم الشارع، المبنى أو الحي...">
+          </div>
+
+          <div class="flex items-center gap-2 justify-end pt-1">
+            <button type="button" id="cancelLabelModalBtn" class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 transition-colors cursor-pointer">
+              إلغاء
+            </button>
+            <button type="button" id="saveLabelModalBtn" class="px-4 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-xs font-bold text-white transition-colors cursor-pointer flex items-center gap-1.5 shadow-md shadow-cyan-600/30">
+              <i class="fa-solid fa-check"></i>
+              <span>تثبيت التسمية</span>
+            </button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(modal);
+
+      const input = modal.querySelector('#labelTextInput');
+      if (input) {
+        setTimeout(() => {
+          input.focus();
+          input.select();
+        }, 50);
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            submit();
+          } else if (e.key === 'Escape') {
+            modal.remove();
+          }
+        });
+      }
+
+      const submit = () => {
+        const val = (input ? input.value : '').trim();
+        modal.remove();
+        if (!val) return;
+        const id = 'feat_' + Date.now();
+        const featureData = {
+          id,
+          type: 'label',
+          name: val,
+          color: this.currentSettings.color || '#38bdf8',
+          points: [{ lat: latlng.lat, lng: latlng.lng }],
+          properties: {
+            text: val,
+            createdDate: new Date().toISOString()
+          }
+        };
+        this._addFeatureToMap(featureData);
+        this.saveToStorage();
+        this.updateStatsUi();
+        this.setMode(null);
+        this._showToast(`✅ تم إضافة التسمية: ${val}`, 'success');
       };
 
-      this._addFeatureToMap(featureData);
-      this.saveToStorage();
-      this.updateStatsUi();
-      this._showToast(`✅ تم إضافة التسمية: ${text}`, 'success');
+      modal.querySelector('#saveLabelModalBtn').onclick = submit;
+      modal.querySelector('#cancelLabelModalBtn').onclick = () => modal.remove();
+      modal.querySelector('#closeLabelModalBtn').onclick = () => modal.remove();
+    }
+
+    /**
+     * Interactive Vertex Editing Engine
+     */
+    enableFeatureEditing(f) {
+      this.disableFeatureEditing();
+      if (!f || !f.layer || !f.points || f.points.length === 0) return;
+      if (f.type === 'point' || f.type === 'label') {
+        this._showToast(`ℹ️ المعالم النقطية والتسميات يمكن نقلها أو إعادة رسمها`, 'info');
+        return;
+      }
+
+      this.editingFeature = f;
+      this.isEditingVertices = true;
+
+      f.points.forEach((pt, idx) => {
+        const handle = L.marker([pt.lat, pt.lng], {
+          draggable: true,
+          pane: 'drawingLayerPane',
+          icon: L.divIcon({
+            className: 'draw-vertex-handle-icon',
+            html: `<div style="background:#10b981; border:2.5px solid #ffffff; width:14px; height:14px; border-radius:50%; box-shadow:0 2px 8px rgba(0,0,0,0.8); cursor:grab;"></div>`,
+            iconSize: [14, 14],
+            iconAnchor: [7, 7]
+          })
+        }).addTo(this.tempLayerGroup);
+
+        handle.on('drag', () => {
+          const newPos = handle.getLatLng();
+          f.points[idx] = { lat: newPos.lat, lng: newPos.lng };
+          const newLatLngs = f.points.map(p => L.latLng(p.lat, p.lng));
+          f.layer.setLatLngs(newLatLngs);
+
+          // Update metrics in real-time
+          if (f.type === 'street' || f.type === 'line') {
+            f.lengthM = this.computePolylineLength(f.points);
+          } else if (f.type === 'block' || f.type === 'building') {
+            f.areaM2 = this.computePolygonArea(f.points);
+            f.perimeterM = this.computePolylineLength([...f.points, f.points[0]]);
+          }
+        });
+
+        handle.on('dragend', () => {
+          this.saveToStorage();
+          this.updateStatsUi();
+          this._showToast(`✅ تم تعديل إحداثيات الرأس رقم ${idx + 1} لـ ${f.name}`, 'info');
+        });
+
+        this.activeVertexHandles.push(handle);
+      });
+
+      this._showToast(`✏️ وضع التعديل نشط: اسحب المقابض الخضراء لتعديل مسار وزوايا ${f.name}`, 'info');
+    }
+
+    disableFeatureEditing() {
+      if (this.activeVertexHandles && this.activeVertexHandles.length > 0) {
+        this.activeVertexHandles.forEach(h => {
+          if (this.tempLayerGroup) this.tempLayerGroup.removeLayer(h);
+        });
+        this.activeVertexHandles = [];
+      }
+      this.editingFeature = null;
+      this.isEditingVertices = false;
     }
 
     /**
@@ -687,6 +844,11 @@
 
       // Click event
       layer.on('click', (e) => {
+        if (this.activeMode === 'edit') {
+          L.DomEvent.stopPropagation(e);
+          this.enableFeatureEditing(f);
+          return;
+        }
         if (this.activeMode) {
           this._handleMapClick(e);
           return;
@@ -843,14 +1005,16 @@
      * Clear all drawn features with confirmation
      */
     clearAllFeatures() {
-      if (this.features.length === 0) return;
+      if (this.features.length === 0 && this.drawingPoints.length === 0) return;
       if (!confirm('هل أنت متأكد من رغبتك في حذف جميع الرسوم والشوارع والبلوكات والمباني؟')) return;
 
       this.featureGroup.clearLayers();
       this.features = [];
       this.cancelCurrentDrawing();
+      this.disableFeatureEditing();
       this.saveToStorage();
       this.updateStatsUi();
+      this.setMode(null);
       this._showToast('🗑️ تم مسح كافة الرسوم من الخارطة', 'warning');
     }
 
@@ -860,11 +1024,14 @@
     toggleLayerVisibility() {
       this.isLayerVisible = !this.isLayerVisible;
       if (this.isLayerVisible) {
-        this.map.addLayer(this.featureGroup);
+        if (!this.map.hasLayer(this.featureGroup)) this.map.addLayer(this.featureGroup);
+        if (!this.map.hasLayer(this.tempLayerGroup)) this.map.addLayer(this.tempLayerGroup);
       } else {
-        this.map.removeLayer(this.featureGroup);
+        if (this.map.hasLayer(this.featureGroup)) this.map.removeLayer(this.featureGroup);
+        if (this.map.hasLayer(this.tempLayerGroup)) this.map.removeLayer(this.tempLayerGroup);
       }
       this._updateVisibilityUi();
+      this._showToast(this.isLayerVisible ? '👁️ تم إظهار طبقة الرسوم' : '🙈 تم إخفاء طبقة الرسوم', 'info');
       return this.isLayerVisible;
     }
 
@@ -873,12 +1040,14 @@
      */
     cancelCurrentDrawing() {
       this.drawingPoints = [];
-      this.tempLayerGroup.clearLayers();
+      if (this.tempLayerGroup) this.tempLayerGroup.clearLayers();
       this.tempPolyline = null;
       this.tempPolygon = null;
       this.tempRubberband = null;
       this.tempVertexMarkers = [];
+      this.disableFeatureEditing();
       this._hideLiveCursorTooltip();
+      this._updateDrawingProgressUi();
     }
 
     /**
@@ -1423,6 +1592,7 @@
   window.cancelActiveDrawing = function () {
     if (window.AtlasDrawingEngine) {
       window.AtlasDrawingEngine.cancelCurrentDrawing();
+      window.AtlasDrawingEngine.setMode(null);
     }
   };
 

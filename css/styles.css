@@ -544,3 +544,24 @@ body.drawing-mode-active .leaflet-marker-pane .calib-center-icon,
   box-shadow: 0 0 12px rgba(56, 189, 248, 0.7);
   transform: scale(1.05);
 }
+
+/* Draggable Vertex Handles for Feature Reshaping */
+.draw-vertex-handle-icon {
+  background: transparent;
+  border: none;
+  cursor: grab !important;
+  z-index: 1000 !important;
+}
+
+.draw-vertex-handle-icon:active {
+  cursor: grabbing !important;
+}
+
+.draw-vertex-handle-icon div {
+  transition: transform 0.15s ease-out;
+}
+
+.draw-vertex-handle-icon:hover div {
+  transform: scale(1.4);
+  box-shadow: 0 0 12px #10b981 !important;
+}

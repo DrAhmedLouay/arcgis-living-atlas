@@ -28,7 +28,7 @@
   <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 
   <!-- Custom Styling -->
-  <link rel="stylesheet" href="css/styles.css?v=20260930_03">
+  <link rel="stylesheet" href="css/styles.css?v=20260930_04">
 
   <script>
     // Immediate Synchronous Handlers for ArcView GIS & GeoTIFF Export Studio
@@ -252,21 +252,27 @@
         </button>
 
         <!-- Line Button -->
-        <button type="button" onclick="window.setDrawingMode('line')" class="draw-tool-btn px-2 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1 cursor-pointer" data-draw-mode="line" title="رسم خط أو مسار شبكات">
+        <button type="button" onclick="window.setDrawingMode('line')" class="draw-tool-btn px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer" data-draw-mode="line" title="رسم خط أو مسار شبكات">
           <i class="fa-solid fa-route text-purple-400"></i>
-          <span class="hidden md:inline">خط</span>
+          <span>خط</span>
         </button>
 
         <!-- Point POI Button -->
-        <button type="button" onclick="window.setDrawingMode('point')" class="draw-tool-btn px-2 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1 cursor-pointer" data-draw-mode="point" title="تثبيت نقطة أو معلم جغرافي">
+        <button type="button" onclick="window.setDrawingMode('point')" class="draw-tool-btn px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer" data-draw-mode="point" title="تثبيت نقطة أو معلم جغرافي">
           <i class="fa-solid fa-location-dot text-rose-400"></i>
-          <span class="hidden md:inline">نقطة</span>
+          <span>نقطة</span>
         </button>
 
         <!-- Text Label Button -->
-        <button type="button" onclick="window.setDrawingMode('label')" class="draw-tool-btn px-2 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1 cursor-pointer" data-draw-mode="label" title="كتابة نص توضيحي على الخارطة">
+        <button type="button" onclick="window.setDrawingMode('label')" class="draw-tool-btn px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer" data-draw-mode="label" title="كتابة نص توضيحي على الخارطة">
           <i class="fa-solid fa-font text-cyan-400"></i>
-          <span class="hidden md:inline">نص</span>
+          <span>نص</span>
+        </button>
+
+        <!-- Edit Vertices Button -->
+        <button type="button" onclick="window.setDrawingMode('edit')" class="draw-tool-btn px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer" data-draw-mode="edit" title="تعديل زوايا ورؤوس الأشكال المرسومة">
+          <i class="fa-solid fa-draw-polygon text-emerald-400"></i>
+          <span>تعديل</span>
         </button>
 
         <!-- Dynamic Drawing In-Progress Controls (Finish / Undo / Cancel) -->
@@ -2566,16 +2572,16 @@
        Scripts
        ========================================================================= -->
   <!-- Curated Catalog Data -->
-  <script src="js/catalog-data.js?v=20260930_03"></script>
+  <script src="js/catalog-data.js?v=20260930_04"></script>
 
   <!-- Curated Official Archaeological Sites of Iraq -->
-  <script src="js/archaeology-data.js?v=20260930_03"></script>
+  <script src="js/archaeology-data.js?v=20260930_04"></script>
 
   <!-- Specialized GIS Drawing & Urban Digitization Engine -->
-  <script src="js/drawing-engine.js?v=20260930_03"></script>
+  <script src="js/drawing-engine.js?v=20260930_04"></script>
 
   <!-- Living Atlas Engine Entry -->
-  <script src="js/atlas-core.js?v=20260930_03"></script>
+  <script src="js/atlas-core.js?v=20260930_04"></script>
 
 </body>
 </html>

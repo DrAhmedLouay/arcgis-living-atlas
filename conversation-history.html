@@ -144,7 +144,7 @@
           <!-- Quick Stat Counters -->
           <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-2 gap-3 shrink-0">
             <div class="glass-card rounded-xl p-3 text-center border-slate-700/60 shadow">
-              <div class="text-2xl font-black text-sky-400 font-mono">63</div>
+              <div class="text-2xl font-black text-sky-400 font-mono">64</div>
               <div class="text-[11px] text-slate-400 font-medium">أمراً واستشارة موثقة</div>
             </div>
             <div class="glass-card rounded-xl p-3 text-center border-slate-700/60 shadow">
@@ -4143,6 +4143,76 @@
         </div>
       </div>
 
+      <!-- =====================================================================
+           Order 64: Resolving Drawing Tool Lifecycle, Vertex Editing, In-App Label Modal, and Polygon Auto-Close
+           ===================================================================== -->
+      <div class="order-card bg-slate-900/60 rounded-2xl border border-sky-500/40 p-4 lg:p-6 space-y-4 hover:border-sky-500/70 transition-all shadow-md" data-category="features" data-index="64">
+        <div class="flex flex-col gap-3">
+          
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+              <span class="w-8 h-8 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/40 flex items-center justify-center font-mono font-bold text-xs">
+                #64
+              </span>
+              <span class="text-xs font-bold text-sky-400 px-2 py-0.5 rounded-full bg-sky-500/10 border border-sky-500/30">
+                إصلاح أدوات الرسم ودورة حياة الحفظ/الإلغاء وتعديل الرؤوس والنافذة التفاعلية للنصوص
+              </span>
+              <span class="text-[10px] text-slate-400 font-medium">
+                المرحلة 8: الرسم الهندسي والرقمنة والتخطيط العقاري
+              </span>
+            </div>
+
+            <div class="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
+              <i class="fa-regular fa-clock text-slate-500"></i>
+              <span>2026-09-30T17:15:00Z</span>
+            </div>
+          </div>
+
+          <!-- User Request Box -->
+          <div class="bg-slate-900/90 rounded-xl p-3.5 border border-slate-800/90 space-y-1">
+            <div class="text-[10px] font-bold text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
+              <i class="fa-solid fa-comment-dots text-xs"></i>
+              <span>نص طلب المستخدم / الأمر الموجه:</span>
+            </div>
+            <div class="text-sm font-semibold text-slate-100 leading-relaxed font-sans pr-1">
+              بعض الادوات في الرسم لا تعمل ، عالج الخلل
+            </div>
+          </div>
+
+          <!-- System Response & Technical Architecture -->
+          <div class="space-y-2 text-xs">
+            <div class="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+              <i class="fa-solid fa-code-commit text-xs"></i>
+              <span>التشخيص الشامل لسلوك الأدوات غير المستجيبة، ضبط دورة حياة الإجراءات، وتفعيل محرك تعديل الرؤوس والمودال الزجاجي</span>
+            </div>
+            <p class="text-slate-300 leading-relaxed">
+              <strong>التشخيص الهندسي الدقيق لجذور المشكلة (Root Cause Analysis):</strong>
+            </p>
+            <ul class="list-disc list-inside space-y-1 text-slate-300 pr-1 text-[11px]">
+              <li><strong>علوق شريط الإجراءات الحي (Action Bar Stuck State):</strong> بعد الانتهاء من رسم المضلع وتخزينه، كان شريط الإجراءات <code>#drawingActiveActions</code> يظل ظاهراً مع عداد النقاط (مثل "6 نقاط") وزر <code>[إنهاء وحفظ ✓]</code> وامضاً، لأن دالة الإلغاء والتنظيف لم تكن تعيد تعيين نمط الأداة <code>setMode(null)</code> ولم تقم بتحديث الواجهة <code>_updateDrawingProgressUi()</code>، مما جعل النقر عليه لاحقاً يظهر خطأ ("حدد 3 نقاط على الأقل") نظراً لأن مصفوفة النقاط كانت قد فُرغت بالفعل في الخلفية.</li>
+              <li><strong>حجب دالة نافذة النص (Prompt Suppression):</strong> كانت أداة النص تعتمد على <code>window.prompt()</code>، وهي دالة متصفح كلاسيكية تحجبها متصفحات الويب الحديثة تلقائياً أو تمنع تركيزها عند استدعائها داخل أحداث تفاعلية مكثفة للخارطة، مما كان يوحي بأن أداة النص معطلة تماماً.</li>
+              <li><strong>أداة تعديل الرؤوس (Vertex Editing Tool):</strong> كانت الأداة غير مفعلة برمجياً ولم يكن زرها متاحاً في الشريط العائم الرئيسي للخريطة <code>#floatingDrawToolbar</code>.</li>
+              <li><strong>توحيد الألوان الافتراضية:</strong> كانت الأدوات تشترك في لون افتراضي برتقالي واحد، مما أفقد العناصر المنشأة تميزها البصري (كالمباني السكنية والشوارع والبلوكات).</li>
+            </ul>
+            <div class="bg-slate-950/80 rounded-lg p-3 border border-slate-800 text-slate-300 leading-relaxed space-y-2">
+              <div class="font-semibold text-sky-400 flex items-center gap-1 text-[11px]">
+                <i class="fa-solid fa-gears"></i>
+                <span>الإجراءات والمعالجات الهندسية المنفذة:</span>
+              </div>
+              <ul class="list-disc list-inside space-y-1 text-slate-300 pr-1 text-[11px]">
+                <li><strong>تصفير دورة حياة أدوات الرسم فور الإنهاء:</strong> استدعاء <code>this.setMode(null)</code> فور إتمام وحفظ أي عنصر، وإخفاء شريط الإجراءات وإعادة المؤشر إلى حالته الطبيعية وإلغاء تنشيط الزر في الشريط العائم.</li>
+                <li><strong>نافذة زجاجية عائمة مدمجة لإضافة النصوص (In-App Glass Modal):</strong> استبدال <code>window.prompt()</code> بنافذة منبثقة تفاعلية راقية <code>#drawLabelModal</code> بخلفية ضبابية، تركيز فوري على حقل الإدخال، ودعم الحفظ بمفتاح <code>Enter</code> والإلغاء بـ <code>Esc</code> أو بالنقر خارج النافذة.</li>
+                <li><strong>محرك متكامل لتعديل الرؤوس والزوايا (Interactive Vertex Editing):</strong> برمجة دالة <code>enableFeatureEditing(f)</code> وإضافة زر <code>تعديل</code> للشريط العائم؛ عند النقر على أي عنصر يتم توليد مقابض دائرية خضراء متوهجة قابلة للسحب، مع تحديث فوري لهندسة الشكل وأطواله ومساحاته.</li>
+                <li><strong>الإغلاق المغناطيسي التلقائي للمضلعات (Polygon Auto-Closing):</strong> عند النقر بالقرب من أول نقطة مسار (ضمن نطاق 25 بكسل / 5 أمتار)، يتم إغلاق وحفظ المضلع تلقائياً دون الحاجة للضغط على زر الحفظ.</li>
+                <li><strong>نظام تلوين تلقائي مميز لكل أداة:</strong> الشوارع باللون البرتقالي (<code>#f59e0b</code>)، البلوكات السكنية بالأزرق الملكي (<code>#3b82f6</code>)، المباني بالأخضر الزمردي (<code>#10b981</code>)، الخطوط الحرة بالبنفسجي (<code>#8b5cf6</code>)، النقاط بالأحمر (<code>#ef4444</code>)، والنصوص بالسماوي (<code>#38bdf8</code>).</li>
+                <li><strong>ترقية إصدار الكاش:</strong> تحديث روابط الملفات إلى <code>?v=20260930_04</code> لمنع التخزين المؤقت وضمان تشغيل الأكواد الجديدة فوراً لدى المستخدم.</li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
     </section>
 
   </main>
@@ -4159,7 +4229,7 @@
       منظومة ArcGIS Living Atlas Iraq • أطلس البيانات المكانية التفاعلي واستوديو تصدير الخرائط الفضائية المصححة لبرامج ArcView GIS و GeoTIFF
     </div>
     <div class="text-[10px] text-slate-600 font-mono">
-      Generated automatically on 2026-09-30 • Full Historical Archive • 63 Engineering Commands
+      Generated automatically on 2026-09-30 • Full Historical Archive • 64 Engineering Commands
     </div>
   </footer>
 
