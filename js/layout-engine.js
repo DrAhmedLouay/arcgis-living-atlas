@@ -75,6 +75,9 @@
       };
 
       this.cachedCanvas = null;
+      this._cachedSatImg = null;
+      this._cachedSatBbox = null;
+      this._debounceTimer = null;
     }
 
     /**
@@ -151,6 +154,11 @@
         this._renderFrameOverlay();
       }
 
+      // Ensure frame is visible in viewport
+      if (this.frameBounds && !this.map.getBounds().intersects(this.frameBounds)) {
+        this.map.fitBounds(this.frameBounds, { padding: [50, 50] });
+      }
+
       // Update UI button state if present
       const btn = document.getElementById('toggleMapLayoutFrameBtn');
       if (btn) {
@@ -208,33 +216,71 @@
       );
 
       this.isFrameVisible = true;
+      this._cachedSatImg = null;
+      this._cachedSatBbox = null;
       this._renderFrameOverlay();
+      this.updateStudioModalUi();
     }
 
     /**
      * Set Sheet Size (a0, a1, a2, a3, a4) and re-adjust frame aspect ratio
      */
-    setSheetSize(size) {
+    async setSheetSize(size) {
       if (!SHEET_SIZES[size]) return;
       this.selectedSheet = size;
+      this._cachedSatImg = null;
+      this._cachedSatBbox = null;
       if (this.aspectRatioLocked && this.frameBounds) {
         this._adjustFrameBoundsToAspectRatio();
       }
       this._renderFrameOverlay();
       this.updateStudioModalUi();
+      await this.refreshStudioPreview();
     }
 
     /**
      * Set Orientation ('landscape' | 'portrait')
      */
-    setOrientation(orientation) {
+    async setOrientation(orientation) {
       if (orientation !== 'landscape' && orientation !== 'portrait') return;
       this.orientation = orientation;
+      this._cachedSatImg = null;
+      this._cachedSatBbox = null;
       if (this.aspectRatioLocked && this.frameBounds) {
         this._adjustFrameBoundsToAspectRatio();
       }
       this._renderFrameOverlay();
       this.updateStudioModalUi();
+      await this.refreshStudioPreview();
+    }
+
+    /**
+     * Set DPI Resolution (150 or 300)
+     */
+    async setDpi(dpi) {
+      this.dpi = Number(dpi) || 150;
+      const btn150 = document.getElementById('layoutDpi150Btn');
+      const btn300 = document.getElementById('layoutDpi300Btn');
+      if (btn150 && btn300) {
+        if (this.dpi === 300) {
+          btn300.className = 'flex-1 py-1.5 rounded-lg text-xs font-bold bg-cyan-600 text-white border border-cyan-500/40 cursor-pointer shadow-sm';
+          btn150.className = 'flex-1 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer';
+        } else {
+          btn150.className = 'flex-1 py-1.5 rounded-lg text-xs font-bold bg-cyan-600 text-white border border-cyan-500/40 cursor-pointer shadow-sm';
+          btn300.className = 'flex-1 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer';
+        }
+      }
+      await this.refreshStudioPreview();
+    }
+
+    /**
+     * Debounced preview refresh for text input typing
+     */
+    debouncedRefresh(delay = 250) {
+      if (this._debounceTimer) clearTimeout(this._debounceTimer);
+      this._debounceTimer = setTimeout(() => {
+        this.refreshStudioPreview();
+      }, delay);
     }
 
     /**
@@ -753,16 +799,32 @@
       const maxY = b.getNorth().toFixed(6);
 
       // 2. Fetch and Draw High-Resolution Satellite Map Image from ArcGIS Living Atlas
-      const exportUrl = `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${minX},${minY},${maxX},${maxY}&bboxSR=4326&imageSR=4326&size=${w},${h}&f=image`;
+      const reqW = Math.min(1600, Math.max(400, Math.round(w)));
+      const reqH = Math.min(1200, Math.max(300, Math.round(h)));
+      const bboxStr = `${minX},${minY},${maxX},${maxY}`;
+      const exportUrl = `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bboxStr}&bboxSR=4326&imageSR=4326&size=${reqW},${reqH}&f=image`;
 
-      try {
-        const satImg = await this._loadImageWithTimeout(exportUrl, 8000);
-        ctx.drawImage(satImg, x, y, w, h);
-      } catch (err) {
-        console.warn('AtlasLayoutStudio: Failed to load ArcGIS Satellite Imagery for layout, rendering cartographic grid instead.', err);
-        // Fallback elegant grid
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(x, y, w, h);
+      let satImgLoaded = false;
+      if (this._cachedSatImg && this._cachedSatBbox === bboxStr) {
+        try {
+          ctx.drawImage(this._cachedSatImg, x, y, w, h);
+          satImgLoaded = true;
+        } catch (e) {
+          this._cachedSatImg = null;
+        }
+      }
+
+      if (!satImgLoaded) {
+        try {
+          const satImg = await this._loadImageWithTimeout(exportUrl, 5000);
+          ctx.drawImage(satImg, x, y, w, h);
+          this._cachedSatImg = satImg;
+          this._cachedSatBbox = bboxStr;
+          satImgLoaded = true;
+        } catch (err) {
+          console.warn('AtlasLayoutStudio: Notice: ArcGIS satellite imagery offline or timeout, rendering high-contrast cartographic grid:', err);
+          this._drawFallbackCartographicGrid(ctx, x, y, w, h, b, mmToPx);
+        }
       }
 
       // 3. Draw Rectified/Calibrated Overlay if active and visible
@@ -789,6 +851,52 @@
       ctx.strokeStyle = '#0f172a';
       ctx.lineWidth = Math.max(1.5, Math.round(0.5 * mmToPx));
       ctx.strokeRect(x, y, w, h);
+    }
+
+    /**
+     * Fallback high-contrast cartographic grid when satellite service is slow or offline
+     */
+    _drawFallbackCartographicGrid(ctx, x, y, w, h, b, mmToPx) {
+      ctx.save();
+      const grad = ctx.createLinearGradient(x, y, x + w, y + h);
+      grad.addColorStop(0, '#090d16');
+      grad.addColorStop(0.5, '#0f172a');
+      grad.addColorStop(1, '#0b1329');
+      ctx.fillStyle = grad;
+      ctx.fillRect(x, y, w, h);
+
+      // Fine Cartographic Grid Lines
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.15)';
+      ctx.lineWidth = 1;
+      const stepX = w / 6;
+      const stepY = h / 4;
+      for (let i = 1; i < 6; i++) {
+        ctx.beginPath();
+        ctx.moveTo(x + i * stepX, y);
+        ctx.lineTo(x + i * stepX, y + h);
+        ctx.stroke();
+      }
+      for (let j = 1; j < 4; j++) {
+        ctx.beginPath();
+        ctx.moveTo(x, y + j * stepY);
+        ctx.lineTo(x + w, y + j * stepY);
+        ctx.stroke();
+      }
+
+      // Compass Rose watermark in center
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.22)';
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.min(w, h) * 0.22, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.6)';
+      ctx.font = `bold ${Math.round(3.4 * mmToPx)}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('أطلس العراق • شبكة الإحداثيات الجغرافية (WGS84)', cx, cy);
+      ctx.restore();
     }
 
     /**
@@ -845,15 +953,20 @@
       if (!engine || !engine.features || engine.features.length === 0 || !engine.isLayerVisible) return;
 
       engine.features.forEach(f => {
+        if (!f) return;
         const type = f.type;
-        const color = (f.properties && f.properties.color) || '#f59e0b';
+        const color = (f.properties && f.properties.color) || f.color || '#f59e0b';
 
         ctx.save();
 
         if (type === 'street' || type === 'line') {
           // Polylines
-          const pts = f.geometry.map(coord => this._latLngToCanvas(coord.lat, coord.lng, b, mapX, mapY, mapW, mapH));
-          if (pts.length < 2) return;
+          const rawPts = f.points || (Array.isArray(f.geometry) ? f.geometry : []);
+          const pts = rawPts.map(coord => this._latLngToCanvas(coord.lat, coord.lng, b, mapX, mapY, mapW, mapH));
+          if (pts.length < 2) {
+            ctx.restore();
+            return;
+          }
 
           // Casing / Outline
           ctx.beginPath();
@@ -875,8 +988,12 @@
 
         } else if (type === 'block' || type === 'building') {
           // Polygons
-          const pts = f.geometry.map(coord => this._latLngToCanvas(coord.lat, coord.lng, b, mapX, mapY, mapW, mapH));
-          if (pts.length < 3) return;
+          const rawPts = f.points || (Array.isArray(f.geometry) ? f.geometry : []);
+          const pts = rawPts.map(coord => this._latLngToCanvas(coord.lat, coord.lng, b, mapX, mapY, mapW, mapH));
+          if (pts.length < 3) {
+            ctx.restore();
+            return;
+          }
 
           ctx.beginPath();
           ctx.moveTo(pts[0].x, pts[0].y);
@@ -893,7 +1010,8 @@
           ctx.stroke();
 
           // Label Centered inside Polygon
-          if (f.properties && f.properties.label) {
+          const lbl = (f.properties && (f.properties.label || f.properties.name)) || f.name;
+          if (lbl) {
             let cx = 0, cy = 0;
             pts.forEach(p => { cx += p.x; cy += p.y; });
             cx /= pts.length;
@@ -905,13 +1023,18 @@
             ctx.textBaseline = 'middle';
             ctx.shadowColor = 'rgba(0,0,0,0.85)';
             ctx.shadowBlur = 4;
-            ctx.fillText(f.properties.label, cx, cy);
+            ctx.fillText(lbl, cx, cy);
             ctx.shadowBlur = 0;
           }
 
         } else if (type === 'point') {
           // Point Marker
-          const pt = this._latLngToCanvas(f.geometry.lat, f.geometry.lng, b, mapX, mapY, mapW, mapH);
+          const ptCoord = (f.points && f.points[0]) || (f.geometry && f.geometry.lat ? f.geometry : null) || (f.layer && f.layer.getLatLng && f.layer.getLatLng());
+          if (!ptCoord) {
+            ctx.restore();
+            return;
+          }
+          const pt = this._latLngToCanvas(ptCoord.lat, ptCoord.lng, b, mapX, mapY, mapW, mapH);
           const r = Math.max(4, Math.round(1.8 * mmToPx));
 
           ctx.beginPath();
@@ -922,21 +1045,27 @@
           ctx.lineWidth = Math.max(1, Math.round(0.4 * mmToPx));
           ctx.stroke();
 
-          if (f.properties && f.properties.label) {
+          const lbl = (f.properties && (f.properties.label || f.properties.name)) || f.name;
+          if (lbl) {
             ctx.fillStyle = '#ffffff';
             ctx.font = `bold ${Math.round(2.4 * mmToPx)}px system-ui, sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'bottom';
             ctx.shadowColor = 'rgba(0,0,0,0.8)';
             ctx.shadowBlur = 4;
-            ctx.fillText(f.properties.label, pt.x, pt.y - r - 2);
+            ctx.fillText(lbl, pt.x, pt.y - r - 2);
             ctx.shadowBlur = 0;
           }
 
         } else if (type === 'label') {
           // Text Label
-          const pt = this._latLngToCanvas(f.geometry.lat, f.geometry.lng, b, mapX, mapY, mapW, mapH);
-          const txt = f.properties.text || 'نص';
+          const ptCoord = (f.points && f.points[0]) || (f.geometry && f.geometry.lat ? f.geometry : null) || (f.layer && f.layer.getLatLng && f.layer.getLatLng());
+          if (!ptCoord) {
+            ctx.restore();
+            return;
+          }
+          const pt = this._latLngToCanvas(ptCoord.lat, ptCoord.lng, b, mapX, mapY, mapW, mapH);
+          const txt = (f.properties && (f.properties.text || f.properties.label)) || f.name || 'نص';
 
           ctx.font = `bold ${Math.round(3.0 * mmToPx)}px system-ui, sans-serif`;
           const textMetrics = ctx.measureText(txt);
@@ -945,11 +1074,11 @@
           // Background Badge
           ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
           ctx.fillRect(pt.x - textMetrics.width / 2 - pad, pt.y - pad * 2, textMetrics.width + pad * 2, Math.round(4 * mmToPx));
-          ctx.strokeStyle = '#38bdf8';
+          ctx.strokeStyle = color || '#38bdf8';
           ctx.lineWidth = 1;
           ctx.strokeRect(pt.x - textMetrics.width / 2 - pad, pt.y - pad * 2, textMetrics.width + pad * 2, Math.round(4 * mmToPx));
 
-          ctx.fillStyle = '#38bdf8';
+          ctx.fillStyle = color || '#38bdf8';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(txt, pt.x, pt.y);
@@ -1100,123 +1229,135 @@
       ctx.stroke();
 
       // Section 1: North Arrow & Scale Bar
-      this._drawNorthAndScaleSection(ctx, col1X, y, col1W, h, mmToPx);
+      if (this.options.showNorthArrow !== false || this.options.showScaleBar !== false) {
+        this._drawNorthAndScaleSection(ctx, col1X, y, col1W, h, mmToPx);
+      }
 
       // Section 2: Legend
-      this._drawLegendSection(ctx, col2X, y, col2W, h, mmToPx);
+      if (this.options.showLegend !== false) {
+        this._drawLegendSection(ctx, col2X, y, col2W, h, mmToPx);
+      }
 
       // Section 3: Official Certified Cartouche
-      this._drawCertifiedCartoucheSection(ctx, col3X, y, col3W, h, mmToPx);
+      if (this.options.showCartouche !== false) {
+        this._drawCertifiedCartoucheSection(ctx, col3X, y, col3W, h, mmToPx);
+      }
     }
 
     /**
      * Draw North Arrow and Metric Scale Bar
      */
     _drawNorthAndScaleSection(ctx, x, y, w, h, mmToPx) {
+      const showNorth = this.options.showNorthArrow !== false;
+      const showScale = this.options.showScaleBar !== false;
+
       // 1. North Arrow
       const northCenterX = x + Math.round(14 * mmToPx);
       const northCenterY = y + (h / 2);
       const northRadius = Math.round(11 * mmToPx);
 
-      // Outer ring
-      ctx.save();
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = Math.max(1, Math.round(0.3 * mmToPx));
-      ctx.beginPath();
-      ctx.arc(northCenterX, northCenterY, northRadius, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // North needle (Dark half)
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.moveTo(northCenterX, northCenterY - northRadius + 2);
-      ctx.lineTo(northCenterX - Math.round(3.5 * mmToPx), northCenterY);
-      ctx.lineTo(northCenterX, northCenterY);
-      ctx.closePath();
-      ctx.fill();
-
-      // North needle (Light half)
-      ctx.fillStyle = '#ffffff';
-      ctx.strokeStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.moveTo(northCenterX, northCenterY - northRadius + 2);
-      ctx.lineTo(northCenterX + Math.round(3.5 * mmToPx), northCenterY);
-      ctx.lineTo(northCenterX, northCenterY);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      // South needle
-      ctx.fillStyle = '#cbd5e1';
-      ctx.beginPath();
-      ctx.moveTo(northCenterX, northCenterY + northRadius - 2);
-      ctx.lineTo(northCenterX - Math.round(3.5 * mmToPx), northCenterY);
-      ctx.lineTo(northCenterX, northCenterY);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.fillStyle = '#64748b';
-      ctx.beginPath();
-      ctx.moveTo(northCenterX, northCenterY + northRadius - 2);
-      ctx.lineTo(northCenterX + Math.round(3.5 * mmToPx), northCenterY);
-      ctx.lineTo(northCenterX, northCenterY);
-      ctx.closePath();
-      ctx.fill();
-
-      // 'N' Label
-      ctx.fillStyle = '#0f172a';
-      ctx.font = `bold ${Math.round(3.5 * mmToPx)}px system-ui, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      ctx.fillText('N', northCenterX, northCenterY - northRadius - 1);
-
-      ctx.restore();
-
-      // 2. Graphic Scale Bar
-      const scaleX = northCenterX + northRadius + Math.round(6 * mmToPx);
-      const scaleY = y + Math.round(18 * mmToPx);
-      const scaleBarWidth = w - (scaleX - x) - Math.round(8 * mmToPx);
-
-      // Representative Scale Text
-      ctx.fillStyle = '#0f172a';
-      ctx.font = `bold ${Math.round(4.0 * mmToPx)}px "Courier New", monospace`;
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-      ctx.fillText(`SCALE ${this.getScaleString()}`, scaleX, y + Math.round(5 * mmToPx));
-
-      // Calculate real scale intervals
-      const groundWidthM = this.frameBounds.getSouthWest().distanceTo(this.frameBounds.getSouthEast());
-      const scaleRatio = groundWidthM / (w * 2); // approximate fraction
-      const maxSegmentM = Math.round(groundWidthM * 0.25);
-
-      // Alternating Black/White Scale Bar Segments
-      const segments = 4;
-      const segW = scaleBarWidth / segments;
-      const segH = Math.round(2.5 * mmToPx);
-
-      for (let i = 0; i < segments; i++) {
-        ctx.fillStyle = (i % 2 === 0) ? '#0f172a' : '#ffffff';
-        ctx.fillRect(scaleX + (i * segW), scaleY, segW, segH);
+      if (showNorth) {
+        // Outer ring
+        ctx.save();
         ctx.strokeStyle = '#0f172a';
-        ctx.strokeRect(scaleX + (i * segW), scaleY, segW, segH);
+        ctx.lineWidth = Math.max(1, Math.round(0.3 * mmToPx));
+        ctx.beginPath();
+        ctx.arc(northCenterX, northCenterY, northRadius, 0, Math.PI * 2);
+        ctx.stroke();
 
-        // Segment number ticks
-        const segDist = Math.round((maxSegmentM / segments) * i);
-        ctx.fillStyle = '#334155';
-        ctx.font = `600 ${Math.round(2.2 * mmToPx)}px "Courier New", monospace`;
+        // North needle (Dark half)
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.moveTo(northCenterX, northCenterY - northRadius + 2);
+        ctx.lineTo(northCenterX - Math.round(3.5 * mmToPx), northCenterY);
+        ctx.lineTo(northCenterX, northCenterY);
+        ctx.closePath();
+        ctx.fill();
+
+        // North needle (Light half)
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.moveTo(northCenterX, northCenterY - northRadius + 2);
+        ctx.lineTo(northCenterX + Math.round(3.5 * mmToPx), northCenterY);
+        ctx.lineTo(northCenterX, northCenterY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // South needle
+        ctx.fillStyle = '#cbd5e1';
+        ctx.beginPath();
+        ctx.moveTo(northCenterX, northCenterY + northRadius - 2);
+        ctx.lineTo(northCenterX - Math.round(3.5 * mmToPx), northCenterY);
+        ctx.lineTo(northCenterX, northCenterY);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#64748b';
+        ctx.beginPath();
+        ctx.moveTo(northCenterX, northCenterY + northRadius - 2);
+        ctx.lineTo(northCenterX + Math.round(3.5 * mmToPx), northCenterY);
+        ctx.lineTo(northCenterX, northCenterY);
+        ctx.closePath();
+        ctx.fill();
+
+        // 'N' Label
+        ctx.fillStyle = '#0f172a';
+        ctx.font = `bold ${Math.round(3.5 * mmToPx)}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
-        ctx.fillText(segDist.toString(), scaleX + (i * segW), scaleY - 2);
+        ctx.fillText('N', northCenterX, northCenterY - northRadius - 1);
+
+        ctx.restore();
       }
 
-      // End Tick
-      ctx.fillText(`${maxSegmentM} m`, scaleX + scaleBarWidth, scaleY - 2);
+      // 2. Graphic Scale Bar
+      if (showScale) {
+        const scaleX = showNorth ? (northCenterX + northRadius + Math.round(6 * mmToPx)) : (x + Math.round(6 * mmToPx));
+        const scaleY = y + Math.round(18 * mmToPx);
+        const scaleBarWidth = w - (scaleX - x) - Math.round(8 * mmToPx);
 
-      // Metric unit note
-      ctx.fillStyle = '#64748b';
-      ctx.font = `400 ${Math.round(2.2 * mmToPx)}px system-ui, sans-serif`;
-      ctx.textAlign = 'left';
-      ctx.fillText('المقياس المتري (الأبعاد بالمتر)', scaleX, scaleY + segH + Math.round(2.5 * mmToPx));
+        // Representative Scale Text
+        ctx.fillStyle = '#0f172a';
+        ctx.font = `bold ${Math.round(4.0 * mmToPx)}px "Courier New", monospace`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(`SCALE ${this.getScaleString()}`, scaleX, y + Math.round(5 * mmToPx));
+
+        // Calculate real scale intervals
+        const groundWidthM = this.frameBounds.getSouthWest().distanceTo(this.frameBounds.getSouthEast());
+        const maxSegmentM = Math.round(groundWidthM * 0.25);
+
+        // Alternating Black/White Scale Bar Segments
+        const segments = 4;
+        const segW = Math.max(10, scaleBarWidth / segments);
+        const segH = Math.round(2.5 * mmToPx);
+
+        for (let i = 0; i < segments; i++) {
+          ctx.fillStyle = (i % 2 === 0) ? '#0f172a' : '#ffffff';
+          ctx.fillRect(scaleX + (i * segW), scaleY, segW, segH);
+          ctx.strokeStyle = '#0f172a';
+          ctx.strokeRect(scaleX + (i * segW), scaleY, segW, segH);
+
+          // Segment number ticks
+          const segDist = Math.round((maxSegmentM / segments) * i);
+          ctx.fillStyle = '#334155';
+          ctx.font = `600 ${Math.round(2.2 * mmToPx)}px "Courier New", monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(segDist.toString(), scaleX + (i * segW), scaleY - 2);
+        }
+
+        // End Tick
+        ctx.fillText(`${maxSegmentM} m`, scaleX + (segments * segW), scaleY - 2);
+
+        // Metric unit note
+        ctx.fillStyle = '#64748b';
+        ctx.font = `400 ${Math.round(2.2 * mmToPx)}px system-ui, sans-serif`;
+        ctx.textAlign = 'left';
+        ctx.fillText('المقياس المتري (الأبعاد بالمتر)', scaleX, scaleY + segH + Math.round(2.5 * mmToPx));
+      }
     }
 
     /**
@@ -1419,14 +1560,14 @@
           const pdf = new jsPDF({
             orientation: this.orientation,
             unit: 'mm',
-            format: this.selectedSheet.toLowerCase()
+            format: [wMm, hMm]
           });
 
           pdf.addImage(dataUrl, 'JPEG', 0, 0, wMm, hMm, undefined, 'FAST');
 
           const filename = `Iraq_Map_Layout_${sheet.name}_${this.orientation}_${Date.now()}.pdf`;
           pdf.save(filename);
-          this._showToast(`تم تصدير وحفظ اللوحة بنجاح: ${filename}`, 'success');
+          this._showToast(`✅ تم تصدير وحفظ اللوحة بنجاح: ${filename}`, 'success');
         } else {
           // If jsPDF is not loaded, fallback smoothly to direct print / download
           console.warn('AtlasLayoutStudio: jsPDF not detected, triggering direct high-res print.');
@@ -1565,10 +1706,17 @@
       // Sheet buttons
       document.querySelectorAll('.layout-sheet-btn').forEach(btn => {
         const sheet = btn.dataset.sheet;
+        const icon = btn.querySelector('i:last-child');
         if (sheet === this.selectedSheet) {
           btn.className = 'layout-sheet-btn px-3 py-2 rounded-xl text-xs font-bold text-cyan-200 bg-cyan-950/80 border border-cyan-500 shadow-md flex items-center justify-between cursor-pointer';
+          if (icon) {
+            icon.className = 'fa-solid fa-check text-[11px] text-cyan-400';
+          }
         } else {
           btn.className = 'layout-sheet-btn px-3 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 transition-all flex items-center justify-between cursor-pointer';
+          if (icon) {
+            icon.className = 'fa-solid fa-chevron-left text-[10px] text-slate-500';
+          }
         }
       });
 
@@ -1577,11 +1725,24 @@
       const portBtn = document.getElementById('layoutOrientPortraitBtn');
       if (landBtn && portBtn) {
         if (this.orientation === 'landscape') {
-          landBtn.className = 'flex-1 py-1.5 rounded-lg text-xs font-bold bg-cyan-600 text-white shadow cursor-pointer';
-          portBtn.className = 'flex-1 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white bg-slate-800 cursor-pointer';
+          landBtn.className = 'flex-1 py-1.5 rounded-lg text-xs font-bold bg-cyan-600 text-white shadow cursor-pointer transition-all flex items-center justify-center gap-1.5';
+          portBtn.className = 'flex-1 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white bg-slate-800 cursor-pointer transition-all flex items-center justify-center gap-1.5';
         } else {
-          portBtn.className = 'flex-1 py-1.5 rounded-lg text-xs font-bold bg-cyan-600 text-white shadow cursor-pointer';
-          landBtn.className = 'flex-1 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white bg-slate-800 cursor-pointer';
+          portBtn.className = 'flex-1 py-1.5 rounded-lg text-xs font-bold bg-cyan-600 text-white shadow cursor-pointer transition-all flex items-center justify-center gap-1.5';
+          landBtn.className = 'flex-1 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white bg-slate-800 cursor-pointer transition-all flex items-center justify-center gap-1.5';
+        }
+      }
+
+      // DPI buttons
+      const btn150 = document.getElementById('layoutDpi150Btn');
+      const btn300 = document.getElementById('layoutDpi300Btn');
+      if (btn150 && btn300) {
+        if (this.dpi === 300) {
+          btn300.className = 'flex-1 py-1.5 rounded-lg text-xs font-bold bg-cyan-600 text-white border border-cyan-500/40 cursor-pointer shadow-sm';
+          btn150.className = 'flex-1 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer';
+        } else {
+          btn150.className = 'flex-1 py-1.5 rounded-lg text-xs font-bold bg-cyan-600 text-white border border-cyan-500/40 cursor-pointer shadow-sm';
+          btn300.className = 'flex-1 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer';
         }
       }
 
@@ -1604,7 +1765,8 @@
 
       const sheetBadge = document.getElementById('layoutSheetNameBadge');
       if (sheetBadge) {
-        sheetBadge.textContent = `${SHEET_SIZES[this.selectedSheet].name} (${this.orientation === 'landscape' ? 'أفقي' : 'عمودي'})`;
+        const sInfo = SHEET_SIZES[this.selectedSheet] || SHEET_SIZES['a3'];
+        sheetBadge.textContent = `${sInfo.name} (${this.orientation === 'landscape' ? 'أفقي' : 'عمودي'})`;
       }
     }
 

@@ -2781,12 +2781,12 @@
           <div class="space-y-2">
             <div>
               <label class="block text-[11px] font-bold text-slate-300 mb-1">عنوان المخطط / اللوحة الرئيسي:</label>
-              <input type="text" id="layoutTitleInput" value="مخطط الرقمنة والمسح الحضري والعقاري" oninput="window.AtlasLayoutStudio.options.title = this.value; this.dataset.dirty = '1'; window.AtlasLayoutStudio.refreshStudioPreview();" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500" placeholder="أدخل عنوان اللوحة">
+              <input type="text" id="layoutTitleInput" value="مخطط الرقمنة والمسح الحضري والعقاري" oninput="window.AtlasLayoutStudio.options.title = this.value; this.dataset.dirty = '1'; window.AtlasLayoutStudio.debouncedRefresh();" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500" placeholder="أدخل عنوان اللوحة">
             </div>
 
             <div>
               <label class="block text-[11px] font-bold text-slate-300 mb-1">العنوان الفرعي والمنطقة:</label>
-              <input type="text" id="layoutSubtitleInput" value="أطلس البيانات المكانية التفاعلي - جمهورية العراق" oninput="window.AtlasLayoutStudio.options.subtitle = this.value; this.dataset.dirty = '1'; window.AtlasLayoutStudio.refreshStudioPreview();" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500" placeholder="المحافظة أو المدينة أو المشروع">
+              <input type="text" id="layoutSubtitleInput" value="أطلس البيانات المكانية التفاعلي - جمهورية العراق" oninput="window.AtlasLayoutStudio.options.subtitle = this.value; this.dataset.dirty = '1'; window.AtlasLayoutStudio.debouncedRefresh();" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500" placeholder="المحافظة أو المدينة أو المشروع">
             </div>
           </div>
 
@@ -2825,10 +2825,10 @@
           <div class="space-y-1.5 pt-1">
             <label class="block text-[11px] font-bold text-slate-300">دقة التصدير والطباعة (DPI Resolution):</label>
             <div class="flex items-center gap-2">
-              <button type="button" onclick="window.AtlasLayoutStudio.dpi = 150; window.AtlasLayoutStudio.refreshStudioPreview(); this.classList.add('bg-cyan-600', 'text-white'); this.nextElementSibling.classList.remove('bg-cyan-600', 'text-white');" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-cyan-600 text-white border border-cyan-500/40 cursor-pointer">
+              <button type="button" id="layoutDpi150Btn" onclick="window.AtlasLayoutStudio.setDpi(150)" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-cyan-600 text-white border border-cyan-500/40 cursor-pointer shadow-sm">
                 150 DPI (معاينة وسريعة)
               </button>
-              <button type="button" onclick="window.AtlasLayoutStudio.dpi = 300; window.AtlasLayoutStudio.refreshStudioPreview(); this.classList.add('bg-cyan-600', 'text-white'); this.previousElementSibling.classList.remove('bg-cyan-600', 'text-white');" class="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">
+              <button type="button" id="layoutDpi300Btn" onclick="window.AtlasLayoutStudio.setDpi(300)" class="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">
                 300 DPI (طباعة مطبعية فائقة)
               </button>
             </div>
@@ -2919,7 +2919,7 @@
   <script src="js/drawing-engine.js?v=20260930_08"></script>
 
   <!-- Specialized Cartographic Map Layout & Print Studio (A0, A1, A2, A3, A4) -->
-  <script src="js/layout-engine.js?v=20260930_08"></script>
+  <script src="js/layout-engine.js?v=20260930_09"></script>
 
   <!-- Intelligent City & Place Search Engine (Gazetteer & Geocoder) -->
   <script src="js/city-search.js?v=20260930_08"></script>

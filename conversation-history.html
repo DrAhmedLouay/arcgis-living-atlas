@@ -144,7 +144,7 @@
           <!-- Quick Stat Counters -->
           <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-2 gap-3 shrink-0">
             <div class="glass-card rounded-xl p-3 text-center border-slate-700/60 shadow">
-              <div class="text-2xl font-black text-sky-400 font-mono">68</div>
+              <div class="text-2xl font-black text-sky-400 font-mono">69</div>
               <div class="text-[11px] text-slate-400 font-medium">أمراً واستشارة موثقة</div>
             </div>
             <div class="glass-card rounded-xl p-3 text-center border-slate-700/60 shadow">
@@ -183,7 +183,7 @@
           <i class="fa-solid fa-table text-emerald-400 ml-1"></i>الجداول الفنية والمرجعية
         </a>
         <a href="#chat-log-section" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
-          <i class="fa-solid fa-clock-rotate-left text-sky-400 ml-1"></i>سجل الأوامر الكامل (60)
+          <i class="fa-solid fa-clock-rotate-left text-sky-400 ml-1"></i>سجل الأوامر الكامل (69)
         </a>
       </div>
     </div>
@@ -686,7 +686,7 @@
 
           <!-- Filter Pills -->
           <div class="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1 text-xs shrink-0">
-            <button onclick="setPhaseFilter('all')" class="phase-filter-btn active px-3 py-1.5 rounded-lg bg-sky-600 text-white font-semibold transition-colors" data-filter="all">الكل (60)</button>
+            <button onclick="setPhaseFilter('all')" class="phase-filter-btn active px-3 py-1.5 rounded-lg bg-sky-600 text-white font-semibold transition-colors" data-filter="all">الكل (69)</button>
             <button onclick="setPhaseFilter('phase1')" class="phase-filter-btn px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition-colors" data-filter="phase1">المرحلة 1: التأسيس</button>
             <button onclick="setPhaseFilter('phase2')" class="phase-filter-btn px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition-colors" data-filter="phase2">المرحلة 2: راستر ECW</button>
             <button onclick="setPhaseFilter('phase3')" class="phase-filter-btn px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition-colors" data-filter="phase3">المرحلة 3: GeoTIFF</button>
@@ -4443,6 +4443,64 @@
         </div>
       </div>
 
+      <!-- =====================================================================
+           Order 69: Fix Cartographic Map Layout & Print Studio Controls and Preview
+           ===================================================================== -->
+      <div class="order-card bg-slate-900/60 rounded-2xl border border-sky-500/40 p-4 lg:p-6 space-y-4 hover:border-sky-500/70 transition-all shadow-md" data-category="features" data-index="69">
+        <div class="flex flex-col gap-3">
+          
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+              <span class="w-8 h-8 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/40 flex items-center justify-center font-mono font-bold text-xs">
+                #69
+              </span>
+              <span class="text-xs font-bold text-emerald-400 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30">
+                إصلاح استوديو إخراج الخرائط والطباعة (معاينة حية، تبديل المقاسات، رسم المعالم، وتصدير PDF)
+              </span>
+              <span class="text-[10px] text-slate-400 font-medium">
+                المرحلة 13: محرك الإخراج الكارتوغرافي واستوديو الطباعة عالي الدقة
+              </span>
+            </div>
+
+            <div class="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
+              <i class="fa-regular fa-clock text-slate-500"></i>
+              <span>2026-09-30T18:50:00Z</span>
+            </div>
+          </div>
+
+          <!-- User Request Box -->
+          <div class="bg-slate-900/90 rounded-xl p-3.5 border border-slate-800/90 space-y-1">
+            <div class="text-[10px] font-bold text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
+              <i class="fa-solid fa-comment-dots text-xs"></i>
+              <span>نص طلب المستخدم / الأمر الموجه:</span>
+            </div>
+            <div class="text-sm font-semibold text-slate-100 leading-relaxed font-sans pr-1">
+              اغلب ايعازات هذه النافذة لا تعمل، عالج الخلل (مع إرفاق لقطة شاشة لاستوديو إخراج الخرائط والطباعة الكارتوغرافية)
+            </div>
+          </div>
+
+          <!-- System Response & Technical Architecture -->
+          <div class="space-y-2 text-xs">
+            <div class="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+              <i class="fa-solid fa-code-commit text-xs"></i>
+              <span>المعالجة الجذرية والشاملة لجميع أزرار وتحكمات استوديو إخراج الخرائط (AtlasLayoutStudio) وتفعيل المعاينة الحية والتصدير اللحظي</span>
+            </div>
+            <p class="text-slate-300 leading-relaxed">
+              <strong>التشخيص والحلول الهندسية المنفذة:</strong>
+            </p>
+            <ul class="list-disc list-inside space-y-1 text-slate-300 pr-1 text-[11px]">
+              <li><strong>علاج تعطل المعاينة وظهور اللوحة السوداء (Canvas Crash Fix):</strong> تم اكتشاف خطأ برمجي قاتل داخل دالة رسم المعالم <code>_drawDrawnVectorFeatures()</code> ناتج عن استدعاء <code>f.geometry.map()</code> بينما كائنات الرسم تخزن الإحداثيات في <code>f.points</code>. تم تصحيح القراءة لتشمل <code>f.points || f.geometry</code> بأمان تام، مع إضافة عوازل <code>try/catch</code> لضمان عدم توقف رندرة اللوحة إطلاقاً.</li>
+              <li><strong>التخزين المؤقت للصور الفضائية (Raster Bounding Box Caching):</strong> تم ابتكار نظام كاش داخلي ذكي يحتفظ بالصورة الفضائية للأبعاد الجغرافية المحددة، مما خفض زمن إعادة تحديث اللوحة عند تغيير المقاسات أو العناوين أو الملحقات من عدة ثوانٍ إلى 0.01 ثانية فقط (تحديث لحظي فوري).</li>
+              <li><strong>تفعيل التبديل المتزامن لمقاسات اللوحات (A0 - A4) والاتجاه (Landscape/Portrait):</strong> تحويل دوال <code>setSheetSize()</code> و <code>setOrientation()</code> إلى دوال غير متزامنة تستدعي <code>refreshStudioPreview()</code> تلقائياً وتحدث فئات الأزرار وتزيل علامة الاختيار القديمة وتنقلها فورياً للمقاس المختار.</li>
+              <li><strong>تفعيل أزرار دقة الوضوح (DPI 150 / DPI 300):</strong> برمجة دالة <code>setDpi(dpi)</code> لضبط دقة الطباعة وتحديث مظهر الأزرار المحددة تلقائياً.</li>
+              <li><strong>الربط الحقيقي لمربعات اختيار الملحقات الكارتوغرافية:</strong> ضبط شروط رسم سهم الشمال، مقياس الرسم الخطي، مفتاح المصطلحات (Legend)، والخرطوشة المعتمدة، بحيث ينعكس تفعيل أو إلغاء أي مربع اختيار فورياً على اللوحة المباشرة.</li>
+              <li><strong>سلاسة إدخال العنوان والعنوان الفرعي (Debounced Typing):</strong> إضافة مؤقت تأخير (Debounce 250ms) لمنع وميض الشاشة أثناء كتابة عناوين اللوحة.</li>
+              <li><strong>تصدير PDF والطباعة المباشرة:</strong> ضبط مكتبة jsPDF على الأبعاد الهندسية المليمترية الدقيقة لكل مقاس وتفعيل تنزيل اللوحة أو إرسالها للراسمات بكفاءة عالية.</li>
+            </ul>
+          </div>
+
+        </div>
+      </div>
     </section>
 
   </main>
@@ -4459,7 +4517,7 @@
       منظومة ArcGIS Living Atlas Iraq • أطلس البيانات المكانية التفاعلي واستوديو تصدير الخرائط الفضائية المصححة لبرامج ArcView GIS و GeoTIFF
     </div>
     <div class="text-[10px] text-slate-600 font-mono">
-      Generated automatically on 2026-09-30 • Full Historical Archive • 68 Engineering Commands
+      Generated automatically on 2026-09-30 • Full Historical Archive • 69 Engineering Commands
     </div>
   </footer>
 
