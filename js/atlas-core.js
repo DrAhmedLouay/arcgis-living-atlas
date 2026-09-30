@@ -9485,11 +9485,15 @@ Date: ${new Date().toLocaleString('ar-IQ')} / ${new Date().toISOString()}
       });
     }
 
-    // Screenshot / Map Export
+    // Screenshot / Map Layout Export Studio
     const screenshotBtn = document.getElementById('screenshotBtn');
     if (screenshotBtn) {
       screenshotBtn.addEventListener('click', () => {
-        window.print();
+        if (typeof window.openMapLayoutStudio === 'function') {
+          window.openMapLayoutStudio();
+        } else {
+          window.print();
+        }
       });
     }
 

@@ -565,3 +565,78 @@ body.drawing-mode-active .leaflet-marker-pane .calib-center-icon,
   transform: scale(1.4);
   box-shadow: 0 0 12px #10b981 !important;
 }
+
+/* =========================================================================
+   Cartographic Layout & Print Studio (A0, A1, A2, A3, A4) Styles
+   ========================================================================= */
+
+.layout-frame-rect {
+  pointer-events: auto !important;
+  cursor: move !important;
+  transition: stroke 0.2s ease;
+}
+
+.layout-frame-rect:hover {
+  stroke: #22d3ee !important;
+  stroke-width: 3.5px !important;
+}
+
+.layout-frame-handle {
+  background: transparent !important;
+  border: none !important;
+}
+
+.layout-center-move-handle {
+  background: transparent !important;
+  border: none !important;
+  pointer-events: auto !important;
+}
+
+.layout-frame-banner {
+  pointer-events: auto !important;
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.8), 0 0 15px rgba(6, 182, 212, 0.35);
+}
+
+.layout-frame-banner-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Print Container Setup */
+#cartographicPrintContainer {
+  display: none;
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  /* Hide all app chrome during direct print */
+  body > *:not(#cartographicPrintContainer) {
+    display: none !important;
+  }
+
+  #cartographicPrintContainer {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    z-index: 9999999 !important;
+  }
+
+  #cartographicPrintContainer img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+  }
+}
+
