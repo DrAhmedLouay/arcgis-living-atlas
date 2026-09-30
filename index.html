@@ -47,6 +47,35 @@
         modal.classList.add('hidden');
       }
     };
+
+    // Immediate Handlers for Conversation & Engineering History Log Modal
+    window.openHistoryModal = function() {
+      var modal = document.getElementById('conversationHistoryModal');
+      if (modal) {
+        modal.classList.remove('hidden');
+        var iframe = document.getElementById('historyIframe');
+        if (iframe && (!iframe.src || iframe.src.indexOf('conversation-history.html') === -1)) {
+          iframe.src = 'conversation-history.html';
+        }
+      }
+    };
+    window.closeHistoryModal = function() {
+      var modal = document.getElementById('conversationHistoryModal');
+      if (modal) {
+        modal.classList.add('hidden');
+      }
+    };
+    window.openHistoryInNewTab = function() {
+      window.open('conversation-history.html', '_blank');
+    };
+    window.downloadHistoryHtml = function() {
+      var link = document.createElement('a');
+      link.href = 'conversation-history.html';
+      link.download = 'ArcGIS_Living_Atlas_Conversation_History_Dr_Ahmed_Louay.html';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
   </script>
 </head>
 <body class="bg-slate-950 text-slate-100 h-screen w-screen flex flex-col overflow-hidden select-none">
@@ -114,6 +143,12 @@
       <button id="screenshotBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700/80 text-xs font-medium text-slate-200 flex items-center gap-1.5 transition-colors" title="تصدير لقطة للخريطة">
         <i class="fa-solid fa-camera text-amber-400"></i>
         <span class="hidden sm:inline">لقطة</span>
+      </button>
+
+      <!-- Conversation & Engineering History Button -->
+      <button id="headerHistoryLogBtn" onclick="window.openHistoryModal()" type="button" class="px-3 py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/50 text-xs font-semibold text-sky-200 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer" title="سجل المحادثات والأوامر الهندسية والمخططات والجداول (صفحة HTML)">
+        <i class="fa-solid fa-clock-rotate-left text-sky-400"></i>
+        <span class="hidden sm:inline">سجل الأوامر</span>
       </button>
 
       <!-- ArcView GIS & GeoTIFF Export Studio Header Button -->
@@ -1483,11 +1518,15 @@
       </div>
 
       <!-- Sidebar Footer -->
-      <div class="p-3 border-t border-slate-800 bg-slate-900/90 shrink-0 text-center text-[11px] text-slate-400 space-y-1.5">
+      <div class="p-3 border-t border-slate-800 bg-slate-900/90 shrink-0 text-center text-[11px] text-slate-400 space-y-2">
         <div class="text-amber-300 font-semibold flex items-center justify-center gap-1.5 bg-amber-500/10 py-1.5 px-3 rounded-lg border border-amber-500/25 shadow-sm">
           <i class="fa-solid fa-user-gear text-amber-400 text-xs"></i>
           <span>تصميم وتطوير الدكتور المهندس احمد لؤي البجاري</span>
         </div>
+        <button type="button" onclick="window.openHistoryModal()" class="w-full py-1.5 px-2.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 hover:text-white border border-sky-500/30 text-[10.5px] font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-sm">
+          <i class="fa-solid fa-clock-rotate-left text-sky-400"></i>
+          <span>سجل المحادثات والأوامر (HTML + المخططات)</span>
+        </button>
         <div class="text-[10px] text-slate-500">
           مدعوم بتقنيات <span class="text-slate-300 font-semibold">Esri ArcGIS Maps SDK</span> &bull; Living Atlas
         </div>
@@ -1998,6 +2037,67 @@
           </span>
         </div>
         <button type="button" id="closeGisExportBottomBtn" onclick="window.closeGisExportModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors cursor-pointer">إغلاق</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       Conversation & Engineering History Log Modal (HTML Report Viewer)
+       ========================================================================= -->
+  <div id="conversationHistoryModal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md hidden flex items-center justify-center p-2 sm:p-4">
+    <div class="glass-panel w-full max-w-6xl h-[92vh] rounded-2xl flex flex-col overflow-hidden shadow-2xl border border-slate-700 bg-slate-950">
+      
+      <!-- Modal Header -->
+      <div class="p-3.5 border-b border-slate-800 bg-slate-900/90 flex flex-wrap items-center justify-between gap-3 shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/30 flex items-center justify-center shadow-inner">
+            <i class="fa-solid fa-clock-rotate-left text-base"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h4 class="font-bold text-sm text-white">سجل المحادثات والأوامر الهندسية والتقنية</h4>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 font-mono font-bold border border-sky-500/30">60 أمراً واستشارة</span>
+            </div>
+            <div class="text-[11px] text-amber-300 font-semibold flex items-center gap-1.5 mt-0.5">
+              <i class="fa-solid fa-user-gear text-[10px] text-amber-400"></i>
+              <span>تصميم وتطوير الدكتور المهندس احمد لؤي البجاري</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="window.openHistoryInNewTab()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer" title="فتح في نافذة متصفح كاملة منفصلة">
+            <i class="fa-solid fa-arrow-up-right-from-square text-sky-400"></i>
+            <span class="hidden sm:inline">نافذة كاملة</span>
+          </button>
+          <button type="button" onclick="window.downloadHistoryHtml()" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white border border-sky-500 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-sky-500/20" title="تنزيل صفحة HTML كاملة مع المخططات والجداول">
+            <i class="fa-solid fa-download"></i>
+            <span class="hidden sm:inline">تنزيل HTML</span>
+          </button>
+          <button type="button" onclick="window.closeHistoryModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-sm transition-colors cursor-pointer" title="إغلاق">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Modal Body (Iframe) -->
+      <div class="flex-1 w-full h-full bg-slate-950 relative overflow-hidden">
+        <iframe id="historyIframe" src="" class="w-full h-full border-0" title="سجل المحادثات والأوامر"></iframe>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-2.5 border-t border-slate-800 bg-slate-900/90 flex flex-wrap items-center justify-between gap-2 text-[11px] shrink-0">
+        <div class="flex items-center gap-2 text-slate-400">
+          <span>توثيق شامل لكافة الخوارزميات، المخططات الهندسية SVG، وجداول التحويل الجيوديسي</span>
+          <span class="text-slate-600 hidden md:inline">&bull;</span>
+          <span class="text-amber-300 font-medium hidden md:inline flex items-center gap-1">
+            <i class="fa-solid fa-compass-drafting text-amber-400"></i>
+            <span>تصميم وتطوير الدكتور المهندس احمد لؤي البجاري</span>
+          </span>
+        </div>
+        <button type="button" onclick="window.closeHistoryModal()" class="px-3.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors cursor-pointer">إغلاق</button>
       </div>
 
     </div>
