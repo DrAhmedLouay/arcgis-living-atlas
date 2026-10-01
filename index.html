@@ -31,7 +31,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <!-- Custom Styling -->
-  <link rel="stylesheet" href="css/styles.css?v=20261001_02">
+  <link rel="stylesheet" href="css/styles.css?v=20261001_03">
 
   <script>
     // Immediate Synchronous Handlers for ArcView GIS & GeoTIFF Export Studio
@@ -78,6 +78,41 @@
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    };
+
+    // Immediate Handlers for ERDAS Maps & OSM Extractor
+    window.openErdasTab = function() {
+      var erdasBtn = document.querySelector('.sidebar-tab-btn[data-tab="calibrate"]');
+      if (erdasBtn) {
+        erdasBtn.click();
+      }
+      var sidebar = document.getElementById('appSidebar');
+      if (sidebar) {
+        sidebar.classList.remove('translate-x-full', '-translate-x-full', 'hidden');
+      }
+      if (typeof window.showToast === 'function') {
+        window.showToast('🛰️ تم فتح استوديو خرائط ومعايرة ERDAS IMAGINE', 'info');
+      }
+    };
+
+    window.openOsmExtractorModal = function() {
+      if (typeof window.openOsmExtractor === 'function') {
+        window.openOsmExtractor();
+      } else if (window.AtlasOsmExtractor && typeof window.AtlasOsmExtractor.openModal === 'function') {
+        window.AtlasOsmExtractor.openModal();
+      } else {
+        var drawBtn = document.querySelector('.sidebar-tab-btn[data-tab="draw"]');
+        if (drawBtn) drawBtn.click();
+        var sidebar = document.getElementById('appSidebar');
+        if (sidebar) sidebar.classList.remove('translate-x-full', '-translate-x-full', 'hidden');
+      }
+    };
+
+    window.openDrawTab = function() {
+      var drawBtn = document.querySelector('.sidebar-tab-btn[data-tab="draw"]');
+      if (drawBtn) drawBtn.click();
+      var sidebar = document.getElementById('appSidebar');
+      if (sidebar) sidebar.classList.remove('translate-x-full', '-translate-x-full', 'hidden');
     };
   </script>
 </head>
@@ -178,6 +213,18 @@
         <span class="hidden sm:inline">لقطة</span>
       </button>
 
+      <!-- ERDAS IMAGINE Satellite Studio Header Button -->
+      <button id="headerErdasBtn" onclick="window.openErdasTab()" type="button" class="px-3 py-1.5 rounded-lg bg-amber-500/25 hover:bg-amber-500/40 border border-amber-500/60 text-xs font-bold text-amber-300 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm" title="فتح استوديو خرائط الأقمار الصناعية ERDAS IMAGINE (.img / .ers / Apollo WMS)">
+        <i class="fa-solid fa-satellite-dish text-amber-400"></i>
+        <span>خرائط ERDAS</span>
+      </button>
+
+      <!-- OSM Vector Extractor Header Button -->
+      <button id="headerOsmBtn" onclick="window.openOsmExtractorModal()" type="button" class="px-3 py-1.5 rounded-lg bg-emerald-500/25 hover:bg-emerald-500/40 border border-emerald-500/60 text-xs font-bold text-emerald-300 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm" title="استخراج مباني وبلوكات وشوارع OpenStreetMap للموقع الحالي">
+        <i class="fa-solid fa-cloud-arrow-down text-emerald-400"></i>
+        <span>استخراج OSM</span>
+      </button>
+
       <!-- Urban Drawing & CAD Layer Button -->
       <button id="headerDrawingToggleBtn" onclick="window.toggleDrawingMode()" type="button" class="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-xs font-bold text-emerald-200 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm" title="أدوات الرسم والتخطيط العمراني (شوارع، بلوكات سكنية، أبنية، مسارات)">
         <i class="fa-solid fa-pen-ruler text-emerald-400"></i>
@@ -241,6 +288,35 @@
       <button id="gpsLocateMeBtn" title="موقعي الحالي — الانتقال إلى موقعك الجغرافي الفعلي" aria-label="الموقع الحالي">
         <i class="fa-solid fa-location-crosshairs"></i>
       </button>
+
+      <!-- Floating Quick Features Bar (ERDAS + OSM Extractor + Drawing) on Map Canvas -->
+      <div id="floatingQuickFeaturesBar" class="absolute top-[134px] left-[10px] z-30 flex flex-col gap-2">
+        <!-- ERDAS Maps Button -->
+        <button type="button" onclick="window.openErdasTab()" 
+          class="px-3 py-1.5 rounded-xl bg-slate-900/95 hover:bg-amber-950/90 border-2 border-amber-500/80 shadow-2xl text-amber-300 hover:text-white flex items-center gap-2 backdrop-blur-md transition-all text-xs font-bold cursor-pointer group"
+          title="فتح استوديو خرائط ERDAS IMAGINE (.img / .ers / Apollo WMS)">
+          <i class="fa-solid fa-satellite-dish text-amber-400 group-hover:scale-125 transition-transform"></i>
+          <span class="shadow-sm">خرائط ERDAS</span>
+          <span class="text-[9px] bg-amber-500/30 text-amber-200 px-1.5 py-0.2 rounded font-mono border border-amber-500/40">IMG</span>
+        </button>
+
+        <!-- OSM Extractor Button -->
+        <button type="button" onclick="window.openOsmExtractorModal()" 
+          class="px-3 py-1.5 rounded-xl bg-slate-900/95 hover:bg-emerald-950/90 border-2 border-emerald-500/80 shadow-2xl text-emerald-300 hover:text-white flex items-center gap-2 backdrop-blur-md transition-all text-xs font-bold cursor-pointer group"
+          title="استخراج المباني والشوارع المحدثة من OpenStreetMap إلى طبقات متجهة">
+          <i class="fa-solid fa-cloud-arrow-down text-emerald-400 group-hover:scale-125 transition-transform"></i>
+          <span class="shadow-sm">استخراج OSM</span>
+          <span class="text-[9px] bg-emerald-500/30 text-emerald-200 px-1.5 py-0.2 rounded font-mono border border-emerald-500/40">Vector</span>
+        </button>
+
+        <!-- Drawing Tools Toggle -->
+        <button type="button" onclick="window.toggleDrawingMode()" 
+          class="px-3 py-1.5 rounded-xl bg-slate-900/95 hover:bg-cyan-950/90 border border-cyan-500/70 shadow-2xl text-cyan-300 hover:text-white flex items-center gap-2 backdrop-blur-md transition-all text-xs font-bold cursor-pointer group"
+          title="تفعيل شريط أدوات الرسم والتخطيط الهندسي">
+          <i class="fa-solid fa-pen-ruler text-cyan-400 group-hover:scale-125 transition-transform"></i>
+          <span>أدوات الرسم</span>
+        </button>
+      </div>
 
       <!-- Floating Restore Top Bar Button (Visible only in Zen Mode) -->
       <button id="restoreZenModeBtn" class="hidden absolute top-3 left-1/2 -translate-x-1/2 z-40 px-3.5 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-cyan-500/60 shadow-2xl text-xs font-semibold text-cyan-300 hover:text-white flex items-center gap-2 backdrop-blur-md transition-all cursor-pointer">
@@ -681,42 +757,59 @@
 
       <!-- Sidebar Navigation Tabs -->
       <div class="flex border-b border-slate-800 px-3 pt-2 gap-1 overflow-x-auto no-scrollbar shrink-0 bg-slate-900/60">
+        <!-- Tab 1: Catalog -->
         <button class="sidebar-tab-btn active px-3 py-2 text-xs font-semibold border-b-2 border-blue-500 text-blue-400 flex items-center gap-1.5 transition-colors shrink-0" data-tab="catalog">
           <i class="fa-solid fa-compass text-[11px]"></i>
           <span>المستكشف</span>
         </button>
+
+        <!-- Tab 2: ERDAS Maps (Immediately Visible) -->
+        <button class="sidebar-tab-btn px-3 py-2 text-xs font-bold border-b-2 border-transparent text-amber-300 hover:text-amber-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="calibrate" id="sidebarErdasTabBtn">
+          <i class="fa-solid fa-satellite-dish text-[12px] text-amber-400"></i>
+          <span>خرائط ERDAS</span>
+          <span class="text-[9px] bg-amber-500/30 text-amber-200 px-1.5 py-0.2 rounded-full font-mono border border-amber-500/50">ERDAS</span>
+        </button>
+
+        <!-- Tab 3: OSM & Drawing (Immediately Visible) -->
+        <button class="sidebar-tab-btn px-3 py-2 text-xs font-bold border-b-2 border-transparent text-emerald-300 hover:text-emerald-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="draw" id="sidebarDrawTabBtn">
+          <i class="fa-solid fa-pen-ruler text-[12px] text-emerald-400"></i>
+          <span>الرسم و OSM</span>
+          <span id="drawnFeaturesBadge" class="text-[9px] bg-emerald-500/30 text-emerald-200 px-1.5 py-0.2 rounded-full font-mono border border-emerald-500/50">OSM</span>
+        </button>
+
+        <!-- Tab 4: Archaeology -->
         <button class="sidebar-tab-btn px-3 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="archaeology">
           <i class="fa-solid fa-landmark text-[11px] text-amber-400"></i>
           <span>آثار العراق</span>
           <span class="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded-full font-mono border border-amber-500/30">40</span>
         </button>
+
+        <!-- Tab 5: Active Layers -->
         <button class="sidebar-tab-btn px-3 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="active">
           <i class="fa-solid fa-layer-group text-[11px]"></i>
           <span>النشطة</span>
           <span id="activeLayersTabBadge" class="bg-blue-600 text-white rounded-full px-1.5 py-0.2 text-[10px] font-mono">0</span>
         </button>
+
+        <!-- Tab 6: Add Layer -->
         <button class="sidebar-tab-btn px-3 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="add-layer">
           <i class="fa-solid fa-plus text-[11px]"></i>
           <span>إضافة طبقة</span>
         </button>
-        <button class="sidebar-tab-btn px-3 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="calibrate">
-          <i class="fa-solid fa-satellite-dish text-[11px] text-amber-400"></i>
-          <span>خرائط ERDAS</span>
-          <span class="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded-full font-mono border border-amber-500/30">ERDAS</span>
-        </button>
-        <button class="sidebar-tab-btn px-3 py-2 text-xs font-bold border-b-2 border-transparent text-emerald-400 hover:text-emerald-300 flex items-center gap-1.5 transition-colors shrink-0" data-tab="draw" id="sidebarDrawTabBtn">
-          <i class="fa-solid fa-pen-ruler text-[11px] text-emerald-400"></i>
-          <span>الرسم والتخطيط</span>
-          <span id="drawnFeaturesBadge" class="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded-full font-mono border border-emerald-500/30">0</span>
-        </button>
+
+        <!-- Tab 7: Tools & Measurement -->
         <button class="sidebar-tab-btn px-3 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="tools">
           <i class="fa-solid fa-ruler-combined text-[11px]"></i>
           <span>القياس</span>
         </button>
+
+        <!-- Tab 8: Bookmarks -->
         <button class="sidebar-tab-btn px-3 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="bookmarks">
           <i class="fa-solid fa-bookmark text-[11px]"></i>
           <span>المواقع</span>
         </button>
+
+        <!-- Tab 9: History -->
         <button class="sidebar-tab-btn px-3 py-2 text-xs font-bold border-b-2 border-transparent text-sky-400 hover:text-sky-300 flex items-center gap-1.5 transition-colors shrink-0" data-tab="history">
           <i class="fa-solid fa-clock-rotate-left text-[11px]"></i>
           <span>سجل الأوامر</span>
@@ -1933,6 +2026,39 @@
             </p>
           </div>
 
+          <!-- Prominent OSM Vector Extractor Card at Top of Drawing Tab -->
+          <div class="bg-gradient-to-br from-emerald-950/60 via-slate-900 to-teal-950/40 border-2 border-emerald-500/70 rounded-xl p-3.5 space-y-2.5 shadow-lg">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30 text-sm shadow-inner">
+                  <i class="fa-solid fa-cloud-arrow-down"></i>
+                </span>
+                <div>
+                  <h4 class="font-bold text-xs text-white">استخراج طبقات OpenStreetMap (OSM)</h4>
+                  <div class="text-[10px] text-emerald-300 font-medium">أبنية تفصيلية + بلوكات سكنية + شبكة شوارع</div>
+                </div>
+              </div>
+              <span class="text-[9px] bg-emerald-500/25 text-emerald-300 px-2 py-0.5 rounded-full font-mono border border-emerald-500/40 font-bold">Vector OSM</span>
+            </div>
+            <p class="text-[11px] text-slate-300 leading-relaxed">
+              استخرج فورياً المباني والشوارع المحدثة من قواعد بيانات <strong>OpenStreetMap</strong> بنقرة واحدة إما للموقع الحالي أو بتحديد نافذة مستطيلة على الخارطة.
+            </p>
+            <div class="grid grid-cols-2 gap-2 pt-1">
+              <button type="button"
+                onclick="window.openOsmExtractorModal()"
+                class="py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md active:scale-95">
+                <i class="fa-solid fa-cloud-arrow-down text-xs"></i>
+                <span>فتح استخراج OSM</span>
+              </button>
+              <button type="button"
+                onclick="window.openOsmExtractor && window.openOsmExtractor(); setTimeout(() => { const b = document.getElementById('osmExtractCurrentViewBtn'); if(b) b.click(); }, 350);"
+                class="py-2 px-3 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md active:scale-95">
+                <i class="fa-solid fa-crosshairs text-xs"></i>
+                <span>استخراج للموقع الحالي</span>
+              </button>
+            </div>
+          </div>
+
           <!-- Drawing Tools Selector -->
           <div class="space-y-2">
             <div class="flex items-center justify-between text-xs">
@@ -3090,22 +3216,62 @@
   <script src="js/archaeology-data.js?v=20260930_08"></script>
 
   <!-- Specialized GIS Drawing & Urban Digitization Engine -->
-  <script src="js/drawing-engine.js?v=20261001_01"></script>
+  <script src="js/drawing-engine.js?v=20261001_03"></script>
 
   <!-- Specialized Cartographic Map Layout & Print Studio (A0, A1, A2, A3, A4) -->
-  <script src="js/layout-engine.js?v=20260930_10"></script>
+  <script src="js/layout-engine.js?v=20261001_03"></script>
 
   <!-- Intelligent City & Place Search Engine (Gazetteer & Geocoder) -->
-  <script src="js/city-search.js?v=20261001_02"></script>
+  <script src="js/city-search.js?v=20261001_03"></script>
 
   <!-- OSM Building & Block Vector Extractor (Overpass API) -->
-  <script src="js/osm-extractor.js?v=20261001_02"></script>
+  <script src="js/osm-extractor.js?v=20261001_03"></script>
 
   <!-- ERDAS IMAGINE (.img / .ers / GeoTIFF / WMS) Map Loader Engine -->
-  <script src="js/erdas-loader.js?v=20261001_01"></script>
+  <script src="js/erdas-loader.js?v=20261001_03"></script>
 
   <!-- Living Atlas Engine Entry -->
-  <script src="js/atlas-core.js?v=20261001_01"></script>
+  <script src="js/atlas-core.js?v=20261001_03"></script>
 
+  <!-- Global UI Quick Access Helpers -->
+  <script>
+    window.openErdasTab = function() {
+      const erdasBtn = document.querySelector('.sidebar-tab-btn[data-tab="calibrate"]');
+      if (erdasBtn) {
+        erdasBtn.click();
+      }
+      const sidebar = document.getElementById('appSidebar');
+      if (sidebar) {
+        sidebar.classList.remove('translate-x-full', '-translate-x-full', 'hidden');
+      }
+      if (typeof window.showToast === 'function') {
+        window.showToast('🛰️ تم فتح استوديو خرائط ومعايرة ERDAS IMAGINE', 'info');
+      }
+    };
+
+    window.openOsmExtractorModal = function() {
+      if (typeof window.openOsmExtractor === 'function') {
+        window.openOsmExtractor();
+      } else if (window.AtlasOsmExtractor && typeof window.AtlasOsmExtractor.openModal === 'function') {
+        window.AtlasOsmExtractor.openModal();
+      } else {
+        const drawBtn = document.querySelector('.sidebar-tab-btn[data-tab="draw"]');
+        if (drawBtn) drawBtn.click();
+        const sidebar = document.getElementById('appSidebar');
+        if (sidebar) sidebar.classList.remove('translate-x-full', '-translate-x-full', 'hidden');
+      }
+    };
+
+    window.openDrawTab = function() {
+      const drawBtn = document.querySelector('.sidebar-tab-btn[data-tab="draw"]');
+      if (drawBtn) {
+        drawBtn.click();
+      }
+      const sidebar = document.getElementById('appSidebar');
+      if (sidebar) {
+        sidebar.classList.remove('translate-x-full', '-translate-x-full', 'hidden');
+      }
+    };
+  </script>
 </body>
 </html>
