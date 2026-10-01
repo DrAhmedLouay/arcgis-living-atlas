@@ -31,7 +31,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <!-- Custom Styling -->
-  <link rel="stylesheet" href="css/styles.css?v=20261001_03">
+  <link rel="stylesheet" href="css/styles.css?v=20261001_04">
 
   <script>
     // Immediate Synchronous Handlers for ArcView GIS & GeoTIFF Export Studio
@@ -113,6 +113,15 @@
       if (drawBtn) drawBtn.click();
       var sidebar = document.getElementById('appSidebar');
       if (sidebar) sidebar.classList.remove('translate-x-full', '-translate-x-full', 'hidden');
+    };
+
+    window.openMapLayoutStudio = function() {
+      if (window.AtlasLayoutStudio && typeof window.AtlasLayoutStudio.openStudioModal === 'function') {
+        window.AtlasLayoutStudio.openStudioModal();
+      } else {
+        var modal = document.getElementById('mapLayoutStudioModal');
+        if (modal) modal.classList.remove('hidden');
+      }
     };
   </script>
 </head>
@@ -3156,7 +3165,7 @@
               <span class="font-bold text-slate-200">معاينة اللوحة الحية:</span>
               <span class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">1:1 WYSIWYG</span>
             </div>
-            <button type="button" onclick="window.AtlasLayoutStudio.refreshStudioPreview()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-xs flex items-center gap-1.5 transition-colors cursor-pointer" title="إعادة توليد المعاينة">
+            <button type="button" id="layoutStudioRefreshPreviewBtn" onclick="window.AtlasLayoutStudio.refreshStudioPreview(true)" class="px-3 py-1.5 rounded-lg bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-200 hover:text-white border border-cyan-500/60 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95" title="إعادة توليد وتحديث المعاينة الحية فوراً">
               <i class="fa-solid fa-rotate text-cyan-400"></i>
               <span>تحديث المعاينة</span>
             </button>
@@ -3219,7 +3228,7 @@
   <script src="js/drawing-engine.js?v=20261001_03"></script>
 
   <!-- Specialized Cartographic Map Layout & Print Studio (A0, A1, A2, A3, A4) -->
-  <script src="js/layout-engine.js?v=20261001_03"></script>
+  <script src="js/layout-engine.js?v=20261001_04"></script>
 
   <!-- Intelligent City & Place Search Engine (Gazetteer & Geocoder) -->
   <script src="js/city-search.js?v=20261001_03"></script>
@@ -3231,7 +3240,7 @@
   <script src="js/erdas-loader.js?v=20261001_03"></script>
 
   <!-- Living Atlas Engine Entry -->
-  <script src="js/atlas-core.js?v=20261001_03"></script>
+  <script src="js/atlas-core.js?v=20261001_04"></script>
 
   <!-- Global UI Quick Access Helpers -->
   <script>

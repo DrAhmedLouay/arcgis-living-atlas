@@ -42,6 +42,15 @@ document.addEventListener('DOMContentLoaded', () => {
   if (window.AtlasDrawingEngine) {
     window.AtlasDrawingEngine.init(map);
   }
+  if (window.AtlasLayoutStudio) {
+    window.AtlasLayoutStudio.init(map);
+  }
+  if (window.AtlasErdasLoader) {
+    window.AtlasErdasLoader.init(map);
+  }
+  if (window.AtlasOsmExtractor) {
+    window.AtlasOsmExtractor.init(map);
+  }
 
   // Add Custom Position Controls
   L.control.zoom({ position: 'topleft' }).addTo(map);

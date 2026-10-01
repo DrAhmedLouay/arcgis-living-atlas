@@ -28,6 +28,10 @@
     'a1': { name: 'A1', widthMm: 594, heightMm: 841, label: 'لوحة A1 (594 × 841 ملم) - تصميم أساس وتخطيط حضري' },
     'a0': { name: 'A0', widthMm: 841, heightMm: 1189, label: 'لوحة A0 (841 × 1189 ملم) - مخططات كبرى ومسوحات إقليمية' }
   };
+  // Case-insensitive aliases
+  ['a4', 'a3', 'a2', 'a1', 'a0'].forEach(k => {
+    SHEET_SIZES[k.toUpperCase()] = SHEET_SIZES[k];
+  });
 
   // Standard Cartographic Scales for rounding
   const STANDARD_SCALES = [
@@ -78,6 +82,7 @@
       this._cachedSatImg = null;
       this._cachedSatBbox = null;
       this._debounceTimer = null;
+      this._listenersAttached = false;
     }
 
     /**
@@ -97,8 +102,37 @@
         this.frameLayerGroup = L.layerGroup().addTo(this.map);
       }
 
-      this._initEventListeners();
+      if (!this._listenersAttached) {
+        this._initEventListeners();
+        this._listenersAttached = true;
+      }
       console.log('📐 AtlasLayoutStudio: Cartographic Map Layout Engine initialized successfully.');
+    }
+
+    /**
+     * Ensure Map and Frame Bounds are ready (Self-Healing)
+     */
+    ensureInitialized() {
+      if (!this.map) {
+        const m = window.map || window.atlasMap;
+        if (m) this.init(m);
+      }
+      if (!this.frameBounds && this.map) {
+        this.fitFrameToCurrentView();
+      }
+      if (!this.frameBounds) {
+        // Fallback default bounds: Iraq centroid / Baghdad
+        const center = (this.map && typeof this.map.getCenter === 'function') 
+          ? this.map.getCenter() 
+          : { lat: 33.3152, lng: 44.3661 };
+        const halfLat = 0.08;
+        const halfLng = 0.12;
+        this.frameBounds = L.latLngBounds(
+          [center.lat - halfLat, center.lng - halfLng],
+          [center.lat + halfLat, center.lng + halfLng]
+        );
+      }
+      return this.frameBounds;
     }
 
     /**
@@ -471,7 +505,7 @@
       });
 
       // 5. Floating Info & Action Banner on Top of Frame
-      const sheetInfo = SHEET_SIZES[this.selectedSheet];
+      const sheetInfo = (this.selectedSheet && SHEET_SIZES[this.selectedSheet.toLowerCase()]) || SHEET_SIZES['a3'];
       const scaleStr = this.getScaleString();
       const widthKm = (sw.distanceTo(se) / 1000).toFixed(2);
       const heightKm = (sw.distanceTo(nw) / 1000).toFixed(2);
@@ -647,11 +681,9 @@
      * Generate the complete layout sheet onto an HTML5 Canvas at target DPI
      */
     async renderLayoutCanvas(dpiChoice = 150) {
-      if (!this.frameBounds) {
-        this.fitFrameToCurrentView();
-      }
+      this.ensureInitialized();
 
-      const sheet = SHEET_SIZES[this.selectedSheet] || SHEET_SIZES['a3'];
+      const sheet = SHEET_SIZES[this.selectedSheet.toLowerCase()] || SHEET_SIZES['a3'];
       let widthMm = sheet.widthMm;
       let heightMm = sheet.heightMm;
 
@@ -792,22 +824,34 @@
       ctx.fillStyle = '#0f172a';
       ctx.fillRect(x, y, w, h);
 
-      const b = this.frameBounds;
+      const b = this.frameBounds || this.ensureInitialized();
+      if (!b || typeof b.getWest !== 'function') {
+        ctx.restore();
+        return;
+      }
 
       // 2. Fetch and Draw High-Resolution Satellite Map Image from ArcGIS Living Atlas
-      // We request in Web Mercator (3857) so the returned image is in the same
-      // projection used by _latLngToCanvas → perfect pixel alignment with drawn features.
       const reqW = Math.min(1600, Math.max(400, Math.round(w)));
       const reqH = Math.min(1200, Math.max(300, Math.round(h)));
 
-      // Convert frame bounds from geographic to Web Mercator (EPSG:3857)
+      // Convert frame bounds from geographic to Web Mercator (EPSG:3857) with strict clamping
       const EARTH_RADIUS = 6378137;
-      const mercXmin = b.getWest()  * Math.PI / 180 * EARTH_RADIUS;
-      const mercXmax = b.getEast()  * Math.PI / 180 * EARTH_RADIUS;
-      const mercYmin = Math.log(Math.tan(Math.PI / 4 + b.getSouth() * Math.PI / 360)) * EARTH_RADIUS;
-      const mercYmax = Math.log(Math.tan(Math.PI / 4 + b.getNorth() * Math.PI / 360)) * EARTH_RADIUS;
+      const south = Math.max(-85.0511, Math.min(85.0511, b.getSouth()));
+      const north = Math.max(-85.0511, Math.min(85.0511, b.getNorth()));
+      const west  = b.getWest();
+      const east  = b.getEast();
 
-      const bboxStr = `${mercXmin.toFixed(2)},${mercYmin.toFixed(2)},${mercXmax.toFixed(2)},${mercYmax.toFixed(2)}`;
+      const mercXmin = west * Math.PI / 180 * EARTH_RADIUS;
+      const mercXmax = east * Math.PI / 180 * EARTH_RADIUS;
+      const mercYmin = Math.log(Math.tan(Math.PI / 4 + south * Math.PI / 360)) * EARTH_RADIUS;
+      const mercYmax = Math.log(Math.tan(Math.PI / 4 + north * Math.PI / 360)) * EARTH_RADIUS;
+
+      const minX = Math.min(mercXmin, mercXmax);
+      const maxX = Math.max(mercXmin, mercXmax);
+      const minY = Math.min(mercYmin, mercYmax);
+      const maxY = Math.max(mercYmin, mercYmax);
+
+      const bboxStr = `${minX.toFixed(2)},${minY.toFixed(2)},${maxX.toFixed(2)},${maxY.toFixed(2)}`;
       const exportUrl = `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bboxStr}&bboxSR=3857&imageSR=3857&size=${reqW},${reqH}&f=image`;
 
       let satImgLoaded = false;
@@ -822,7 +866,8 @@
 
       if (!satImgLoaded) {
         try {
-          const satImg = await this._loadImageWithTimeout(exportUrl, 8000);
+          const timeoutMs = mmToPx < 5 ? 4500 : 8500;
+          const satImg = await this._loadImageWithTimeout(exportUrl, timeoutMs);
           ctx.drawImage(satImg, x, y, w, h);
           this._cachedSatImg = satImg;
           this._cachedSatBbox = bboxStr;
@@ -833,23 +878,50 @@
         }
       }
 
-
       // 3. Draw Rectified/Calibrated Overlay if active and visible
       if (window.calibOverlayInstance && window.isCalibOverlayVisible && window.isCalibOverlayVisible()) {
-        await this._drawCalibratedOverlayOnCanvas(ctx, x, y, w, h, b);
+        try {
+          await this._drawCalibratedOverlayOnCanvas(ctx, x, y, w, h, b);
+        } catch (e) {
+          console.warn('AtlasLayoutStudio: Calibrated overlay error:', e);
+        }
+      }
+
+      // 3.1 Draw ERDAS IMAGINE active raster overlay if present
+      if (window.AtlasErdasLoader && typeof window.AtlasErdasLoader.getState === 'function') {
+        try {
+          const erdasState = window.AtlasErdasLoader.getState();
+          if (erdasState && erdasState.overlayLayer && erdasState.overlayBounds && erdasState.isLayerVisible !== false) {
+            await this._drawImageOverlayOnCanvas(ctx, erdasState.overlayLayer, erdasState.overlayBounds, x, y, w, h, b);
+          }
+        } catch (e) {
+          console.warn('AtlasLayoutStudio: ERDAS overlay error:', e);
+        }
       }
 
       // 4. Draw User Vector Drawings (Streets, Blocks, Buildings, Lines, Points, Labels)
-      this._drawDrawnVectorFeatures(ctx, x, y, w, h, b, mmToPx);
+      try {
+        this._drawDrawnVectorFeatures(ctx, x, y, w, h, b, mmToPx);
+      } catch (e) {
+        console.warn('AtlasLayoutStudio: Vector features error:', e);
+      }
 
       // 5. Draw Archaeological & Historical Sites if visible
       if (window.IRAQ_ARCHAEOLOGY_DATA && window.IRAQ_ARCHAEOLOGY_DATA.sites) {
-        this._drawArchaeologicalSites(ctx, x, y, w, h, b, mmToPx);
+        try {
+          this._drawArchaeologicalSites(ctx, x, y, w, h, b, mmToPx);
+        } catch (e) {
+          console.warn('AtlasLayoutStudio: Archaeology error:', e);
+        }
       }
 
       // 6. Draw Grid Graticule Lines inside the map
       if (this.options.showGrid) {
-        this._drawMapGridLines(ctx, x, y, w, h, b, mmToPx);
+        try {
+          this._drawMapGridLines(ctx, x, y, w, h, b, mmToPx);
+        } catch (e) {
+          console.warn('AtlasLayoutStudio: Grid lines error:', e);
+        }
       }
 
       ctx.restore();
@@ -935,6 +1007,37 @@
         ctx.restore();
       } catch (e) {
         console.warn('AtlasLayoutStudio: Failed to draw calibrated overlay onto layout:', e);
+      }
+    }
+
+    /**
+     * Draw Any Image Overlay onto Map Canvas (ERDAS, Georeferenced Tiff, etc.)
+     */
+    async _drawImageOverlayOnCanvas(ctx, overlay, overlayBounds, mapX, mapY, mapW, mapH, frameBounds) {
+      if (!overlay || !overlayBounds || !frameBounds || !frameBounds.intersects(overlayBounds)) return;
+      const url = overlay._url || (overlay.getElement && overlay.getElement() && overlay.getElement().src);
+      if (!url) return;
+
+      try {
+        const img = await this._loadImageWithTimeout(url, 4500);
+        const nw = overlayBounds.getNorthWest();
+        const se = overlayBounds.getSouthEast();
+
+        const p1 = this._latLngToCanvas(nw.lat, nw.lng, frameBounds, mapX, mapY, mapW, mapH);
+        const p2 = this._latLngToCanvas(se.lat, se.lng, frameBounds, mapX, mapY, mapW, mapH);
+
+        const drawX = Math.min(p1.x, p2.x);
+        const drawY = Math.min(p1.y, p2.y);
+        const drawW = Math.abs(p2.x - p1.x);
+        const drawH = Math.abs(p2.y - p1.y);
+
+        ctx.save();
+        const op = (overlay.options && typeof overlay.options.opacity === 'number') ? overlay.options.opacity : 0.85;
+        ctx.globalAlpha = op;
+        ctx.drawImage(img, drawX, drawY, drawW, drawH);
+        ctx.restore();
+      } catch (e) {
+        console.warn('AtlasLayoutStudio: Failed to draw image overlay onto layout:', e);
       }
     }
 
@@ -1502,8 +1605,9 @@
       ctx.textAlign = 'right';
 
       ctx.fillText('منظومة ArcGIS Living Atlas Iraq • الرقمنة والمسح الهندسي', bx + bw - Math.round(4 * mmToPx), metaY);
+      const sheetObj = (this.selectedSheet && SHEET_SIZES[this.selectedSheet.toLowerCase()]) || SHEET_SIZES['a3'];
       ctx.fillText(`المرجع الجيوديسي: ${this.options.crs}`, bx + bw - Math.round(4 * mmToPx), metaY + Math.round(5 * mmToPx));
-      ctx.fillText(`حجم اللوحة: ${SHEET_SIZES[this.selectedSheet].name} (${this.orientation === 'landscape' ? 'أفقي' : 'عمودي'}) • المقياس: ${this.getScaleString()}`, bx + bw - Math.round(4 * mmToPx), metaY + Math.round(10 * mmToPx));
+      ctx.fillText(`حجم اللوحة: ${sheetObj.name} (${this.orientation === 'landscape' ? 'أفقي' : 'عمودي'}) • المقياس: ${this.getScaleString()}`, bx + bw - Math.round(4 * mmToPx), metaY + Math.round(10 * mmToPx));
 
       // Left Stamp / Approval Box
       const stampW = Math.round(20 * mmToPx);
@@ -1712,10 +1816,7 @@
 
       modal.classList.remove('hidden');
 
-      if (!this.frameBounds) {
-        this.fitFrameToCurrentView();
-      }
-
+      this.ensureInitialized();
       this.updateStudioModalUi();
       await this.refreshStudioPreview();
     }
@@ -1796,7 +1897,7 @@
 
       const sheetBadge = document.getElementById('layoutSheetNameBadge');
       if (sheetBadge) {
-        const sInfo = SHEET_SIZES[this.selectedSheet] || SHEET_SIZES['a3'];
+        const sInfo = (this.selectedSheet && SHEET_SIZES[this.selectedSheet.toLowerCase()]) || SHEET_SIZES['a3'];
         sheetBadge.textContent = `${sInfo.name} (${this.orientation === 'landscape' ? 'أفقي' : 'عمودي'})`;
       }
     }
@@ -1804,27 +1905,58 @@
     /**
      * Refresh Modal Live Preview
      */
-    async refreshStudioPreview() {
+    async refreshStudioPreview(forceFresh = false) {
       const previewContainer = document.getElementById('layoutStudioPreviewCanvasContainer');
       const loader = document.getElementById('layoutPreviewLoader');
+      const refreshBtn = document.getElementById('layoutStudioRefreshPreviewBtn') || document.querySelector('button[onclick*="refreshStudioPreview"]');
+      const icon = refreshBtn ? refreshBtn.querySelector('i') : null;
+
       if (!previewContainer) return;
 
       if (loader) loader.classList.remove('hidden');
+      if (icon) icon.classList.add('animate-spin');
+
+      if (forceFresh) {
+        this._cachedSatImg = null;
+        this._cachedSatBbox = null;
+      }
 
       try {
+        this.ensureInitialized();
+
         const canvas = await this.renderLayoutCanvas(100); // 100 DPI for ultra-fast live preview
         canvas.style.maxWidth = '100%';
         canvas.style.maxHeight = '100%';
+        canvas.style.width = 'auto';
+        canvas.style.height = 'auto';
+        canvas.style.objectFit = 'contain';
         canvas.style.boxShadow = '0 10px 30px rgba(0,0,0,0.6)';
         canvas.style.border = '1px solid #334155';
         canvas.style.borderRadius = '4px';
+        canvas.style.display = 'block';
 
         previewContainer.innerHTML = '';
         previewContainer.appendChild(canvas);
+
+        if (forceFresh) {
+          this._showToast('✅ تم تحديث معاينة لوحة الخارطة بنجاح', 'success');
+        }
       } catch (e) {
-        console.warn('AtlasLayoutStudio: Preview refresh error:', e);
+        console.error('AtlasLayoutStudio: Preview refresh error:', e);
+        previewContainer.innerHTML = `
+          <div class="flex flex-col items-center justify-center p-6 text-center text-slate-400 max-w-sm">
+            <i class="fa-solid fa-triangle-exclamation text-amber-400 text-3xl mb-2.5"></i>
+            <div class="text-sm font-bold text-white mb-1">تعذر تحديث المعاينة</div>
+            <div class="text-xs text-slate-400 mb-3">${e.message || 'حدث خطأ غير متوقع'}</div>
+            <button type="button" onclick="window.AtlasLayoutStudio.refreshStudioPreview(true)" class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition-all cursor-pointer shadow">
+              إعادة المحاولة 🔄
+            </button>
+          </div>
+        `;
+        this._showToast('❌ تعذر تحديث المعاينة: ' + (e.message || ''), 'error');
       } finally {
         if (loader) loader.classList.add('hidden');
+        if (icon) icon.classList.remove('animate-spin');
       }
     }
 
@@ -1843,12 +1975,20 @@
   // Instantiate and expose globally
   window.AtlasLayoutStudio = new LayoutStudioEngine();
 
-  // Auto-init when map is ready
-  document.addEventListener('DOMContentLoaded', () => {
-    if (window.map || window.atlasMap) {
-      window.AtlasLayoutStudio.init(window.map || window.atlasMap);
+  // Robust Auto-init when map is ready
+  function autoInitLayoutStudio() {
+    const m = window.map || window.atlasMap;
+    if (m && window.AtlasLayoutStudio) {
+      window.AtlasLayoutStudio.init(m);
     }
-  });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', autoInitLayoutStudio);
+  } else {
+    autoInitLayoutStudio();
+  }
+  window.addEventListener('load', autoInitLayoutStudio);
 
   // Global convenient helpers
   window.openMapLayoutStudio = function () {
