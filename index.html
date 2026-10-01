@@ -31,7 +31,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <!-- Custom Styling -->
-  <link rel="stylesheet" href="css/styles.css?v=20261001_01">
+  <link rel="stylesheet" href="css/styles.css?v=20261001_02">
 
   <script>
     // Immediate Synchronous Handlers for ArcView GIS & GeoTIFF Export Studio
@@ -86,34 +86,34 @@
   <!-- =========================================================================
        Top Application Header
        ========================================================================= -->
-  <header id="appHeader" class="h-14 glass-header z-30 px-4 flex items-center justify-between gap-4 shrink-0 shadow-md">
+  <header id="appHeader" class="h-14 glass-header z-[2000] px-3 md:px-4 flex items-center justify-between gap-2 md:gap-4 shrink-0 shadow-md relative">
     <!-- Brand / Title -->
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-2.5 shrink-0">
       <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-700 to-sky-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/25">
         <i class="fa-solid fa-earth-americas text-lg animate-pulse"></i>
       </div>
       <div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-1.5">
           <h1 class="font-black text-sm md:text-base text-white tracking-wide">ArcGIS Living Atlas</h1>
           <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold flex items-center gap-1">
             <i class="fa-solid fa-location-dot text-[9px]"></i>
             العراق
           </span>
         </div>
-        <div class="text-[11px] font-bold text-amber-300 flex items-center gap-1.5 leading-tight mt-0.5">
+        <div class="text-[10.5px] font-bold text-amber-300 flex items-center gap-1.5 leading-tight mt-0.5">
           <i class="fa-solid fa-user-gear text-[10px] text-amber-400"></i>
           <span>تصميم وتطوير الدكتور المهندس احمد لؤي البجاري</span>
         </div>
       </div>
     </div>
 
-    <!-- Center Search Container (High-Contrast Intelligent City & Place Search Widget) -->
-    <div class="flex-1 max-w-lg mx-2 relative z-30">
+    <!-- Center Search Container (Wide & Spacious High-Contrast Intelligent City & Place Search Widget) -->
+    <div class="flex-1 max-w-3xl mx-2 md:mx-4 relative z-[2100] min-w-[260px] md:min-w-[420px]">
       <div id="geosearchContainer" class="w-full relative">
         <div class="relative flex items-center w-full">
           <!-- Search Icon on right for RTL -->
-          <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-sky-600">
-            <i class="fa-solid fa-magnifying-glass text-xs"></i>
+          <div class="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-sky-600 text-sm">
+            <i class="fa-solid fa-magnifying-glass"></i>
           </div>
 
           <!-- High-Contrast Search Input with Bold Black Text -->
@@ -122,25 +122,25 @@
             id="cityPlaceSearchInput" 
             dir="rtl"
             autocomplete="off"
-            placeholder="ابحث عن مدينة، قضاء، ناحية، أو معلم في العراق..." 
-            class="w-full bg-white text-black font-bold text-xs py-2 pr-9 pl-16 rounded-xl border-2 border-sky-400 focus:border-sky-600 shadow-md placeholder-slate-500 focus:outline-none transition-all"
+            placeholder="ابحث عن أي مدينة، قضاء، ناحية، حي أو معلم في العراق (مثال: بغداد، الكرادة، الموصل، البصرة...)" 
+            class="w-full bg-white text-black font-bold text-xs md:text-sm py-2.5 pr-10 pl-20 rounded-xl border-2 border-sky-400 focus:border-sky-600 shadow-lg placeholder-slate-500 focus:outline-none transition-all"
             style="color: #000000 !important; background-color: #ffffff !important; -webkit-text-fill-color: #000000 !important; font-weight: 700 !important;"
           />
 
           <!-- Action buttons inside search bar -->
-          <div class="absolute left-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+          <div class="absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
             <button type="button" id="clearSearchInputBtn" class="hidden text-slate-400 hover:text-slate-700 w-5 h-5 rounded-full flex items-center justify-center text-xs transition-colors cursor-pointer" title="مسح حقل البحث">
               <i class="fa-solid fa-circle-xmark"></i>
             </button>
             <div class="h-4 w-px bg-slate-200 mx-0.5"></div>
-            <button type="button" id="submitSearchInputBtn" class="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-bold shadow-sm transition-colors cursor-pointer flex items-center gap-1" title="بدء البحث">
+            <button type="button" id="submitSearchInputBtn" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold shadow-md transition-colors cursor-pointer flex items-center gap-1" title="بدء البحث">
               <span>بحث</span>
             </button>
           </div>
         </div>
 
         <!-- Live Instant Suggestions Dropdown -->
-        <div id="citySearchResultsDropdown" class="hidden absolute top-full right-0 left-0 mt-1.5 bg-white border border-slate-300 rounded-xl shadow-2xl overflow-hidden z-50 max-h-80 overflow-y-auto divide-y divide-slate-100 text-right" dir="rtl">
+        <div id="citySearchResultsDropdown" class="hidden absolute top-full right-0 left-0 mt-2 bg-white border border-slate-300 rounded-xl shadow-2xl overflow-hidden z-[99999] max-h-96 overflow-y-auto divide-y divide-slate-100 text-right" dir="rtl">
           <!-- Populated dynamically with high-contrast items (black text) -->
         </div>
       </div>
@@ -3096,7 +3096,7 @@
   <script src="js/layout-engine.js?v=20260930_10"></script>
 
   <!-- Intelligent City & Place Search Engine (Gazetteer & Geocoder) -->
-  <script src="js/city-search.js?v=20260930_09"></script>
+  <script src="js/city-search.js?v=20261001_02"></script>
 
   <!-- OSM Building & Block Vector Extractor (Overpass API) -->
   <script src="js/osm-extractor.js?v=20261001_02"></script>
