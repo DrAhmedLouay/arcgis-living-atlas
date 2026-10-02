@@ -331,7 +331,7 @@
                 <div class="text-[10px] text-slate-400 leading-tight">سجل رسمي يشمل نينوى، أور، بابل، الحضر، النمرود، آشور، طاق كسرى</div>
               </div>
             </div>
-            <button type="button" onclick="if(window.toggleLayer) { window.toggleLayer('iraq-archaeology', !${isArchActive}); if(window.AtlasLegendManager) window.AtlasLegendManager.render(); }" class="px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] font-bold border border-amber-500/40 shrink-0 cursor-pointer">
+            <button type="button" onclick="if(window.toggleLayer) { window.toggleLayer('iraq-archaeology', ${!isArchActive}); if(window.AtlasLegendManager) window.AtlasLegendManager.render(); }" class="px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] font-bold border border-amber-500/40 shrink-0 cursor-pointer">
               ${isArchActive ? 'إخفاء' : 'إظهار'}
             </button>
           </div>

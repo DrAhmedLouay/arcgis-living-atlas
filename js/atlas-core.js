@@ -9662,14 +9662,8 @@ Date: ${new Date().toLocaleString('ar-IQ')} / ${new Date().toISOString()}
     }
 
     // Legend Toggle (مفتاح الخريطة)
-    const toggleLegendBtn = document.getElementById('toggleLegendBtn');
-    if (toggleLegendBtn) {
-      toggleLegendBtn.addEventListener('click', () => {
-        if (window.AtlasLegendManager) {
-          window.AtlasLegendManager.toggle();
-        }
-      });
-    }
+    // Managed canonically by AtlasLegendManager / window.toggleMapLegend to avoid duplicate event toggling.
+
 
     // Screenshot / Map Layout Export Studio
     const screenshotBtn = document.getElementById('screenshotBtn');

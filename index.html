@@ -31,7 +31,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <!-- Custom Styling -->
-  <link rel="stylesheet" href="css/styles.css?v=20261001_04">
+  <link rel="stylesheet" href="css/styles.css?v=20261002_03">
 
   <script>
     // Immediate Synchronous Handlers for ArcView GIS & GeoTIFF Export Studio
@@ -128,162 +128,169 @@
 <body class="bg-slate-950 text-slate-100 h-screen w-screen flex flex-col overflow-hidden select-none">
 
   <!-- =========================================================================
-       Top Application Header
+       Top Application Header (Dual-Tier Professional GIS Command Ribbon)
        ========================================================================= -->
-  <header id="appHeader" class="h-14 glass-header z-[2000] px-2.5 md:px-3.5 flex items-center justify-between gap-1.5 md:gap-3 shrink-0 shadow-md relative">
-    <!-- Brand / Title -->
-    <div class="flex items-center gap-2 shrink-0 select-none">
-      <div class="w-8.5 h-8.5 rounded-xl bg-gradient-to-tr from-blue-700 to-sky-500 flex items-center justify-center text-white shadow-md shadow-blue-500/25 shrink-0">
-        <i class="fa-solid fa-earth-americas text-base animate-pulse"></i>
+  <header id="appHeader" class="glass-header z-[2000] shrink-0 shadow-md relative flex flex-col">
+    <!-- Tier 1: Brand, Attribution, City Search & Global System Controls -->
+    <div class="h-11 md:h-12 px-3 md:px-4 flex items-center justify-between gap-2 md:gap-3 border-b border-slate-800/80 bg-slate-950/80">
+      <!-- Right: Brand Logo & Engineer Attribution -->
+      <div class="flex items-center gap-2.5 shrink-0 select-none">
+        <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-700 to-sky-500 flex items-center justify-center text-white shadow-md shadow-blue-500/25 shrink-0">
+          <i class="fa-solid fa-earth-americas text-sm animate-pulse"></i>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="flex items-center gap-1.5">
+            <h1 class="font-black text-xs md:text-sm text-white tracking-wide whitespace-nowrap">ArcGIS Living Atlas</h1>
+            <span class="text-[9.5px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold flex items-center gap-1 shrink-0">
+              <i class="fa-solid fa-location-dot text-[8.5px]"></i>
+              العراق
+            </span>
+          </div>
+          <div class="hidden sm:flex items-center gap-1.5 text-[11px] font-bold text-amber-300 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 whitespace-nowrap">
+            <i class="fa-solid fa-user-gear text-[10px] text-amber-400"></i>
+            <span>تصميم وتطوير الدكتور المهندس احمد لؤي البجاري</span>
+          </div>
+        </div>
       </div>
-      <div class="shrink-0">
-        <div class="flex items-center gap-1.5">
-          <h1 class="font-black text-xs md:text-sm text-white tracking-wide whitespace-nowrap">ArcGIS Living Atlas</h1>
-          <span class="text-[9.5px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold flex items-center gap-1 shrink-0">
-            <i class="fa-solid fa-location-dot text-[8.5px]"></i>
-            العراق
-          </span>
+
+      <!-- Center: Search Container (City & Place Search) -->
+      <div class="flex-1 max-w-xs md:max-w-md lg:max-w-lg mx-2 relative z-[2100]">
+        <div id="geosearchContainer" class="w-full relative">
+          <div class="relative flex items-center w-full">
+            <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-sky-600 text-xs">
+              <i class="fa-solid fa-magnifying-glass"></i>
+            </div>
+            <input 
+              type="text" 
+              id="cityPlaceSearchInput" 
+              dir="rtl"
+              autocomplete="off"
+              placeholder="ابحث عن مدينة، حي أو معلم بالعراق..." 
+              class="w-full bg-white text-black font-bold text-xs py-1.5 pr-8 pl-16 rounded-xl border-2 border-sky-400 focus:border-sky-600 shadow-md placeholder-slate-500 focus:outline-none transition-all"
+              style="color: #000000 !important; background-color: #ffffff !important; -webkit-text-fill-color: #000000 !important; font-weight: 700 !important;"
+            />
+            <div class="absolute left-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+              <button type="button" id="clearSearchInputBtn" class="hidden text-slate-400 hover:text-slate-700 w-5 h-5 rounded-full flex items-center justify-center text-xs transition-colors cursor-pointer" title="مسح حقل البحث">
+                <i class="fa-solid fa-circle-xmark"></i>
+              </button>
+              <div class="h-3.5 w-px bg-slate-200 mx-0.5"></div>
+              <button type="button" id="submitSearchInputBtn" class="px-2.5 py-0.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-bold shadow transition-colors cursor-pointer flex items-center gap-1" title="بدء البحث">
+                <span>بحث</span>
+              </button>
+            </div>
+          </div>
+          <div id="citySearchResultsDropdown" class="hidden absolute top-full right-0 left-0 mt-2 bg-white border border-slate-300 rounded-xl shadow-2xl overflow-hidden z-[99999] max-h-96 overflow-y-auto divide-y divide-slate-100 text-right" dir="rtl"></div>
         </div>
-        <div class="text-[10px] font-bold text-amber-300 flex items-center gap-1 leading-tight mt-0.5 whitespace-nowrap">
-          <i class="fa-solid fa-user-gear text-[9.5px] text-amber-400"></i>
-          <span>تصميم وتطوير د.م. احمد لؤي البجاري</span>
+      </div>
+
+      <!-- Left: Active Layers Badge + Zen Fullscreen + Mobile Sidebar Toggle -->
+      <div class="flex items-center gap-2 shrink-0 select-none">
+        <div class="h-7.5 flex items-center gap-1.5 px-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[11px] font-mono shrink-0 whitespace-nowrap">
+          <i class="fa-solid fa-layer-group text-[11px]"></i>
+          <span>طبقات:</span>
+          <span id="activeLayersHeaderBadge" class="font-bold text-sky-300">0</span>
         </div>
+        <button id="toggleZenModeBtn" type="button" class="h-7.5 px-2.5 rounded-lg bg-slate-800/90 hover:bg-slate-750 border border-slate-700/80 hover:border-cyan-500/50 text-[11px] font-bold text-slate-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer" title="إخفاء الأشرطة والقوائم (Zen Mode / زر Esc للخروج)">
+          <i class="fa-solid fa-expand text-cyan-400 text-xs"></i>
+          <span class="hidden sm:inline">ملء الشاشة</span>
+        </button>
+        <button id="toggleSidebarBtn" type="button" class="h-7.5 w-7.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 md:hidden border border-slate-700 flex items-center justify-center shrink-0 cursor-pointer" title="فتح / إغلاق القائمة الجانبية">
+          <i class="fa-solid fa-bars text-sm"></i>
+        </button>
       </div>
     </div>
 
-    <!-- Center Search Container (Intelligent City & Place Search Widget) -->
-    <div class="flex-1 max-w-xs md:max-w-sm lg:max-w-md mx-1 md:mx-2 relative z-[2100] min-w-[140px] md:min-w-[180px]">
-      <div id="geosearchContainer" class="w-full relative">
-        <div class="relative flex items-center w-full">
-          <!-- Search Icon on right for RTL -->
-          <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-sky-600 text-xs">
-            <i class="fa-solid fa-magnifying-glass"></i>
-          </div>
-
-          <!-- High-Contrast Search Input with Bold Black Text -->
-          <input 
-            type="text" 
-            id="cityPlaceSearchInput" 
-            dir="rtl"
-            autocomplete="off"
-            placeholder="ابحث عن مدينة، حي أو معلم بالعراق..." 
-            class="w-full bg-white text-black font-bold text-xs py-2 pr-8 pl-16 rounded-xl border-2 border-sky-400 focus:border-sky-600 shadow-md placeholder-slate-500 focus:outline-none transition-all"
-            style="color: #000000 !important; background-color: #ffffff !important; -webkit-text-fill-color: #000000 !important; font-weight: 700 !important;"
-          />
-
-          <!-- Action buttons inside search bar -->
-          <div class="absolute left-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
-            <button type="button" id="clearSearchInputBtn" class="hidden text-slate-400 hover:text-slate-700 w-5 h-5 rounded-full flex items-center justify-center text-xs transition-colors cursor-pointer" title="مسح حقل البحث">
-              <i class="fa-solid fa-circle-xmark"></i>
-            </button>
-            <div class="h-3.5 w-px bg-slate-200 mx-0.5"></div>
-            <button type="button" id="submitSearchInputBtn" class="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-bold shadow transition-colors cursor-pointer flex items-center gap-1" title="بدء البحث">
-              <span>بحث</span>
-            </button>
-          </div>
+    <!-- Tier 2: GIS Command Tools Ribbon (Full Viewport Width dedicated to Action Buttons) -->
+    <div id="headerActionsBar" class="h-9 px-3 md:px-4 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar bg-slate-900/95 border-b border-slate-800/70 select-none">
+      <div class="flex items-center gap-2 shrink-0">
+        
+        <!-- 1. Measurement Group (القياس المساحي) -->
+        <div class="flex items-center bg-slate-800/90 rounded-lg p-0.5 border border-slate-700/80 shadow-sm shrink-0">
+          <button id="quickMeasureDistBtn" type="button" class="h-6.5 px-2 rounded-md text-[11px] font-bold text-slate-200 hover:text-sky-300 hover:bg-slate-700 flex items-center gap-1.5 transition-all whitespace-nowrap cursor-pointer" title="قياس مسافة (خط ومسار)">
+            <i class="fa-solid fa-ruler text-sky-400 text-xs"></i>
+            <span>مسافة</span>
+          </button>
+          <div class="h-3.5 w-px bg-slate-700/80 mx-0.5"></div>
+          <button id="quickMeasureAreaBtn" type="button" class="h-6.5 px-2 rounded-md text-[11px] font-bold text-slate-200 hover:text-emerald-300 hover:bg-slate-700 flex items-center gap-1.5 transition-all whitespace-nowrap cursor-pointer" title="قياس مساحة (مضلع)">
+            <i class="fa-solid fa-draw-polygon text-emerald-400 text-xs"></i>
+            <span>مساحة</span>
+          </button>
         </div>
 
-        <!-- Live Instant Suggestions Dropdown -->
-        <div id="citySearchResultsDropdown" class="hidden absolute top-full right-0 left-0 mt-2 bg-white border border-slate-300 rounded-xl shadow-2xl overflow-hidden z-[99999] max-h-96 overflow-y-auto divide-y divide-slate-100 text-right" dir="rtl">
-          <!-- Populated dynamically with high-contrast items -->
+        <div class="h-4 w-px bg-slate-700/60 shrink-0"></div>
+
+        <!-- 2. Basemaps & Legend Group (الخرائط والمفاتيح) -->
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button id="toggleBasemapBtn" type="button" class="h-6.5 px-2.5 rounded-md bg-slate-800/90 hover:bg-slate-700 border border-slate-700/80 hover:border-blue-500/50 text-[11px] font-bold text-slate-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm whitespace-nowrap cursor-pointer" title="اختيار خرائط الأساس (أقمار صناعية، شوارع، تضاريس، داكنة، فاتحة)">
+            <i class="fa-solid fa-map text-blue-400 text-xs"></i>
+            <span>خرائط الأساس</span>
+          </button>
+          <button id="toggleLegendBtn" onclick="window.toggleMapLegend ? window.toggleMapLegend() : null" type="button" class="h-6.5 px-2.5 rounded-md bg-slate-800/90 hover:bg-slate-700 border border-slate-700/80 hover:border-emerald-500/50 text-[11px] font-bold text-slate-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm whitespace-nowrap cursor-pointer" title="فتح مفتاح الخريطة والمصطلحات والرموز الكارتوغرافية (Legend)">
+            <i class="fa-solid fa-list-check text-emerald-400 text-xs"></i>
+            <span>مفتاح الخريطة</span>
+          </button>
         </div>
-      </div>
-    </div>
 
-    <!-- Header Actions Toolbar (Visible, Compact, Sized, Never Truncated) -->
-    <div id="headerActionsBar" class="flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar shrink select-none">
-      
-      <!-- 1. Quick Measurement Tool (Distance & Area) -->
-      <div class="h-8 flex items-center bg-slate-800/90 rounded-lg p-0.5 border border-slate-700/80 shadow-sm shrink-0">
-        <button id="quickMeasureDistBtn" type="button" class="h-7 px-2 rounded-md text-[11px] font-bold text-slate-200 hover:text-sky-300 hover:bg-slate-700 flex items-center gap-1 transition-all whitespace-nowrap cursor-pointer" title="قياس مسافة (خط ومسار)">
-          <i class="fa-solid fa-ruler text-sky-400 text-xs"></i>
-          <span>مسافة</span>
-        </button>
-        <div class="h-4 w-px bg-slate-700/80 mx-0.5"></div>
-        <button id="quickMeasureAreaBtn" type="button" class="h-7 px-2 rounded-md text-[11px] font-bold text-slate-200 hover:text-emerald-300 hover:bg-slate-700 flex items-center gap-1 transition-all whitespace-nowrap cursor-pointer" title="قياس مساحة (مضلع)">
-          <i class="fa-solid fa-draw-polygon text-emerald-400 text-xs"></i>
-          <span>مساحة</span>
-        </button>
-      </div>
+        <div class="h-4 w-px bg-slate-700/60 shrink-0"></div>
 
-      <!-- 2. Basemaps Toggle -->
-      <button id="toggleBasemapBtn" type="button" class="h-8 px-2.5 rounded-lg bg-slate-800/90 hover:bg-slate-750 border border-slate-700/80 hover:border-blue-500/50 text-[11px] font-bold text-slate-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer" title="اختيار خرائط الأساس (أقمار صناعية، شوارع، تضاريس، داكنة، فاتحة)">
-        <i class="fa-solid fa-map text-blue-400 text-xs"></i>
-        <span>خرائط الأساس</span>
-      </button>
+        <!-- 3. Remote Sensing & Vector Extractor Group (المصورات والاستخراج) -->
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button id="headerErdasBtn" onclick="window.openErdasTab()" type="button" class="h-6.5 px-2.5 rounded-md bg-amber-500/15 hover:bg-amber-500/30 border border-amber-500/40 text-[11px] font-bold text-amber-300 hover:text-white flex items-center gap-1.5 transition-all shadow-sm whitespace-nowrap cursor-pointer" title="فتح استوديو خرائط الأقمار الصناعية ERDAS IMAGINE (.img / .ers / Apollo WMS)">
+            <i class="fa-solid fa-satellite-dish text-amber-400 text-xs"></i>
+            <span>خرائط ERDAS</span>
+          </button>
+          <button id="headerOsmBtn" onclick="window.openOsmExtractorModal()" type="button" class="h-6.5 px-2.5 rounded-md bg-emerald-500/15 hover:bg-emerald-500/30 border border-emerald-500/40 text-[11px] font-bold text-emerald-300 hover:text-white flex items-center gap-1.5 transition-all shadow-sm whitespace-nowrap cursor-pointer" title="استخراج مباني وبلوكات وشوارع OpenStreetMap للموقع الحالي">
+            <i class="fa-solid fa-cloud-arrow-down text-emerald-400 text-xs"></i>
+            <span>استخراج OSM</span>
+          </button>
+        </div>
 
-      <!-- 3. Map Legend Toggle (مفتاح الخريطة) -->
-      <button id="toggleLegendBtn" type="button" class="h-8 px-2.5 rounded-lg bg-slate-800/90 hover:bg-slate-750 border border-slate-700/80 hover:border-emerald-500/50 text-[11px] font-bold text-slate-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer" title="فتح مفتاح الخريطة والمصطلحات والرموز (Legend)">
-        <i class="fa-solid fa-list-check text-emerald-400 text-xs"></i>
-        <span>مفتاح الخريطة</span>
-      </button>
+        <div class="h-4 w-px bg-slate-700/60 shrink-0"></div>
 
-      <!-- 4. Export Screenshot / Print -->
-      <button id="screenshotBtn" type="button" class="h-8 px-2.5 rounded-lg bg-slate-800/90 hover:bg-slate-750 border border-slate-700/80 hover:border-amber-500/50 text-[11px] font-bold text-slate-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer" title="تصدير لقطة للخريطة أو طباعتها">
-        <i class="fa-solid fa-camera text-amber-400 text-xs"></i>
-        <span>لقطة</span>
-      </button>
+        <!-- 4. Urban Drawing & Cartographic Layout Studio Group (الرسم والطباعة) -->
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button id="headerDrawingToggleBtn" onclick="window.toggleDrawingMode()" type="button" class="h-6.5 px-2.5 rounded-md bg-teal-500/15 hover:bg-teal-500/30 border border-teal-500/40 text-[11px] font-bold text-teal-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm whitespace-nowrap cursor-pointer" title="أدوات الرسم والتخطيط العمراني (شوارع، بلوكات سكنية، أبنية، مسارات)">
+            <i class="fa-solid fa-pen-ruler text-teal-400 text-xs"></i>
+            <span>أدوات الرسم</span>
+          </button>
+          <button id="headerMapLayoutBtn" onclick="window.openMapLayoutStudio()" type="button" class="h-6.5 px-2.5 rounded-md bg-cyan-600/25 hover:bg-cyan-600/45 border border-cyan-400/60 text-[11px] font-bold text-cyan-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm whitespace-nowrap cursor-pointer" title="استوديو تصميم وتصدير لوحات الخرائط القياسية (A0, A1, A2, A3, A4) والطباعة المباشرة و PDF">
+            <i class="fa-solid fa-map-location-dot text-cyan-300 text-xs"></i>
+            <span>لوحات الطباعة (A0-A4)</span>
+          </button>
+        </div>
 
-      <!-- 5. ERDAS IMAGINE Satellite Studio -->
-      <button id="headerErdasBtn" onclick="window.openErdasTab()" type="button" class="h-8 px-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/60 text-[11px] font-bold text-amber-300 hover:text-white flex items-center gap-1.5 transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer" title="فتح استوديو خرائط الأقمار الصناعية ERDAS IMAGINE (.img / .ers / Apollo WMS)">
-        <i class="fa-solid fa-satellite-dish text-amber-400 text-xs"></i>
-        <span>خرائط ERDAS</span>
-      </button>
+        <div class="h-4 w-px bg-slate-700/60 shrink-0"></div>
 
-      <!-- 6. OSM Vector Extractor -->
-      <button id="headerOsmBtn" onclick="window.openOsmExtractorModal()" type="button" class="h-8 px-2.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-500/60 text-[11px] font-bold text-emerald-300 hover:text-white flex items-center gap-1.5 transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer" title="استخراج مباني وبلوكات وشوارع OpenStreetMap للموقع الحالي">
-        <i class="fa-solid fa-cloud-arrow-down text-emerald-400 text-xs"></i>
-        <span>استخراج OSM</span>
-      </button>
+        <!-- 5. Export, Screenshot & Logs Group (التصدير والسجلات) -->
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button id="screenshotBtn" type="button" class="h-6.5 px-2.5 rounded-md bg-slate-800/90 hover:bg-slate-700 border border-slate-700/80 hover:border-amber-500/50 text-[11px] font-bold text-slate-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm whitespace-nowrap cursor-pointer" title="تصدير لقطة للخريطة أو طباعتها">
+            <i class="fa-solid fa-camera text-amber-400 text-xs"></i>
+            <span>لقطة</span>
+          </button>
+          <button id="headerGisExportBtn" onclick="window.openGisExportModal()" type="button" class="h-6.5 px-2.5 rounded-md bg-amber-500/15 hover:bg-amber-500/30 border border-amber-500/40 text-[11px] font-bold text-amber-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm whitespace-nowrap cursor-pointer" title="خزن وتصدير الخارطة بصيغة GeoTIFF و ArcView GIS">
+            <i class="fa-solid fa-file-export text-amber-400 text-xs"></i>
+            <span>تصدير GIS</span>
+          </button>
+          <a href="conversation-history.html" target="_blank" id="headerHistoryLogBtn" class="h-6.5 px-2.5 rounded-md bg-sky-500/15 hover:bg-sky-500/30 border border-sky-400/40 text-[11px] font-bold text-sky-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm whitespace-nowrap cursor-pointer" title="فتح سجل المحادثات والأوامر الهندسية والمخططات والجداول">
+            <i class="fa-solid fa-clock-rotate-left text-sky-400 text-xs"></i>
+            <span>سجل الأوامر</span>
+          </a>
+        </div>
 
-      <!-- 7. Urban Drawing & CAD Layer -->
-      <button id="headerDrawingToggleBtn" onclick="window.toggleDrawingMode()" type="button" class="h-8 px-2.5 rounded-lg bg-teal-500/20 hover:bg-teal-500/35 border border-teal-500/50 text-[11px] font-bold text-teal-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer" title="أدوات الرسم والتخطيط العمراني (شوارع، بلوكات سكنية، أبنية، مسارات)">
-        <i class="fa-solid fa-pen-ruler text-teal-400 text-xs"></i>
-        <span>أدوات الرسم</span>
-      </button>
-
-      <!-- 8. Cartographic Layout & Print Studio (A0-A4) -->
-      <button id="headerMapLayoutBtn" onclick="window.openMapLayoutStudio()" type="button" class="h-8 px-2.5 rounded-lg bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-400/70 text-[11px] font-bold text-cyan-200 hover:text-white flex items-center gap-1.5 transition-all shadow-md shadow-cyan-950/40 shrink-0 whitespace-nowrap cursor-pointer" title="استوديو تصميم وتصدير لوحات الخرائط القياسية (A0, A1, A2, A3, A4) والطباعة المباشرة و PDF">
-        <i class="fa-solid fa-map-location-dot text-cyan-300 text-xs"></i>
-        <span>لوحات الطباعة (A0-A4)</span>
-      </button>
-
-      <!-- 9. Conversation & Engineering History Log -->
-      <a href="conversation-history.html" target="_blank" id="headerHistoryLogBtn" class="h-8 px-2.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/35 border border-sky-400/50 text-[11px] font-bold text-sky-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer" title="فتح سجل المحادثات والأوامر الهندسية والمخططات والجداول (صفحة HTML)">
-        <i class="fa-solid fa-clock-rotate-left text-sky-400 text-xs"></i>
-        <span>سجل الأوامر</span>
-      </a>
-
-      <!-- 10. ArcView GIS & GeoTIFF Export Studio -->
-      <button id="headerGisExportBtn" onclick="window.openGisExportModal()" type="button" class="h-8 px-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/50 text-[11px] font-bold text-amber-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer" title="خزن وتصدير الخارطة بصيغة GeoTIFF و ArcView GIS">
-        <i class="fa-solid fa-file-export text-amber-400 text-xs"></i>
-        <span>تصدير GIS</span>
-      </button>
-
-      <!-- 11. Toggle Zen / Fullscreen Mode -->
-      <button id="toggleZenModeBtn" type="button" class="h-8 px-2.5 rounded-lg bg-slate-800/90 hover:bg-slate-750 border border-slate-700/80 hover:border-cyan-500/50 text-[11px] font-bold text-slate-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer" title="إخفاء الأشرطة والقوائم العلوية (Zen Mode / زر Esc للخروج)">
-        <i class="fa-solid fa-expand text-cyan-400 text-xs"></i>
-        <span>ملء الشاشة</span>
-      </button>
-
-      <!-- 12. Active Layer Counter Badge -->
-      <div class="h-8 flex items-center gap-1.5 px-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[11px] font-mono shrink-0 whitespace-nowrap">
-        <i class="fa-solid fa-layer-group text-[10px]"></i>
-        <span>طبقات:</span>
-        <span id="activeLayersHeaderBadge" class="font-bold text-sky-300">0</span>
       </div>
 
-      <!-- 13. Mobile Sidebar Toggle -->
-      <button id="toggleSidebarBtn" type="button" class="h-8 w-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 md:hidden border border-slate-700 flex items-center justify-center shrink-0 cursor-pointer" title="فتح / إغلاق القائمة الجانبية">
-        <i class="fa-solid fa-bars text-sm"></i>
-      </button>
+      <!-- Left hint in Tier 2 -->
+      <div class="hidden xl:flex items-center gap-1.5 text-[10px] text-slate-400 shrink-0">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span class="font-medium">المنصة الجغرافية الرسمية للعراق</span>
+      </div>
     </div>
   </header>
 
   <!-- =========================================================================
        Main Workspace (Sidebar + Map)
        ========================================================================= -->
-  <div id="mainWorkspaceWrapper" class="flex-1 flex relative overflow-hidden" style="flex: 1 1 0%; position: relative; width: 100%; height: calc(100vh - 56px);">
+  <div id="mainWorkspaceWrapper" class="flex-1 flex relative overflow-hidden w-full h-full min-h-0" style="flex: 1 1 0%; position: relative; width: 100%; height: 100%; min-height: 0;">
     
     <!-- Map Container -->
     <main class="flex-1 relative h-full" style="flex: 1 1 0%; position: relative; width: 100%; height: 100%;">
@@ -2367,7 +2374,7 @@
        ========================================================================= -->
 
   <!-- Basemap Picker Modal -->
-  <div id="basemapModal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+  <div id="basemapModal" class="hidden fixed inset-0 z-[4000] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="glass-panel rounded-2xl w-full max-w-lg p-5 border border-slate-700 shadow-2xl space-y-4">
       <div class="flex items-center justify-between border-b border-slate-800 pb-3">
         <div class="flex items-center gap-2">
@@ -2386,7 +2393,7 @@
   </div>
 
   <!-- Floating Legend Drawer (Map Symbology & Layer Legend) -->
-  <div id="legendPanel" class="hidden fixed top-16 left-4 z-[2500] glass-panel rounded-2xl border border-emerald-500/40 shadow-2xl max-h-[82vh] flex flex-col overflow-hidden select-none animate-fadeIn" style="width: 360px; max-width: calc(100vw - 32px);">
+  <div id="legendPanel" class="hidden fixed top-24 left-4 z-[2500] glass-panel rounded-2xl border border-emerald-500/40 shadow-2xl max-h-[calc(100vh-105px)] flex flex-col overflow-hidden select-none animate-fadeIn" style="width: 360px; max-width: calc(100vw - 32px);">
     <div class="p-3 border-b border-slate-800 flex items-center justify-between bg-gradient-to-r from-slate-900 via-emerald-950/40 to-slate-900 shrink-0">
       <div class="flex items-center gap-2 text-xs font-bold text-slate-100">
         <div class="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center shrink-0">
@@ -2425,7 +2432,7 @@
   </div>
 
   <!-- Layer Information & Metadata Modal -->
-  <div id="layerInfoModal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+  <div id="layerInfoModal" class="hidden fixed inset-0 z-[4000] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="glass-panel rounded-2xl w-full max-w-lg p-5 border border-slate-700 shadow-2xl space-y-4">
       <div class="flex items-center justify-between border-b border-slate-800 pb-3">
         <div class="flex items-center gap-2">
@@ -2446,7 +2453,7 @@
   <!-- =========================================================================
        AI Spatial Alignment & Landmark Reality Matching Modal
        ========================================================================= -->
-  <div id="aiAlignmentModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+  <div id="aiAlignmentModal" class="hidden fixed inset-0 z-[4000] bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
     <div class="glass-panel rounded-2xl w-full max-w-2xl border border-indigo-500/60 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden my-auto animate-fadeIn">
       
       <!-- Modal Header -->
@@ -2653,7 +2660,7 @@
   <!-- =========================================================================
        ArcView GIS & GeoTIFF Export Studio Modal
        ========================================================================= -->
-  <div id="gisExportModal" class="hidden fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+  <div id="gisExportModal" class="hidden fixed inset-0 z-[4000] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
     <div class="glass-panel rounded-2xl w-full max-w-2xl border border-amber-500/60 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden my-auto animate-fadeIn relative z-[101]">
       
       <!-- Modal Header -->
@@ -2896,7 +2903,7 @@
   <!-- =========================================================================
        Conversation & Engineering History Log Modal (HTML Report Viewer)
        ========================================================================= -->
-  <div id="conversationHistoryModal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md hidden flex items-center justify-center p-2 sm:p-4">
+  <div id="conversationHistoryModal" class="fixed inset-0 z-[4000] bg-black/85 backdrop-blur-md hidden flex items-center justify-center p-2 sm:p-4">
     <div class="glass-panel w-full max-w-6xl h-[92vh] rounded-2xl flex flex-col overflow-hidden shadow-2xl border border-slate-700 bg-slate-950">
       
       <!-- Modal Header -->
@@ -2957,7 +2964,7 @@
   <!-- =========================================================================
        Cartographic Map Layout & Print Studio Modal (A0, A1, A2, A3, A4)
        ========================================================================= -->
-  <div id="mapLayoutStudioModal" class="hidden fixed inset-0 z-[120] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+  <div id="mapLayoutStudioModal" class="hidden fixed inset-0 z-[4000] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
     <div class="glass-panel rounded-2xl w-full max-w-6xl border border-cyan-500/60 shadow-2xl flex flex-col h-[94vh] max-h-[96vh] overflow-hidden my-auto animate-fadeIn relative z-[121] bg-slate-900/95" dir="rtl">
       
       <!-- Modal Header -->
@@ -3317,7 +3324,7 @@
   </div>
 
   <!-- Toast Notification Stack -->
-  <div id="toastContainer" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 pointer-events-none"></div>
+  <div id="toastContainer" class="fixed top-24 left-1/2 -translate-x-1/2 z-[5000] flex flex-col gap-2 pointer-events-none"></div>
 
   <!-- =========================================================================
        Scripts
@@ -3332,10 +3339,10 @@
   <script src="js/drawing-engine.js?v=20261001_03"></script>
 
   <!-- Specialized Cartographic Map Layout & Print Studio (A0, A1, A2, A3, A4) -->
-  <script src="js/layout-engine.js?v=20261002_01"></script>
+  <script src="js/layout-engine.js?v=20261002_03"></script>
 
   <!-- Dynamic Map Symbology & Layer Legend Manager -->
-  <script src="js/legend-manager.js?v=20261002_01"></script>
+  <script src="js/legend-manager.js?v=20261002_03"></script>
 
   <!-- Intelligent City & Place Search Engine (Gazetteer & Geocoder) -->
   <script src="js/city-search.js?v=20261001_03"></script>
@@ -3347,7 +3354,7 @@
   <script src="js/erdas-loader.js?v=20261001_03"></script>
 
   <!-- Living Atlas Engine Entry -->
-  <script src="js/atlas-core.js?v=20261002_01"></script>
+  <script src="js/atlas-core.js?v=20261002_03"></script>
 
   <!-- Global UI Quick Access Helpers -->
   <script>
