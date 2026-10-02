@@ -51,6 +51,17 @@ html, body {
   background: rgba(107, 114, 128, 0.9);
 }
 
+/* No scrollbar utility for clean toolbar scrolling */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
 /* Map View container */
 #viewDiv {
   position: absolute;

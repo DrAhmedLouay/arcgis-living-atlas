@@ -8701,6 +8701,7 @@ Date: ${new Date().toLocaleString('ar-IQ')} / ${new Date().toISOString()}
       updateArchToggleBtnState();
     }
   }
+  window.toggleLayer = toggleLayer;
 
   /**
    * Create Esri Leaflet Layer from Metadata
@@ -9660,6 +9661,16 @@ Date: ${new Date().toLocaleString('ar-IQ')} / ${new Date().toISOString()}
       });
     }
 
+    // Legend Toggle (مفتاح الخريطة)
+    const toggleLegendBtn = document.getElementById('toggleLegendBtn');
+    if (toggleLegendBtn) {
+      toggleLegendBtn.addEventListener('click', () => {
+        if (window.AtlasLegendManager) {
+          window.AtlasLegendManager.toggle();
+        }
+      });
+    }
+
     // Screenshot / Map Layout Export Studio
     const screenshotBtn = document.getElementById('screenshotBtn');
     if (screenshotBtn) {
@@ -9873,4 +9884,5 @@ Date: ${new Date().toLocaleString('ar-IQ')} / ${new Date().toISOString()}
       setTimeout(() => toast.remove(), 300);
     }, 3500);
   }
+  window.showToast = showToast;
 });

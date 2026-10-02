@@ -130,33 +130,33 @@
   <!-- =========================================================================
        Top Application Header
        ========================================================================= -->
-  <header id="appHeader" class="h-14 glass-header z-[2000] px-3 md:px-4 flex items-center justify-between gap-2 md:gap-4 shrink-0 shadow-md relative">
+  <header id="appHeader" class="h-14 glass-header z-[2000] px-2.5 md:px-3.5 flex items-center justify-between gap-1.5 md:gap-3 shrink-0 shadow-md relative">
     <!-- Brand / Title -->
-    <div class="flex items-center gap-2.5 shrink-0">
-      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-700 to-sky-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/25">
-        <i class="fa-solid fa-earth-americas text-lg animate-pulse"></i>
+    <div class="flex items-center gap-2 shrink-0 select-none">
+      <div class="w-8.5 h-8.5 rounded-xl bg-gradient-to-tr from-blue-700 to-sky-500 flex items-center justify-center text-white shadow-md shadow-blue-500/25 shrink-0">
+        <i class="fa-solid fa-earth-americas text-base animate-pulse"></i>
       </div>
-      <div>
+      <div class="shrink-0">
         <div class="flex items-center gap-1.5">
-          <h1 class="font-black text-sm md:text-base text-white tracking-wide">ArcGIS Living Atlas</h1>
-          <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold flex items-center gap-1">
-            <i class="fa-solid fa-location-dot text-[9px]"></i>
+          <h1 class="font-black text-xs md:text-sm text-white tracking-wide whitespace-nowrap">ArcGIS Living Atlas</h1>
+          <span class="text-[9.5px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold flex items-center gap-1 shrink-0">
+            <i class="fa-solid fa-location-dot text-[8.5px]"></i>
             العراق
           </span>
         </div>
-        <div class="text-[10.5px] font-bold text-amber-300 flex items-center gap-1.5 leading-tight mt-0.5">
-          <i class="fa-solid fa-user-gear text-[10px] text-amber-400"></i>
-          <span>تصميم وتطوير الدكتور المهندس احمد لؤي البجاري</span>
+        <div class="text-[10px] font-bold text-amber-300 flex items-center gap-1 leading-tight mt-0.5 whitespace-nowrap">
+          <i class="fa-solid fa-user-gear text-[9.5px] text-amber-400"></i>
+          <span>تصميم وتطوير د.م. احمد لؤي البجاري</span>
         </div>
       </div>
     </div>
 
-    <!-- Center Search Container (Wide & Spacious High-Contrast Intelligent City & Place Search Widget) -->
-    <div class="flex-1 max-w-3xl mx-2 md:mx-4 relative z-[2100] min-w-[260px] md:min-w-[420px]">
+    <!-- Center Search Container (Intelligent City & Place Search Widget) -->
+    <div class="flex-1 max-w-xs md:max-w-sm lg:max-w-md mx-1 md:mx-2 relative z-[2100] min-w-[140px] md:min-w-[180px]">
       <div id="geosearchContainer" class="w-full relative">
         <div class="relative flex items-center w-full">
           <!-- Search Icon on right for RTL -->
-          <div class="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-sky-600 text-sm">
+          <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-sky-600 text-xs">
             <i class="fa-solid fa-magnifying-glass"></i>
           </div>
 
@@ -166,18 +166,18 @@
             id="cityPlaceSearchInput" 
             dir="rtl"
             autocomplete="off"
-            placeholder="ابحث عن أي مدينة، قضاء، ناحية، حي أو معلم في العراق (مثال: بغداد، الكرادة، الموصل، البصرة...)" 
-            class="w-full bg-white text-black font-bold text-xs md:text-sm py-2.5 pr-10 pl-20 rounded-xl border-2 border-sky-400 focus:border-sky-600 shadow-lg placeholder-slate-500 focus:outline-none transition-all"
+            placeholder="ابحث عن مدينة، حي أو معلم بالعراق..." 
+            class="w-full bg-white text-black font-bold text-xs py-2 pr-8 pl-16 rounded-xl border-2 border-sky-400 focus:border-sky-600 shadow-md placeholder-slate-500 focus:outline-none transition-all"
             style="color: #000000 !important; background-color: #ffffff !important; -webkit-text-fill-color: #000000 !important; font-weight: 700 !important;"
           />
 
           <!-- Action buttons inside search bar -->
-          <div class="absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+          <div class="absolute left-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
             <button type="button" id="clearSearchInputBtn" class="hidden text-slate-400 hover:text-slate-700 w-5 h-5 rounded-full flex items-center justify-center text-xs transition-colors cursor-pointer" title="مسح حقل البحث">
               <i class="fa-solid fa-circle-xmark"></i>
             </button>
-            <div class="h-4 w-px bg-slate-200 mx-0.5"></div>
-            <button type="button" id="submitSearchInputBtn" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold shadow-md transition-colors cursor-pointer flex items-center gap-1" title="بدء البحث">
+            <div class="h-3.5 w-px bg-slate-200 mx-0.5"></div>
+            <button type="button" id="submitSearchInputBtn" class="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-bold shadow transition-colors cursor-pointer flex items-center gap-1" title="بدء البحث">
               <span>بحث</span>
             </button>
           </div>
@@ -185,100 +185,96 @@
 
         <!-- Live Instant Suggestions Dropdown -->
         <div id="citySearchResultsDropdown" class="hidden absolute top-full right-0 left-0 mt-2 bg-white border border-slate-300 rounded-xl shadow-2xl overflow-hidden z-[99999] max-h-96 overflow-y-auto divide-y divide-slate-100 text-right" dir="rtl">
-          <!-- Populated dynamically with high-contrast items (black text) -->
+          <!-- Populated dynamically with high-contrast items -->
         </div>
       </div>
     </div>
 
-    <!-- Header Actions -->
-    <div class="flex items-center gap-2">
-      <!-- Quick Measurement Header Shortcut -->
-      <div class="flex items-center bg-slate-800/90 rounded-lg p-0.5 border border-slate-700/80 shadow-sm">
-        <button id="quickMeasureDistBtn" type="button" class="px-2.5 py-1.5 rounded-md text-xs font-semibold text-slate-300 hover:text-sky-300 hover:bg-slate-700 flex items-center gap-1.5 transition-all" title="قياس مسافة (خط ومسار)">
-          <i class="fa-solid fa-ruler text-sky-400"></i>
-          <span class="hidden xl:inline">قياس مسافة</span>
+    <!-- Header Actions Toolbar (Visible, Compact, Sized, Never Truncated) -->
+    <div id="headerActionsBar" class="flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar shrink select-none">
+      
+      <!-- 1. Quick Measurement Tool (Distance & Area) -->
+      <div class="h-8 flex items-center bg-slate-800/90 rounded-lg p-0.5 border border-slate-700/80 shadow-sm shrink-0">
+        <button id="quickMeasureDistBtn" type="button" class="h-7 px-2 rounded-md text-[11px] font-bold text-slate-200 hover:text-sky-300 hover:bg-slate-700 flex items-center gap-1 transition-all whitespace-nowrap cursor-pointer" title="قياس مسافة (خط ومسار)">
+          <i class="fa-solid fa-ruler text-sky-400 text-xs"></i>
+          <span>مسافة</span>
         </button>
-        <button id="quickMeasureAreaBtn" type="button" class="px-2.5 py-1.5 rounded-md text-xs font-semibold text-slate-300 hover:text-emerald-300 hover:bg-slate-700 flex items-center gap-1.5 transition-all" title="قياس مساحة (مضلع)">
-          <i class="fa-solid fa-draw-polygon text-emerald-400"></i>
-          <span class="hidden xl:inline">قياس مساحة</span>
+        <div class="h-4 w-px bg-slate-700/80 mx-0.5"></div>
+        <button id="quickMeasureAreaBtn" type="button" class="h-7 px-2 rounded-md text-[11px] font-bold text-slate-200 hover:text-emerald-300 hover:bg-slate-700 flex items-center gap-1 transition-all whitespace-nowrap cursor-pointer" title="قياس مساحة (مضلع)">
+          <i class="fa-solid fa-draw-polygon text-emerald-400 text-xs"></i>
+          <span>مساحة</span>
         </button>
       </div>
 
-      <!-- Basemaps Toggle -->
-      <button id="toggleBasemapBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700/80 text-xs font-medium text-slate-200 flex items-center gap-1.5 transition-colors" title="خرائط الأساس">
-        <i class="fa-solid fa-map text-blue-400"></i>
-        <span class="hidden sm:inline">خرائط الأساس</span>
+      <!-- 2. Basemaps Toggle -->
+      <button id="toggleBasemapBtn" type="button" class="h-8 px-2.5 rounded-lg bg-slate-800/90 hover:bg-slate-750 border border-slate-700/80 hover:border-blue-500/50 text-[11px] font-bold text-slate-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer" title="اختيار خرائط الأساس (أقمار صناعية، شوارع، تضاريس، داكنة، فاتحة)">
+        <i class="fa-solid fa-map text-blue-400 text-xs"></i>
+        <span>خرائط الأساس</span>
       </button>
 
-      <!-- Legend Toggle -->
-      <button id="toggleLegendBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700/80 text-xs font-medium text-slate-200 flex items-center gap-1.5 transition-colors" title="مفتاح الخريطة">
-        <i class="fa-solid fa-list-check text-emerald-400"></i>
-        <span class="hidden sm:inline">مفتاح الخريطة</span>
+      <!-- 3. Map Legend Toggle (مفتاح الخريطة) -->
+      <button id="toggleLegendBtn" type="button" class="h-8 px-2.5 rounded-lg bg-slate-800/90 hover:bg-slate-750 border border-slate-700/80 hover:border-emerald-500/50 text-[11px] font-bold text-slate-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer" title="فتح مفتاح الخريطة والمصطلحات والرموز (Legend)">
+        <i class="fa-solid fa-list-check text-emerald-400 text-xs"></i>
+        <span>مفتاح الخريطة</span>
       </button>
 
-      <!-- Export Screenshot -->
-      <button id="screenshotBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700/80 text-xs font-medium text-slate-200 flex items-center gap-1.5 transition-colors" title="تصدير لقطة للخريطة">
-        <i class="fa-solid fa-camera text-amber-400"></i>
-        <span class="hidden sm:inline">لقطة</span>
+      <!-- 4. Export Screenshot / Print -->
+      <button id="screenshotBtn" type="button" class="h-8 px-2.5 rounded-lg bg-slate-800/90 hover:bg-slate-750 border border-slate-700/80 hover:border-amber-500/50 text-[11px] font-bold text-slate-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer" title="تصدير لقطة للخريطة أو طباعتها">
+        <i class="fa-solid fa-camera text-amber-400 text-xs"></i>
+        <span>لقطة</span>
       </button>
 
-      <!-- ERDAS IMAGINE Satellite Studio Header Button -->
-      <button id="headerErdasBtn" onclick="window.openErdasTab()" type="button" class="px-3 py-1.5 rounded-lg bg-amber-500/25 hover:bg-amber-500/40 border border-amber-500/60 text-xs font-bold text-amber-300 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm" title="فتح استوديو خرائط الأقمار الصناعية ERDAS IMAGINE (.img / .ers / Apollo WMS)">
-        <i class="fa-solid fa-satellite-dish text-amber-400"></i>
+      <!-- 5. ERDAS IMAGINE Satellite Studio -->
+      <button id="headerErdasBtn" onclick="window.openErdasTab()" type="button" class="h-8 px-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/60 text-[11px] font-bold text-amber-300 hover:text-white flex items-center gap-1.5 transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer" title="فتح استوديو خرائط الأقمار الصناعية ERDAS IMAGINE (.img / .ers / Apollo WMS)">
+        <i class="fa-solid fa-satellite-dish text-amber-400 text-xs"></i>
         <span>خرائط ERDAS</span>
       </button>
 
-      <!-- OSM Vector Extractor Header Button -->
-      <button id="headerOsmBtn" onclick="window.openOsmExtractorModal()" type="button" class="px-3 py-1.5 rounded-lg bg-emerald-500/25 hover:bg-emerald-500/40 border border-emerald-500/60 text-xs font-bold text-emerald-300 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm" title="استخراج مباني وبلوكات وشوارع OpenStreetMap للموقع الحالي">
-        <i class="fa-solid fa-cloud-arrow-down text-emerald-400"></i>
+      <!-- 6. OSM Vector Extractor -->
+      <button id="headerOsmBtn" onclick="window.openOsmExtractorModal()" type="button" class="h-8 px-2.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-500/60 text-[11px] font-bold text-emerald-300 hover:text-white flex items-center gap-1.5 transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer" title="استخراج مباني وبلوكات وشوارع OpenStreetMap للموقع الحالي">
+        <i class="fa-solid fa-cloud-arrow-down text-emerald-400 text-xs"></i>
         <span>استخراج OSM</span>
       </button>
 
-      <!-- Urban Drawing & CAD Layer Button -->
-      <button id="headerDrawingToggleBtn" onclick="window.toggleDrawingMode()" type="button" class="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-xs font-bold text-emerald-200 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm" title="أدوات الرسم والتخطيط العمراني (شوارع، بلوكات سكنية، أبنية، مسارات)">
-        <i class="fa-solid fa-pen-ruler text-emerald-400"></i>
+      <!-- 7. Urban Drawing & CAD Layer -->
+      <button id="headerDrawingToggleBtn" onclick="window.toggleDrawingMode()" type="button" class="h-8 px-2.5 rounded-lg bg-teal-500/20 hover:bg-teal-500/35 border border-teal-500/50 text-[11px] font-bold text-teal-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer" title="أدوات الرسم والتخطيط العمراني (شوارع، بلوكات سكنية، أبنية، مسارات)">
+        <i class="fa-solid fa-pen-ruler text-teal-400 text-xs"></i>
         <span>أدوات الرسم</span>
       </button>
 
-      <!-- Cartographic Layout & Print Studio (A0-A4) Header Button -->
-      <button id="headerMapLayoutBtn" onclick="window.openMapLayoutStudio()" type="button" class="px-3 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/50 text-xs font-bold text-cyan-200 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm" title="استوديو تصميم وتصدير لوحات الخرائط القياسية (A0, A1, A2, A3, A4) وتحديد نافذة الإطار والطباعة المباشرة و PDF">
-        <i class="fa-solid fa-map-location-dot text-cyan-400"></i>
+      <!-- 8. Cartographic Layout & Print Studio (A0-A4) -->
+      <button id="headerMapLayoutBtn" onclick="window.openMapLayoutStudio()" type="button" class="h-8 px-2.5 rounded-lg bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-400/70 text-[11px] font-bold text-cyan-200 hover:text-white flex items-center gap-1.5 transition-all shadow-md shadow-cyan-950/40 shrink-0 whitespace-nowrap cursor-pointer" title="استوديو تصميم وتصدير لوحات الخرائط القياسية (A0, A1, A2, A3, A4) والطباعة المباشرة و PDF">
+        <i class="fa-solid fa-map-location-dot text-cyan-300 text-xs"></i>
         <span>لوحات الطباعة (A0-A4)</span>
       </button>
 
-      <!-- Conversation & Engineering History Link / Button -->
-      <a href="conversation-history.html" target="_blank" id="headerHistoryLogBtn" class="px-3 py-1.5 rounded-lg bg-sky-500/25 hover:bg-sky-500/35 border border-sky-400/60 text-xs font-bold text-sky-200 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm" title="فتح سجل المحادثات والأوامر الهندسية والمخططات والجداول (صفحة HTML)">
-        <i class="fa-solid fa-clock-rotate-left text-sky-400"></i>
-        <span>سجل الأوامر (HTML)</span>
+      <!-- 9. Conversation & Engineering History Log -->
+      <a href="conversation-history.html" target="_blank" id="headerHistoryLogBtn" class="h-8 px-2.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/35 border border-sky-400/50 text-[11px] font-bold text-sky-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer" title="فتح سجل المحادثات والأوامر الهندسية والمخططات والجداول (صفحة HTML)">
+        <i class="fa-solid fa-clock-rotate-left text-sky-400 text-xs"></i>
+        <span>سجل الأوامر</span>
       </a>
 
-      <!-- ArcView GIS & GeoTIFF Export Studio Header Button -->
-      <button id="headerGisExportBtn" onclick="window.openGisExportModal()" type="button" class="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-xs font-semibold text-amber-200 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer" title="خزن وتصدير الخارطة بصيغة GeoTIFF و ArcView GIS">
-        <i class="fa-solid fa-file-export text-amber-400"></i>
-        <span class="hidden sm:inline">تصدير GIS</span>
+      <!-- 10. ArcView GIS & GeoTIFF Export Studio -->
+      <button id="headerGisExportBtn" onclick="window.openGisExportModal()" type="button" class="h-8 px-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/50 text-[11px] font-bold text-amber-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer" title="خزن وتصدير الخارطة بصيغة GeoTIFF و ArcView GIS">
+        <i class="fa-solid fa-file-export text-amber-400 text-xs"></i>
+        <span>تصدير GIS</span>
       </button>
 
-      <!-- Toggle Quick Basemap Bar -->
-      <button id="headerToggleBasemapBarBtn" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700/80 text-xs font-medium text-slate-300 hover:text-white flex items-center gap-1.5 transition-colors" title="إظهار / إخفاء شريط خرائط الأساس السريع على الخارطة (اختصار B)">
-        <i class="fa-solid fa-layer-group text-sky-400"></i>
-        <span class="hidden xl:inline">خرائط الأساس</span>
+      <!-- 11. Toggle Zen / Fullscreen Mode -->
+      <button id="toggleZenModeBtn" type="button" class="h-8 px-2.5 rounded-lg bg-slate-800/90 hover:bg-slate-750 border border-slate-700/80 hover:border-cyan-500/50 text-[11px] font-bold text-slate-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer" title="إخفاء الأشرطة والقوائم العلوية (Zen Mode / زر Esc للخروج)">
+        <i class="fa-solid fa-expand text-cyan-400 text-xs"></i>
+        <span>ملء الشاشة</span>
       </button>
 
-      <!-- Toggle Zen / Fullscreen Mode (Hide Top Bars & Menus) -->
-      <button id="toggleZenModeBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700/80 text-xs font-medium text-slate-200 flex items-center gap-1.5 transition-colors" title="إخفاء الأشرطة والقوائم العلوية (Zen Mode / زر Esc للخروج)">
-        <i class="fa-solid fa-expand text-cyan-400"></i>
-        <span class="hidden sm:inline">إخفاء الأشرطة</span>
-      </button>
-
-      <!-- Active Layer Counter Badge -->
-      <div class="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-mono">
-        <i class="fa-solid fa-layer-group text-[11px]"></i>
-        <span>طبقات نشطة:</span>
-        <span id="activeLayersHeaderBadge" class="font-bold">0</span>
+      <!-- 12. Active Layer Counter Badge -->
+      <div class="h-8 flex items-center gap-1.5 px-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[11px] font-mono shrink-0 whitespace-nowrap">
+        <i class="fa-solid fa-layer-group text-[10px]"></i>
+        <span>طبقات:</span>
+        <span id="activeLayersHeaderBadge" class="font-bold text-sky-300">0</span>
       </div>
 
-      <!-- Mobile Sidebar Toggle -->
-      <button id="toggleSidebarBtn" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 md:hidden border border-slate-700">
+      <!-- 13. Mobile Sidebar Toggle -->
+      <button id="toggleSidebarBtn" type="button" class="h-8 w-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 md:hidden border border-slate-700 flex items-center justify-center shrink-0 cursor-pointer" title="فتح / إغلاق القائمة الجانبية">
         <i class="fa-solid fa-bars text-sm"></i>
       </button>
     </div>
@@ -2389,19 +2385,42 @@
     </div>
   </div>
 
-  <!-- Floating Legend Drawer (Bottom Right) -->
-  <div id="legendPanel" class="hidden absolute top-16 left-4 z-40 w-80 glass-panel rounded-2xl border border-slate-700 shadow-2xl max-h-[75vh] flex flex-col overflow-hidden">
-    <div class="p-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-900/70">
-      <div class="flex items-center gap-2 text-xs font-bold text-slate-200">
-        <i class="fa-solid fa-list-check text-emerald-400"></i>
-        <span>مفتاح الخريطة (Legend)</span>
+  <!-- Floating Legend Drawer (Map Symbology & Layer Legend) -->
+  <div id="legendPanel" class="hidden fixed top-16 left-4 z-[2500] glass-panel rounded-2xl border border-emerald-500/40 shadow-2xl max-h-[82vh] flex flex-col overflow-hidden select-none animate-fadeIn" style="width: 360px; max-width: calc(100vw - 32px);">
+    <div class="p-3 border-b border-slate-800 flex items-center justify-between bg-gradient-to-r from-slate-900 via-emerald-950/40 to-slate-900 shrink-0">
+      <div class="flex items-center gap-2 text-xs font-bold text-slate-100">
+        <div class="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center shrink-0">
+          <i class="fa-solid fa-list-check text-xs"></i>
+        </div>
+        <div>
+          <div class="font-bold text-white text-xs">مفتاح الخريطة والمصطلحات</div>
+          <div class="text-[10px] text-emerald-400 font-normal">دلالات الرموز والألوان والطبقات (Legend)</div>
+        </div>
       </div>
-      <button id="closeLegendBtn" class="text-slate-400 hover:text-white text-xs p-1">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
+      <div class="flex items-center gap-1 shrink-0">
+        <button id="refreshLegendBtn" class="text-slate-400 hover:text-emerald-300 text-xs p-1.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer" title="تحديث الرموز فوراً">
+          <i class="fa-solid fa-rotate text-xs"></i>
+        </button>
+        <button id="closeLegendBtn" class="text-slate-400 hover:text-white text-xs p-1.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer" title="إغلاق مفتاح الخريطة">
+          <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+      </div>
     </div>
-    <div id="legendContent" class="flex-1 overflow-y-auto p-3 text-xs">
-      <!-- ArcGIS Legend Component attaches here -->
+    
+    <div id="legendContent" class="flex-1 overflow-y-auto p-3 space-y-3 text-xs text-slate-300">
+      <!-- Populated dynamically by window.AtlasLegendManager -->
+    </div>
+
+    <!-- Legend Footer with Print & Drawing Shortcuts -->
+    <div class="p-2.5 border-t border-slate-800 bg-slate-900/80 flex items-center justify-between text-[11px] text-slate-400 shrink-0">
+      <span class="flex items-center gap-1.5 text-[10.5px] text-slate-400">
+        <i class="fa-solid fa-circle-check text-emerald-400 text-xs"></i>
+        <span>يتطابق تلقائياً مع معالم اللوحة</span>
+      </span>
+      <button type="button" onclick="window.openMapLayoutStudio()" class="px-2.5 py-1 rounded-lg bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-500/40 text-cyan-200 hover:text-white font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer">
+        <i class="fa-solid fa-print text-cyan-400 text-[10px]"></i>
+        <span>تضمين بالطباعة</span>
+      </button>
     </div>
   </div>
 
@@ -3315,6 +3334,9 @@
   <!-- Specialized Cartographic Map Layout & Print Studio (A0, A1, A2, A3, A4) -->
   <script src="js/layout-engine.js?v=20261002_01"></script>
 
+  <!-- Dynamic Map Symbology & Layer Legend Manager -->
+  <script src="js/legend-manager.js?v=20261002_01"></script>
+
   <!-- Intelligent City & Place Search Engine (Gazetteer & Geocoder) -->
   <script src="js/city-search.js?v=20261001_03"></script>
 
@@ -3325,7 +3347,7 @@
   <script src="js/erdas-loader.js?v=20261001_03"></script>
 
   <!-- Living Atlas Engine Entry -->
-  <script src="js/atlas-core.js?v=20261001_04"></script>
+  <script src="js/atlas-core.js?v=20261002_01"></script>
 
   <!-- Global UI Quick Access Helpers -->
   <script>
