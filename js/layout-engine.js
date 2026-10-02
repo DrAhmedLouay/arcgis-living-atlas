@@ -74,7 +74,17 @@
         showCartouche: true,
         showCoordinates: true,
         showGrid: true,
-        basemapType: 'satellite', // 'satellite' | 'streets' | 'topo'
+        basemapType: 'satellite', // 'satellite' | 'streets' | 'topo' | 'dark-gray' | 'light-gray' | 'grid'
+        layerVisibility: {
+          blocks: true,
+          buildings: true,
+          streets: true,
+          points: true,
+          labels: true,
+          archaeology: true,
+          calibrated: true,
+          erdas: true
+        },
         sheetNumber: '01 / IRQ-LAYOUT'
       };
 
@@ -304,6 +314,43 @@
           btn300.className = 'flex-1 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer';
         }
       }
+      await this.refreshStudioPreview();
+    }
+
+    /**
+     * Set Basemap Type ('satellite' | 'streets' | 'topo' | 'dark-gray' | 'light-gray' | 'grid')
+     */
+    async setBasemapType(type) {
+      if (!type) return;
+      this.options.basemapType = type;
+      this._cachedSatImg = null;
+      this._cachedSatBbox = null;
+      this.updateStudioModalUi();
+      await this.refreshStudioPreview(true);
+    }
+
+    /**
+     * Toggle specific feature layer visibility in print layout
+     */
+    async toggleLayerVisibility(layerKey, isVisible) {
+      if (!this.options.layerVisibility) {
+        this.options.layerVisibility = {
+          blocks: true,
+          buildings: true,
+          streets: true,
+          points: true,
+          labels: true,
+          archaeology: true,
+          calibrated: true,
+          erdas: true
+        };
+      }
+      if (typeof isVisible === 'boolean') {
+        this.options.layerVisibility[layerKey] = isVisible;
+      } else {
+        this.options.layerVisibility[layerKey] = !this.options.layerVisibility[layerKey];
+      }
+      this.updateStudioModalUi();
       await this.refreshStudioPreview();
     }
 
@@ -821,7 +868,9 @@
       ctx.rect(x, y, w, h);
       ctx.clip();
 
-      ctx.fillStyle = '#0f172a';
+      const basemapType = this.options.basemapType || 'satellite';
+      const isLightBase = (basemapType === 'streets' || basemapType === 'topo' || basemapType === 'light-gray');
+      ctx.fillStyle = isLightBase ? '#f1f5f9' : '#0f172a';
       ctx.fillRect(x, y, w, h);
 
       const b = this.frameBounds || this.ensureInitialized();
@@ -830,56 +879,76 @@
         return;
       }
 
-      // 2. Fetch and Draw High-Resolution Satellite Map Image from ArcGIS Living Atlas
-      const reqW = Math.min(1600, Math.max(400, Math.round(w)));
-      const reqH = Math.min(1200, Math.max(300, Math.round(h)));
+      // 2. Render Basemap Image or Grid
+      if (basemapType === 'grid') {
+        this._drawFallbackCartographicGrid(ctx, x, y, w, h, b, mmToPx);
+      } else {
+        const reqW = Math.min(1600, Math.max(400, Math.round(w)));
+        const reqH = Math.min(1200, Math.max(300, Math.round(h)));
 
-      // Convert frame bounds from geographic to Web Mercator (EPSG:3857) with strict clamping
-      const EARTH_RADIUS = 6378137;
-      const south = Math.max(-85.0511, Math.min(85.0511, b.getSouth()));
-      const north = Math.max(-85.0511, Math.min(85.0511, b.getNorth()));
-      const west  = b.getWest();
-      const east  = b.getEast();
+        // Convert frame bounds from geographic to Web Mercator (EPSG:3857) with strict clamping
+        const EARTH_RADIUS = 6378137;
+        const south = Math.max(-85.0511, Math.min(85.0511, b.getSouth()));
+        const north = Math.max(-85.0511, Math.min(85.0511, b.getNorth()));
+        const west  = b.getWest();
+        const east  = b.getEast();
 
-      const mercXmin = west * Math.PI / 180 * EARTH_RADIUS;
-      const mercXmax = east * Math.PI / 180 * EARTH_RADIUS;
-      const mercYmin = Math.log(Math.tan(Math.PI / 4 + south * Math.PI / 360)) * EARTH_RADIUS;
-      const mercYmax = Math.log(Math.tan(Math.PI / 4 + north * Math.PI / 360)) * EARTH_RADIUS;
+        const mercXmin = west * Math.PI / 180 * EARTH_RADIUS;
+        const mercXmax = east * Math.PI / 180 * EARTH_RADIUS;
+        const mercYmin = Math.log(Math.tan(Math.PI / 4 + south * Math.PI / 360)) * EARTH_RADIUS;
+        const mercYmax = Math.log(Math.tan(Math.PI / 4 + north * Math.PI / 360)) * EARTH_RADIUS;
 
-      const minX = Math.min(mercXmin, mercXmax);
-      const maxX = Math.max(mercXmin, mercXmax);
-      const minY = Math.min(mercYmin, mercYmax);
-      const maxY = Math.max(mercYmin, mercYmax);
+        const minX = Math.min(mercXmin, mercXmax);
+        const maxX = Math.max(mercXmin, mercXmax);
+        const minY = Math.min(mercYmin, mercYmax);
+        const maxY = Math.max(mercYmin, mercYmax);
 
-      const bboxStr = `${minX.toFixed(2)},${minY.toFixed(2)},${maxX.toFixed(2)},${maxY.toFixed(2)}`;
-      const exportUrl = `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bboxStr}&bboxSR=3857&imageSR=3857&size=${reqW},${reqH}&f=image`;
+        const bboxStr = `${minX.toFixed(2)},${minY.toFixed(2)},${maxX.toFixed(2)},${maxY.toFixed(2)}`;
+        const cacheKey = `${basemapType}_${bboxStr}`;
 
-      let satImgLoaded = false;
-      if (this._cachedSatImg && this._cachedSatBbox === bboxStr) {
-        try {
-          ctx.drawImage(this._cachedSatImg, x, y, w, h);
-          satImgLoaded = true;
-        } catch (e) {
-          this._cachedSatImg = null;
+        let exportUrl = '';
+        if (basemapType === 'streets') {
+          exportUrl = `https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/export?bbox=${bboxStr}&bboxSR=3857&imageSR=3857&size=${reqW},${reqH}&f=image`;
+        } else if (basemapType === 'topo') {
+          exportUrl = `https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/export?bbox=${bboxStr}&bboxSR=3857&imageSR=3857&size=${reqW},${reqH}&f=image`;
+        } else if (basemapType === 'dark-gray') {
+          exportUrl = `https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/export?bbox=${bboxStr}&bboxSR=3857&imageSR=3857&size=${reqW},${reqH}&f=image`;
+        } else if (basemapType === 'light-gray') {
+          exportUrl = `https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/export?bbox=${bboxStr}&bboxSR=3857&imageSR=3857&size=${reqW},${reqH}&f=image`;
+        } else {
+          // Default: satellite (ArcGIS World Imagery)
+          exportUrl = `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bboxStr}&bboxSR=3857&imageSR=3857&size=${reqW},${reqH}&f=image`;
+        }
+
+        let basemapLoaded = false;
+        if (this._cachedSatImg && this._cachedSatBbox === cacheKey) {
+          try {
+            ctx.drawImage(this._cachedSatImg, x, y, w, h);
+            basemapLoaded = true;
+          } catch (e) {
+            this._cachedSatImg = null;
+          }
+        }
+
+        if (!basemapLoaded) {
+          try {
+            const timeoutMs = mmToPx < 5 ? 4500 : 8500;
+            const basemapImg = await this._loadImageWithTimeout(exportUrl, timeoutMs);
+            ctx.drawImage(basemapImg, x, y, w, h);
+            this._cachedSatImg = basemapImg;
+            this._cachedSatBbox = cacheKey;
+            basemapLoaded = true;
+          } catch (err) {
+            console.warn(`AtlasLayoutStudio: ArcGIS ${basemapType} imagery offline or timeout, using cartographic grid fallback:`, err);
+            this._drawFallbackCartographicGrid(ctx, x, y, w, h, b, mmToPx);
+          }
         }
       }
 
-      if (!satImgLoaded) {
-        try {
-          const timeoutMs = mmToPx < 5 ? 4500 : 8500;
-          const satImg = await this._loadImageWithTimeout(exportUrl, timeoutMs);
-          ctx.drawImage(satImg, x, y, w, h);
-          this._cachedSatImg = satImg;
-          this._cachedSatBbox = bboxStr;
-          satImgLoaded = true;
-        } catch (err) {
-          console.warn('AtlasLayoutStudio: ArcGIS satellite imagery offline or timeout, using cartographic grid fallback:', err);
-          this._drawFallbackCartographicGrid(ctx, x, y, w, h, b, mmToPx);
-        }
-      }
+      const layerVis = this.options.layerVisibility || {};
 
       // 3. Draw Rectified/Calibrated Overlay if active and visible
-      if (window.calibOverlayInstance && window.isCalibOverlayVisible && window.isCalibOverlayVisible()) {
+      if (layerVis.calibrated !== false && window.calibOverlayInstance && window.isCalibOverlayVisible && window.isCalibOverlayVisible()) {
         try {
           await this._drawCalibratedOverlayOnCanvas(ctx, x, y, w, h, b);
         } catch (e) {
@@ -888,7 +957,7 @@
       }
 
       // 3.1 Draw ERDAS IMAGINE active raster overlay if present
-      if (window.AtlasErdasLoader && typeof window.AtlasErdasLoader.getState === 'function') {
+      if (layerVis.erdas !== false && window.AtlasErdasLoader && typeof window.AtlasErdasLoader.getState === 'function') {
         try {
           const erdasState = window.AtlasErdasLoader.getState();
           if (erdasState && erdasState.overlayLayer && erdasState.overlayBounds && erdasState.isLayerVisible !== false) {
@@ -907,7 +976,7 @@
       }
 
       // 5. Draw Archaeological & Historical Sites if visible
-      if (window.IRAQ_ARCHAEOLOGY_DATA && window.IRAQ_ARCHAEOLOGY_DATA.sites) {
+      if (layerVis.archaeology !== false && window.IRAQ_ARCHAEOLOGY_DATA && window.IRAQ_ARCHAEOLOGY_DATA.sites) {
         try {
           this._drawArchaeologicalSites(ctx, x, y, w, h, b, mmToPx);
         } catch (e) {
@@ -1086,10 +1155,25 @@
       const engine = window.AtlasDrawingEngine;
       if (!engine || !engine.features || engine.features.length === 0 || !engine.isLayerVisible) return;
 
+      const layerVis = this.options.layerVisibility || {};
+
       engine.features.forEach(f => {
         if (!f) return;
         const type = f.type;
         const color = (f.properties && f.properties.color) || f.color || '#f59e0b';
+
+        // Check Individual Layer Visibility
+        if (type === 'street' || type === 'line') {
+          if (layerVis.streets === false) return;
+        } else if (type === 'block') {
+          if (layerVis.blocks === false) return;
+        } else if (type === 'building') {
+          if (layerVis.buildings === false) return;
+        } else if (type === 'point') {
+          if (layerVis.points === false) return;
+        } else if (type === 'label') {
+          if (layerVis.labels === false) return;
+        }
 
         ctx.save();
 
@@ -1506,15 +1590,18 @@
       ctx.textBaseline = 'top';
       ctx.fillText('مفتاح الرموز والمصطلحات (LEGEND)', x + w - Math.round(6 * mmToPx), y + Math.round(4 * mmToPx));
 
-      // Items list in 2 columns
-      const items = [
-        { label: 'شوارع وطرق شريانية', color: '#f59e0b', type: 'line' },
-        { label: 'بلوكات سكنية وعقارية', color: '#3b82f6', type: 'poly' },
-        { label: 'أبنية ومنشآت حضرية', color: '#10b981', type: 'poly' },
-        { label: 'مسارات وشبكات خدمية', color: '#8b5cf6', type: 'line' },
-        { label: 'معالم ومحطات ضبط', color: '#ef4444', type: 'point' },
-        { label: 'مواقع تاريخية وأثرية', color: '#f59e0b', type: 'star' }
+      const layerVis = this.options.layerVisibility || {};
+      const allItems = [
+        { key: 'streets', label: 'شوارع وطرق شريانية', color: '#f59e0b', type: 'line' },
+        { key: 'blocks', label: 'بلوكات سكنية وعقارية', color: '#3b82f6', type: 'poly' },
+        { key: 'buildings', label: 'أبنية ومنشآت حضرية', color: '#10b981', type: 'poly' },
+        { key: 'streets', label: 'مسارات وشبكات خدمية', color: '#8b5cf6', type: 'line' },
+        { key: 'points', label: 'معالم ومحطات ضبط', color: '#ef4444', type: 'point' },
+        { key: 'archaeology', label: 'مواقع تاريخية وأثرية', color: '#f59e0b', type: 'star' }
       ];
+
+      // Keep only legend items whose layer is visible
+      const items = allItems.filter(item => layerVis[item.key] !== false);
 
       const startY = y + Math.round(11 * mmToPx);
       const rowH = Math.round(8 * mmToPx);
@@ -1900,6 +1987,33 @@
         const sInfo = (this.selectedSheet && SHEET_SIZES[this.selectedSheet.toLowerCase()]) || SHEET_SIZES['a3'];
         sheetBadge.textContent = `${sInfo.name} (${this.orientation === 'landscape' ? 'أفقي' : 'عمودي'})`;
       }
+
+      // Basemap selector buttons
+      const currentBasemap = this.options.basemapType || 'satellite';
+      document.querySelectorAll('.layout-basemap-btn').forEach(btn => {
+        const bType = btn.dataset.basemap;
+        if (bType === currentBasemap) {
+          btn.className = 'layout-basemap-btn flex-1 py-1.5 px-2 rounded-lg text-xs font-bold bg-cyan-600 text-white shadow border border-cyan-400/50 cursor-pointer transition-all flex items-center justify-center gap-1.5';
+        } else {
+          btn.className = 'layout-basemap-btn flex-1 py-1.5 px-2 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-750 border border-slate-700 cursor-pointer transition-all flex items-center justify-center gap-1.5';
+        }
+      });
+
+      // Layer Visibility checkboxes
+      const layerVis = this.options.layerVisibility || {};
+      const layerCheckboxes = {
+        'layerVisBlocks': layerVis.blocks !== false,
+        'layerVisBuildings': layerVis.buildings !== false,
+        'layerVisStreets': layerVis.streets !== false,
+        'layerVisPoints': layerVis.points !== false,
+        'layerVisLabels': layerVis.labels !== false,
+        'layerVisArchaeology': layerVis.archaeology !== false,
+        'layerVisCalibrated': (layerVis.calibrated !== false || layerVis.erdas !== false)
+      };
+      for (const [id, isChecked] of Object.entries(layerCheckboxes)) {
+        const cb = document.getElementById(id);
+        if (cb) cb.checked = isChecked;
+      }
     }
 
     /**
@@ -2009,6 +2123,14 @@
 
   window.exportMapLayoutPng = function () {
     window.AtlasLayoutStudio.exportPng();
+  };
+
+  window.setLayoutStudioBasemap = function (type) {
+    window.AtlasLayoutStudio.setBasemapType(type);
+  };
+
+  window.toggleLayoutStudioLayer = function (layerKey, isVisible) {
+    window.AtlasLayoutStudio.toggleLayerVisibility(layerKey, isVisible);
   };
 
 })();

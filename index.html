@@ -3062,6 +3062,43 @@
             </div>
           </div>
 
+          <!-- Basemap Selection -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between text-xs font-bold text-slate-300">
+              <span class="flex items-center gap-1.5">
+                <i class="fa-solid fa-map text-cyan-400"></i>
+                <span>نوع خارطة الأساس (Basemap):</span>
+              </span>
+              <span class="text-[10px] text-cyan-300 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-800">ArcGIS Living Atlas</span>
+            </div>
+            <div class="grid grid-cols-3 gap-1.5 bg-slate-900/90 p-1.5 rounded-xl border border-slate-800">
+              <button type="button" data-basemap="satellite" onclick="window.AtlasLayoutStudio.setBasemapType('satellite')" class="layout-basemap-btn flex-1 py-1.5 px-2 rounded-lg text-xs font-bold bg-cyan-600 text-white shadow border border-cyan-400/50 cursor-pointer transition-all flex items-center justify-center gap-1.5" title="صور أقمار صناعية فائقة الدقة">
+                <i class="fa-solid fa-satellite text-[11px]"></i>
+                <span>فضائية</span>
+              </button>
+              <button type="button" data-basemap="streets" onclick="window.AtlasLayoutStudio.setBasemapType('streets')" class="layout-basemap-btn flex-1 py-1.5 px-2 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-750 border border-slate-700 cursor-pointer transition-all flex items-center justify-center gap-1.5" title="خارطة الشوارع والتنقل">
+                <i class="fa-solid fa-road text-[11px]"></i>
+                <span>شوارع</span>
+              </button>
+              <button type="button" data-basemap="topo" onclick="window.AtlasLayoutStudio.setBasemapType('topo')" class="layout-basemap-btn flex-1 py-1.5 px-2 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-750 border border-slate-700 cursor-pointer transition-all flex items-center justify-center gap-1.5" title="خارطة التضاريس والكنتور">
+                <i class="fa-solid fa-mountain-sun text-[11px]"></i>
+                <span>طبوغرافية</span>
+              </button>
+              <button type="button" data-basemap="dark-gray" onclick="window.AtlasLayoutStudio.setBasemapType('dark-gray')" class="layout-basemap-btn flex-1 py-1.5 px-2 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-750 border border-slate-700 cursor-pointer transition-all flex items-center justify-center gap-1.5" title="لوحة كارتوغرافية رمادية داكنة">
+                <i class="fa-solid fa-moon text-[11px]"></i>
+                <span>داكنة</span>
+              </button>
+              <button type="button" data-basemap="light-gray" onclick="window.AtlasLayoutStudio.setBasemapType('light-gray')" class="layout-basemap-btn flex-1 py-1.5 px-2 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-750 border border-slate-700 cursor-pointer transition-all flex items-center justify-center gap-1.5" title="لوحة كارتوغرافية رمادية فاتحة">
+                <i class="fa-solid fa-sun text-[11px]"></i>
+                <span>فاتحة</span>
+              </button>
+              <button type="button" data-basemap="grid" onclick="window.AtlasLayoutStudio.setBasemapType('grid')" class="layout-basemap-btn flex-1 py-1.5 px-2 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-750 border border-slate-700 cursor-pointer transition-all flex items-center justify-center gap-1.5" title="شبكة هندسية نظيفة للمخططات بدون صورة أساس">
+                <i class="fa-solid fa-border-none text-[11px]"></i>
+                <span>شبكة فقط</span>
+              </button>
+            </div>
+          </div>
+
           <!-- 3. Interactive Map Frame Controls -->
           <div class="p-3 rounded-xl bg-cyan-950/40 border border-cyan-800/60 space-y-2">
             <div class="flex items-center justify-between text-cyan-300 font-bold text-xs">
@@ -3096,6 +3133,54 @@
             <div>
               <label class="block text-[11px] font-bold text-slate-300 mb-1">العنوان الفرعي والمنطقة:</label>
               <input type="text" id="layoutSubtitleInput" value="أطلس البيانات المكانية التفاعلي - جمهورية العراق" oninput="window.AtlasLayoutStudio.options.subtitle = this.value; this.dataset.dirty = '1'; window.AtlasLayoutStudio.debouncedRefresh();" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500" placeholder="المحافظة أو المدينة أو المشروع">
+            </div>
+          </div>
+
+          <!-- Feature Layers Visibility (إظهار / إخفاء طبقات الرسم والمعالم) -->
+          <div class="space-y-1.5 p-3 rounded-xl bg-slate-900/90 border border-slate-800">
+            <div class="flex items-center justify-between text-xs font-bold text-slate-200">
+              <span class="flex items-center gap-1.5">
+                <i class="fa-solid fa-layer-group text-cyan-400"></i>
+                <span>طبقات ومعالم الخارطة (Layers):</span>
+              </span>
+              <span class="text-[10px] text-cyan-300 bg-cyan-950/70 px-2 py-0.5 rounded border border-cyan-800">تحكم الطباعة</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-[11px] pt-1.5">
+              <label class="flex items-center gap-2 text-slate-200 cursor-pointer hover:text-cyan-300 transition-colors">
+                <input type="checkbox" id="layerVisBlocks" checked onchange="window.AtlasLayoutStudio.toggleLayerVisibility('blocks', this.checked)" class="rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0">
+                <span class="inline-block w-2.5 h-2.5 rounded bg-blue-500/70 border border-blue-400"></span>
+                <span>البلوكات السكنية</span>
+              </label>
+              <label class="flex items-center gap-2 text-slate-200 cursor-pointer hover:text-cyan-300 transition-colors">
+                <input type="checkbox" id="layerVisBuildings" checked onchange="window.AtlasLayoutStudio.toggleLayerVisibility('buildings', this.checked)" class="rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0">
+                <span class="inline-block w-2.5 h-2.5 rounded bg-emerald-500/70 border border-emerald-400"></span>
+                <span>الأبنية والمنشآت</span>
+              </label>
+              <label class="flex items-center gap-2 text-slate-200 cursor-pointer hover:text-cyan-300 transition-colors">
+                <input type="checkbox" id="layerVisStreets" checked onchange="window.AtlasLayoutStudio.toggleLayerVisibility('streets', this.checked)" class="rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0">
+                <span class="inline-block w-3 h-0.5 bg-amber-400"></span>
+                <span>الشوارع والمسارات</span>
+              </label>
+              <label class="flex items-center gap-2 text-slate-200 cursor-pointer hover:text-cyan-300 transition-colors">
+                <input type="checkbox" id="layerVisPoints" checked onchange="window.AtlasLayoutStudio.toggleLayerVisibility('points', this.checked)" class="rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0">
+                <span class="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+                <span>النقاط والمعالم</span>
+              </label>
+              <label class="flex items-center gap-2 text-slate-200 cursor-pointer hover:text-cyan-300 transition-colors">
+                <input type="checkbox" id="layerVisLabels" checked onchange="window.AtlasLayoutStudio.toggleLayerVisibility('labels', this.checked)" class="rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0">
+                <i class="fa-solid fa-font text-cyan-400 text-[10px]"></i>
+                <span>التسميات والنصوص</span>
+              </label>
+              <label class="flex items-center gap-2 text-slate-200 cursor-pointer hover:text-cyan-300 transition-colors">
+                <input type="checkbox" id="layerVisArchaeology" checked onchange="window.AtlasLayoutStudio.toggleLayerVisibility('archaeology', this.checked)" class="rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0">
+                <span class="inline-block w-2 h-2 rounded-full bg-amber-400"></span>
+                <span>المواقع الأثرية</span>
+              </label>
+              <label class="flex items-center gap-2 text-slate-200 cursor-pointer hover:text-cyan-300 transition-colors col-span-2">
+                <input type="checkbox" id="layerVisCalibrated" checked onchange="window.AtlasLayoutStudio.toggleLayerVisibility('calibrated', this.checked); window.AtlasLayoutStudio.toggleLayerVisibility('erdas', this.checked);" class="rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0">
+                <i class="fa-solid fa-satellite-dish text-purple-400 text-[10px]"></i>
+                <span>خرائط ERDAS والمعايرة المكانية</span>
+              </label>
             </div>
           </div>
 
@@ -3228,7 +3313,7 @@
   <script src="js/drawing-engine.js?v=20261001_03"></script>
 
   <!-- Specialized Cartographic Map Layout & Print Studio (A0, A1, A2, A3, A4) -->
-  <script src="js/layout-engine.js?v=20261001_04"></script>
+  <script src="js/layout-engine.js?v=20261002_01"></script>
 
   <!-- Intelligent City & Place Search Engine (Gazetteer & Geocoder) -->
   <script src="js/city-search.js?v=20261001_03"></script>
