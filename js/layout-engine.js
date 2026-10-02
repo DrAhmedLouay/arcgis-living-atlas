@@ -64,7 +64,7 @@
       this.options = {
         title: 'مخطط الرقمنة والمسح الحضري والعقاري',
         subtitle: 'أطلس البيانات المكانية التفاعلي - جمهورية العراق',
-        locationName: 'محافظة نينوى - مدينة الموصل',
+        locationName: 'مدينة الموصل',
         organization: 'جمهورية العراق • أطلس البيانات المكانية التفاعلي',
         engineerAttribution: 'تصميم وتطوير الدكتور المهندس احمد لؤي البجاري',
         crs: 'WGS 84 / UTM Zone 38N (EPSG:32638)',
@@ -844,7 +844,11 @@
       // Subtitle & Project
       ctx.fillStyle = '#475569';
       ctx.font = `500 ${Math.round(3.4 * mmToPx)}px system-ui, -apple-system, "Segoe UI", Roboto, "Cairo", sans-serif`;
-      ctx.fillText(`${this.options.subtitle} • ${this.options.locationName}`, textRight, y + Math.round(13 * mmToPx));
+      const subtitleParts = [];
+      if (this.options.subtitle && this.options.subtitle.trim()) subtitleParts.push(this.options.subtitle.trim());
+      if (this.options.locationName && this.options.locationName.trim()) subtitleParts.push(this.options.locationName.trim());
+      const subtitleText = subtitleParts.join(' • ');
+      ctx.fillText(subtitleText, textRight, y + Math.round(13 * mmToPx));
 
       // Left Metadata Block
       ctx.textAlign = 'left';
@@ -1974,6 +1978,11 @@
       const subInput = document.getElementById('layoutSubtitleInput');
       if (subInput && !subInput.dataset.dirty) {
         subInput.value = this.options.subtitle;
+      }
+
+      const locInput = document.getElementById('layoutLocationInput');
+      if (locInput && !locInput.dataset.dirty) {
+        locInput.value = this.options.locationName || '';
       }
 
       // Scale readout badge

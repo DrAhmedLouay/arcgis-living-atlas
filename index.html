@@ -3156,9 +3156,15 @@
               <input type="text" id="layoutTitleInput" value="مخطط الرقمنة والمسح الحضري والعقاري" oninput="window.AtlasLayoutStudio.options.title = this.value; this.dataset.dirty = '1'; window.AtlasLayoutStudio.debouncedRefresh();" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500" placeholder="أدخل عنوان اللوحة">
             </div>
 
-            <div>
-              <label class="block text-[11px] font-bold text-slate-300 mb-1">العنوان الفرعي والمنطقة:</label>
-              <input type="text" id="layoutSubtitleInput" value="أطلس البيانات المكانية التفاعلي - جمهورية العراق" oninput="window.AtlasLayoutStudio.options.subtitle = this.value; this.dataset.dirty = '1'; window.AtlasLayoutStudio.debouncedRefresh();" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500" placeholder="المحافظة أو المدينة أو المشروع">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[11px] font-bold text-slate-300 mb-1">العنوان الفرعي للمشروع:</label>
+                <input type="text" id="layoutSubtitleInput" value="أطلس البيانات المكانية التفاعلي - جمهورية العراق" oninput="window.AtlasLayoutStudio.options.subtitle = this.value; this.dataset.dirty = '1'; window.AtlasLayoutStudio.debouncedRefresh();" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500" placeholder="المشروع أو المنظومة">
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-300 mb-1">المنطقة / الموقع:</label>
+                <input type="text" id="layoutLocationInput" value="مدينة الموصل" oninput="window.AtlasLayoutStudio.options.locationName = this.value; this.dataset.dirty = '1'; window.AtlasLayoutStudio.debouncedRefresh();" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500" placeholder="المدينة أو الموقع الجغرافي">
+              </div>
             </div>
           </div>
 
@@ -3339,7 +3345,7 @@
   <script src="js/drawing-engine.js?v=20261001_03"></script>
 
   <!-- Specialized Cartographic Map Layout & Print Studio (A0, A1, A2, A3, A4) -->
-  <script src="js/layout-engine.js?v=20261002_03"></script>
+  <script src="js/layout-engine.js?v=20261002_04"></script>
 
   <!-- Dynamic Map Symbology & Layer Legend Manager -->
   <script src="js/legend-manager.js?v=20261002_03"></script>
