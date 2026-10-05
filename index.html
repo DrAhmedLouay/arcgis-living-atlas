@@ -1091,6 +1091,22 @@
             </p>
           </div>
 
+          <!-- Quick Navigation Anchor Ribbon between Importer & Calibration Tools -->
+          <div class="grid grid-cols-3 gap-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-700/80 text-[11px] font-bold select-none shrink-0 shadow-sm">
+            <button type="button" onclick="document.getElementById('ecwDropZone').scrollIntoView({behavior:'smooth'})" class="py-1.5 px-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 flex items-center justify-center gap-1 transition-colors cursor-pointer text-center">
+              <i class="fa-solid fa-cloud-arrow-up text-[10px]"></i>
+              <span class="truncate">1. استيراد الخارطة</span>
+            </button>
+            <button type="button" onclick="document.getElementById('calibrationControlsContainer').scrollIntoView({behavior:'smooth'})" class="py-1.5 px-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 flex items-center justify-center gap-1 transition-colors cursor-pointer text-center">
+              <i class="fa-solid fa-arrows-to-dot text-[10px]"></i>
+              <span class="truncate">2. خيارات التصحيح</span>
+            </button>
+            <button type="button" onclick="var d=document.getElementById('fourCornersDetails'); if(d){d.open=true; d.scrollIntoView({behavior:'smooth'});}" class="py-1.5 px-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 flex items-center justify-center gap-1 transition-colors cursor-pointer text-center">
+              <i class="fa-solid fa-crosshairs text-[10px]"></i>
+              <span class="truncate">3. إحداثيات الأركان</span>
+            </button>
+          </div>
+
           <!-- =========================================================================
                Primary Geospatial File Importer Hub (Dedicated Buttons for All Formats)
                ========================================================================= -->
@@ -1407,10 +1423,25 @@
                 </div>
               </details>
             </div>
-          </div>
 
-          <!-- Step 2: Geometric Calibration (Nudge, Scale, Rotate) -->
-          <div id="calibrationControlsContainer" class="hidden space-y-3">
+            <!-- Step 2: Geometric Calibration (Nudge, Scale, Rotate) -->
+            <div id="calibrationControlsContainer" class="space-y-3">
+
+              <!-- Calibration Section Title Banner -->
+              <div class="bg-gradient-to-r from-emerald-950/70 via-slate-900 to-sky-950/60 border border-emerald-500/40 rounded-xl p-3 flex items-center justify-between shadow-md">
+                <div class="flex items-center gap-2">
+                  <span class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-xs shadow-inner">
+                    <i class="fa-solid fa-arrows-to-dot"></i>
+                  </span>
+                  <div>
+                    <h5 class="text-xs font-bold text-white">خيارات وأدوات تصحيح ومعايرة الخارطة الفضائية</h5>
+                    <div class="text-[10px] text-emerald-300 font-mono">Geometric Georeferencing & Calibration Tools</div>
+                  </div>
+                </div>
+                <span id="calibActiveIndicator" class="text-[9.5px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-bold">
+                  أدوات التصحيح جاهزة
+                </span>
+              </div>
 
             <!-- =========================================================================
                  AI Spatial Alignment & Landmark Matching Studio
@@ -1777,7 +1808,7 @@
               </div>
 
               <!-- Exact 4-Corner Coordinates Input Card -->
-              <details class="text-xs bg-slate-950/90 border border-emerald-500/40 rounded-xl p-2.5 space-y-2 group">
+              <details id="fourCornersDetails" class="text-xs bg-slate-950/90 border border-emerald-500/40 rounded-xl p-2.5 space-y-2 group">
                 <summary class="cursor-pointer text-emerald-300 font-bold select-none flex items-center justify-between">
                   <span class="flex items-center gap-1.5">
                     <i class="fa-solid fa-crosshairs text-emerald-400"></i>
@@ -3467,7 +3498,7 @@
   <script src="js/erdas-loader.js?v=20261005_01"></script>
 
   <!-- Living Atlas Engine Entry -->
-  <script src="js/atlas-core.js?v=20261005_01"></script>
+  <script src="js/atlas-core.js?v=20261005_02"></script>
 
   <!-- Global UI Quick Access Helpers -->
   <script>

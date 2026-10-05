@@ -4557,6 +4557,61 @@
 
         </div>
       </div>
+
+      <!-- =====================================================================
+           Order 71: Visual Satellite Image Georeferencing & Calibration Tools Activation
+           ===================================================================== -->
+      <div class="order-card bg-slate-900/60 rounded-2xl border border-emerald-500/40 p-4 lg:p-6 space-y-4 hover:border-emerald-500/70 transition-all shadow-md" data-category="features" data-index="71">
+        <div class="flex flex-col gap-3">
+          
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+              <span class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center font-mono font-bold text-xs">
+                #71
+              </span>
+              <span class="text-xs font-bold text-emerald-400 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30">
+                إظهار وتفعيل خيارات وأدوات تصحيح ومعايرة الصورة الفضائية وشريط التنقل السريع
+              </span>
+              <span class="text-[10px] text-slate-400 font-medium">
+                المرحلة 14: التوافقية المتعددة الأجهزة ومحرك استيراد ومعايرة الرستر الفضائي
+              </span>
+            </div>
+
+            <div class="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
+              <i class="fa-regular fa-clock text-slate-500"></i>
+              <span>2026-10-05T15:12:00Z</span>
+            </div>
+          </div>
+
+          <!-- User Request Box -->
+          <div class="bg-slate-900/90 rounded-xl p-3.5 border border-slate-800/90 space-y-1">
+            <div class="text-[10px] font-bold text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
+              <i class="fa-solid fa-comment-dots text-xs"></i>
+              <span>نص طلب المستخدم / الأمر الموجه:</span>
+            </div>
+            <div class="text-sm font-semibold text-slate-100 leading-relaxed font-sans pr-1">
+              اين خيارات تصحيح الصورة الفضائية؟
+            </div>
+          </div>
+
+          <!-- System Response & Technical Architecture -->
+          <div class="space-y-2 text-xs">
+            <div class="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+              <i class="fa-solid fa-code-commit text-xs"></i>
+              <span>معالجة توازن وسوم لوحة المعايرة وإظهار أدوات التصحيح الهندسي الدائم وشريط الوصول السريع للأركان</span>
+            </div>
+            <p class="text-slate-300 leading-relaxed">
+              <strong>التشخيص والحلول الهندسية المنفذة:</strong>
+            </p>
+            <ul class="list-disc list-inside space-y-1 text-slate-300 pr-1 text-[11px]">
+              <li><strong>تصحيح توازن وسوم DOM للوحة المعايرة (Tag Balance Fix):</strong> كان هناك وسم إغلاق مبكر <code>&lt;/div&gt;</code> بعد صندوق ميتاداتا ECW تسبب في إغلاق وسم <code>tab-panel</code> قبل بداية قسم أدوات التصحيح، مما ألقى بكامل حاوية المعايرة خارج التبويب فاحتجبت عن الظهور. تم حذف الوسم الزائد وإعادة ضبط توازن الوسوم بدقة.</li>
+              <li><strong>الظهور الدائم لأدوات التصحيح الهندسي (Always-Visible Calibration Suite):</strong> تمت إزالة فئة الإخفاء <code>hidden</code> الافتراضية عن حاوية <code>#calibrationControlsContainer</code> وتزويدها بلافتة حالة تفاعلية 🟢، لتكون خيارات المعايرة (أزرار التحريك الدقيق Nudge Pad، زوايا التدوير Rotation، مقياس الحجم Scale، استوديو المطابقة بالذكاء الاصطناعي AI Reality Studio، أدوات الفحص التفاعلي Swipe و Lens، وتثبيت الإحداثيات) ظاهرة وجاهزة للاستخدام في أي لحظة.</li>
+              <li><strong>شريط التنقل والوصول السريع الداخلي (Quick Navigation Anchor Ribbon):</strong> تمت إضافة 3 أزرار تنقل تفاعلية فورية بأعلى لوحة الاستيراد: [1. استيراد الخارطة]، [2. خيارات التصحيح]، و [3. إحداثيات الأركان] تُمكّن المهندس من التمرير اللحظي أو فتح بطاقة إدخال إحداثيات الأركان الأربعة (4 Corners) بنقرة زر واحدة.</li>
+            </ul>
+          </div>
+
+        </div>
+      </div>
     </section>
 
   </main>
@@ -4573,7 +4628,7 @@
       منظومة ArcGIS Living Atlas Iraq • أطلس البيانات المكانية التفاعلي واستوديو تصدير الخرائط الفضائية المصححة لبرامج ArcView GIS و GeoTIFF
     </div>
     <div class="text-[10px] text-slate-600 font-mono">
-      Generated automatically on 2026-10-05 • Full Historical Archive • 70 Engineering Commands
+      Generated automatically on 2026-10-05 • Full Historical Archive • 71 Engineering Commands
     </div>
   </footer>
 

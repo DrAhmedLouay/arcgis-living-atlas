@@ -6026,6 +6026,11 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
 
       // Update UI
       if (controlsContainer) controlsContainer.classList.remove('hidden');
+      const calibActiveIndicator = document.getElementById('calibActiveIndicator');
+      if (calibActiveIndicator) {
+        calibActiveIndicator.textContent = 'المعايرة نشطة الآن 🟢';
+        calibActiveIndicator.className = 'text-[9.5px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold animate-pulse';
+      }
       if (statusLabel) {
         statusLabel.textContent = `معايرة: ${label.substring(0, 20)}...`;
         statusLabel.className = 'text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-medium';
@@ -7741,7 +7746,11 @@ Date: ${new Date().toLocaleString('ar-IQ')} / ${new Date().toISOString()}
       isOverlayVisible = false;
       if (floatingVisibilityBar) floatingVisibilityBar.classList.add('hidden');
       if (floatRestoreVisibilityBarBtn) floatRestoreVisibilityBarBtn.classList.add('hidden');
-      if (controlsContainer) controlsContainer.classList.add('hidden');
+      const calibActiveIndicator = document.getElementById('calibActiveIndicator');
+      if (calibActiveIndicator) {
+        calibActiveIndicator.textContent = 'أدوات التصحيح جاهزة';
+        calibActiveIndicator.className = 'text-[9.5px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-bold';
+      }
       if (statusLabel) {
         statusLabel.textContent = 'لم يتم اختيار ملف';
         statusLabel.className = 'text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700';
