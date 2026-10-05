@@ -4708,6 +4708,7 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
 
       let zipFile = null;
       let ecwFile = null;
+      let imgFile = null;
       let sidecarFile = null;
       let prjFile = null;
       let tiffFile = null;
@@ -4720,6 +4721,8 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
           zipFile = f;
         } else if (lower.endsWith('.ecw')) {
           ecwFile = f;
+        } else if (lower.endsWith('.img') || lower.endsWith('.hfa')) {
+          imgFile = f;
         } else if (lower.endsWith('.ers') || lower.endsWith('.eww') || lower.endsWith('.wld') || lower.endsWith('.tfw') || lower.endsWith('.jgw') || lower.endsWith('.pgw')) {
           sidecarFile = f;
         } else if (lower.endsWith('.prj')) {
@@ -4813,6 +4816,13 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
         } catch (se) {}
       }
 
+      if (imgFile) {
+        if (window.AtlasErdasLoader && typeof window.AtlasErdasLoader.handleFile === 'function') {
+          await window.AtlasErdasLoader.handleFile(imgFile);
+          return;
+        }
+      }
+
       if (ecwFile) {
         if (companionRasterFile) {
           const companionSrc = URL.createObjectURL(companionRasterFile);
@@ -4829,10 +4839,15 @@ Respond ONLY in this exact JSON format (no markdown, no other text):
         }
       } else if (companionRasterFile) {
         await processAnyImageFile(companionRasterFile, sidecarFile, preloadedSidecarText, preloadedPrjText);
+      } else if (sidecarFile && sidecarFile.name.toLowerCase().endsWith('.ers')) {
+        if (window.AtlasErdasLoader && typeof window.AtlasErdasLoader.handleFile === 'function') {
+          await window.AtlasErdasLoader.handleFile(sidecarFile);
+          return;
+        }
       } else if (sidecarFile || prjFile) {
         showToast('يرجى اختيار ملف الصورة (TIFF / PNG / JPG) مع ملفات الإسناد (.TFW / .PRJ)', 'warning');
       } else {
-        showToast('يرجى اختيار ملف بصيغة .ecw أو صورة فضائية مدعومة (TIFF / PNG / JPG) أو حزمة .zip', 'warning');
+        showToast('يرجى اختيار ملف بصيغة .ecw أو GeoTIFF (.tif) أو ERDAS (.img/.ers) أو حزمة .zip', 'warning');
       }
     }
 
@@ -9619,11 +9634,9 @@ Date: ${new Date().toLocaleString('ar-IQ')} / ${new Date().toISOString()}
       btn.addEventListener('click', () => {
         const tab = btn.getAttribute('data-tab');
         tabButtons.forEach(b => {
-          b.classList.remove('active', 'border-blue-500', 'text-blue-400');
-          b.classList.add('border-transparent', 'text-slate-400');
+          b.classList.remove('active');
         });
-        btn.classList.add('active', 'border-blue-500', 'text-blue-400');
-        btn.classList.remove('border-transparent', 'text-slate-400');
+        btn.classList.add('active');
 
         tabPanels.forEach(panel => {
           panel.classList.toggle('hidden', panel.getAttribute('data-panel') !== tab);
@@ -9642,7 +9655,11 @@ Date: ${new Date().toLocaleString('ar-IQ')} / ${new Date().toISOString()}
     const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
     if (toggleSidebarBtn && sidebar) {
       toggleSidebarBtn.addEventListener('click', () => {
-        sidebar.classList.toggle('translate-x-full');
+        if (typeof window.togglePlatformSidebar === 'function') {
+          window.togglePlatformSidebar();
+        } else {
+          sidebar.classList.toggle('translate-x-full');
+        }
       });
     }
 

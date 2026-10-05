@@ -31,7 +31,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <!-- Custom Styling -->
-  <link rel="stylesheet" href="css/styles.css?v=20261002_03">
+  <link rel="stylesheet" href="css/styles.css?v=20261005_01">
 
   <script>
     // Immediate Synchronous Handlers for ArcView GIS & GeoTIFF Export Studio
@@ -80,18 +80,71 @@
       document.body.removeChild(link);
     };
 
+    // Responsive Multi-Device Sidebar Toggle (PC, iPad, Tablet, Mobile)
+    window.togglePlatformSidebar = function(forceState) {
+      var sidebar = document.getElementById('appSidebar');
+      if (!sidebar) return;
+      var isSmallScreen = window.innerWidth <= 1024;
+      if (isSmallScreen) {
+        sidebar.classList.remove('desktop-collapsed', 'translate-x-full', '-translate-x-full');
+        var shouldExpand;
+        if (typeof forceState === 'boolean') {
+          shouldExpand = forceState;
+        } else {
+          shouldExpand = sidebar.classList.contains('sidebar-collapsed') || !sidebar.classList.contains('sidebar-expanded');
+        }
+        if (shouldExpand) {
+          sidebar.classList.remove('sidebar-collapsed', 'hidden');
+          sidebar.classList.add('sidebar-expanded');
+        } else {
+          sidebar.classList.remove('sidebar-expanded');
+          sidebar.classList.add('sidebar-collapsed');
+        }
+      } else {
+        // Desktop (> 1024px)
+        sidebar.classList.remove('sidebar-expanded', 'sidebar-collapsed', 'translate-x-full', '-translate-x-full', 'hidden');
+        var shouldCollapse;
+        if (typeof forceState === 'boolean') {
+          shouldCollapse = !forceState;
+        } else {
+          shouldCollapse = !sidebar.classList.contains('desktop-collapsed');
+        }
+        if (shouldCollapse) {
+          sidebar.classList.add('desktop-collapsed');
+        } else {
+          sidebar.classList.remove('desktop-collapsed');
+        }
+      }
+    };
+
+    // Dedicated Trigger for File Upload by Extension (ECW, GeoTIFF, ERDAS, ZIP, etc.)
+    window.triggerFormatUpload = function(filter) {
+      var erdasBtn = document.querySelector('.sidebar-tab-btn[data-tab="calibrate"]');
+      if (erdasBtn) erdasBtn.click();
+      if (typeof window.togglePlatformSidebar === 'function') {
+        window.togglePlatformSidebar(true);
+      }
+      var fileInput = document.getElementById('satelliteImageFileInput');
+      if (!fileInput) return;
+      if (filter) {
+        fileInput.accept = filter;
+      } else {
+        fileInput.accept = '.zip,.ecw,.ers,.eww,.wld,.tfw,.pgw,.prj,.tif,.tiff,.img,.hfa,.jpg,.jpeg,.png,.webp,image/*';
+      }
+      setTimeout(function() {
+        fileInput.click();
+      }, 60);
+    };
+
     // Immediate Handlers for ERDAS Maps & OSM Extractor
     window.openErdasTab = function() {
       var erdasBtn = document.querySelector('.sidebar-tab-btn[data-tab="calibrate"]');
       if (erdasBtn) {
         erdasBtn.click();
       }
-      var sidebar = document.getElementById('appSidebar');
-      if (sidebar) {
-        sidebar.classList.remove('translate-x-full', '-translate-x-full', 'hidden');
-      }
+      window.togglePlatformSidebar(true);
       if (typeof window.showToast === 'function') {
-        window.showToast('🛰️ تم فتح استوديو خرائط ومعايرة ERDAS IMAGINE', 'info');
+        window.showToast('🛰️ تم فتح استوديو استيراد ومعايرة صور الأقمار الصناعية و ECW', 'info');
       }
     };
 
@@ -103,16 +156,14 @@
       } else {
         var drawBtn = document.querySelector('.sidebar-tab-btn[data-tab="draw"]');
         if (drawBtn) drawBtn.click();
-        var sidebar = document.getElementById('appSidebar');
-        if (sidebar) sidebar.classList.remove('translate-x-full', '-translate-x-full', 'hidden');
+        window.togglePlatformSidebar(true);
       }
     };
 
     window.openDrawTab = function() {
       var drawBtn = document.querySelector('.sidebar-tab-btn[data-tab="draw"]');
       if (drawBtn) drawBtn.click();
-      var sidebar = document.getElementById('appSidebar');
-      if (sidebar) sidebar.classList.remove('translate-x-full', '-translate-x-full', 'hidden');
+      window.togglePlatformSidebar(true);
     };
 
     window.openMapLayoutStudio = function() {
@@ -194,8 +245,9 @@
           <i class="fa-solid fa-expand text-cyan-400 text-xs"></i>
           <span class="hidden sm:inline">ملء الشاشة</span>
         </button>
-        <button id="toggleSidebarBtn" type="button" class="h-7.5 w-7.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 md:hidden border border-slate-700 flex items-center justify-center shrink-0 cursor-pointer" title="فتح / إغلاق القائمة الجانبية">
-          <i class="fa-solid fa-bars text-sm"></i>
+        <button id="toggleSidebarBtn" onclick="window.togglePlatformSidebar()" type="button" class="h-7.5 px-2 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 hover:border-sky-500/50 flex items-center justify-center gap-1.5 shrink-0 cursor-pointer transition-all shadow-sm" title="فتح / إغلاق القائمة الجانبية (الحاسوب، الآيباد، والتابلت)">
+          <i class="fa-solid fa-bars text-xs text-sky-400"></i>
+          <span class="text-[11px] font-bold hidden sm:inline">القائمة</span>
         </button>
       </div>
     </div>
@@ -235,9 +287,9 @@
 
         <!-- 3. Remote Sensing & Vector Extractor Group (المصورات والاستخراج) -->
         <div class="flex items-center gap-1.5 shrink-0">
-          <button id="headerErdasBtn" onclick="window.openErdasTab()" type="button" class="h-6.5 px-2.5 rounded-md bg-amber-500/15 hover:bg-amber-500/30 border border-amber-500/40 text-[11px] font-bold text-amber-300 hover:text-white flex items-center gap-1.5 transition-all shadow-sm whitespace-nowrap cursor-pointer" title="فتح استوديو خرائط الأقمار الصناعية ERDAS IMAGINE (.img / .ers / Apollo WMS)">
-            <i class="fa-solid fa-satellite-dish text-amber-400 text-xs"></i>
-            <span>خرائط ERDAS</span>
+          <button id="headerErdasBtn" onclick="window.openErdasTab()" type="button" class="h-6.5 px-2.5 rounded-md bg-amber-500/15 hover:bg-amber-500/30 border border-amber-500/40 text-[11px] font-bold text-amber-300 hover:text-white flex items-center gap-1.5 transition-all shadow-sm whitespace-nowrap cursor-pointer" title="استيراد ومعايرة صور الأقمار الصناعية ECW و ERDAS و GeoTIFF">
+            <i class="fa-solid fa-cloud-arrow-up text-amber-400 text-xs"></i>
+            <span>استيراد ECW و ERDAS</span>
           </button>
           <button id="headerOsmBtn" onclick="window.openOsmExtractorModal()" type="button" class="h-6.5 px-2.5 rounded-md bg-emerald-500/15 hover:bg-emerald-500/30 border border-emerald-500/40 text-[11px] font-bold text-emerald-300 hover:text-white flex items-center gap-1.5 transition-all shadow-sm whitespace-nowrap cursor-pointer" title="استخراج مباني وبلوكات وشوارع OpenStreetMap للموقع الحالي">
             <i class="fa-solid fa-cloud-arrow-down text-emerald-400 text-xs"></i>
@@ -753,80 +805,89 @@
     <!-- =========================================================================
          Sidebar Control Panel
          ========================================================================= -->
-    <aside id="appSidebar" class="w-full md:w-[420px] lg:w-[450px] glass-panel border-r border-slate-800 z-20 flex flex-col h-full transition-transform duration-300 md:translate-x-0 shrink-0">
+    <aside id="appSidebar" class="w-full md:w-[390px] lg:w-[420px] glass-panel border-r border-slate-800 z-20 flex flex-col h-full shrink-0">
       
       <!-- Official Author Top Banner in Sidebar -->
-      <div class="bg-gradient-to-r from-amber-500/20 via-slate-900 to-amber-500/10 border-b border-amber-500/30 px-3.5 py-2 flex items-center justify-between text-xs shrink-0 shadow-sm">
-        <span class="font-bold text-amber-300 flex items-center gap-1.5">
+      <div class="bg-gradient-to-r from-amber-500/20 via-slate-900 to-amber-500/10 border-b border-amber-500/30 px-3 py-1.5 flex items-center justify-between text-xs shrink-0 shadow-sm">
+        <span class="font-bold text-amber-300 flex items-center gap-1.5 text-[11px]">
           <i class="fa-solid fa-user-gear text-amber-400"></i>
-          <span>تصميم وتطوير الدكتور المهندس احمد لؤي البجاري</span>
+          <span>تصميم وتطوير د.م. احمد لؤي البجاري</span>
         </span>
-        <a href="conversation-history.html" target="_blank" class="text-[10.5px] text-sky-300 hover:text-white bg-sky-500/20 hover:bg-sky-500/40 px-2 py-0.5 rounded-full border border-sky-500/40 font-bold flex items-center gap-1 transition-colors" title="فتح سجل الأوامر والمحادثات الكامل بصفحة HTML">
-          <i class="fa-solid fa-file-lines text-[9px]"></i>
-          <span>السجل</span>
-        </a>
+        <div class="flex items-center gap-1.5">
+          <a href="conversation-history.html" target="_blank" class="text-[10px] text-sky-300 hover:text-white bg-sky-500/20 hover:bg-sky-500/40 px-2 py-0.5 rounded-full border border-sky-500/40 font-bold flex items-center gap-1 transition-colors" title="فتح سجل الأوامر والمحادثات الكامل بصفحة HTML">
+            <i class="fa-solid fa-file-lines text-[8.5px]"></i>
+            <span>السجل</span>
+          </a>
+          <button type="button" id="closeSidebarDrawerBtn" onclick="window.togglePlatformSidebar(false)" class="w-6 h-6 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center text-xs lg:hidden cursor-pointer" title="إغلاق القائمة الجانبية (لشاشات الآيباد والتابلت والهواتف)">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
       </div>
 
-      <!-- Sidebar Navigation Tabs -->
-      <div class="flex border-b border-slate-800 px-3 pt-2 gap-1 overflow-x-auto no-scrollbar shrink-0 bg-slate-900/60">
-        <!-- Tab 1: Catalog -->
-        <button class="sidebar-tab-btn active px-3 py-2 text-xs font-semibold border-b-2 border-blue-500 text-blue-400 flex items-center gap-1.5 transition-colors shrink-0" data-tab="catalog">
-          <i class="fa-solid fa-compass text-[11px]"></i>
-          <span>المستكشف</span>
-        </button>
+      <!-- Sidebar Navigation Tasks Ribbon (Dual-Tier Matrix - All 9 Buttons 100% Visible) -->
+      <div class="border-b border-slate-800 bg-slate-900/95 shrink-0 p-1.5 space-y-1 select-none">
+        
+        <!-- Tier 1: Geospatial Sources & Urban Digitization (4 Primary Tasks) -->
+        <div class="grid grid-cols-4 gap-1">
+          <!-- 1. Catalog / Explorer -->
+          <button class="sidebar-tab-btn active h-8 px-1 rounded-lg text-[11px] font-bold border border-blue-500/60 bg-blue-600/20 text-blue-300 hover:text-white flex items-center justify-center gap-1 transition-all cursor-pointer shadow-sm" data-tab="catalog" title="مستكشف الكتالوج والطبقات الجغرافية المعتمدة">
+            <i class="fa-solid fa-compass text-[11px] text-blue-400"></i>
+            <span>المستكشف</span>
+          </button>
 
-        <!-- Tab 2: ERDAS Maps (Immediately Visible) -->
-        <button class="sidebar-tab-btn px-3 py-2 text-xs font-bold border-b-2 border-transparent text-amber-300 hover:text-amber-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="calibrate" id="sidebarErdasTabBtn">
-          <i class="fa-solid fa-satellite-dish text-[12px] text-amber-400"></i>
-          <span>خرائط ERDAS</span>
-          <span class="text-[9px] bg-amber-500/30 text-amber-200 px-1.5 py-0.2 rounded-full font-mono border border-amber-500/50">ERDAS</span>
-        </button>
+          <!-- 2. ECW & ERDAS Importer & Calibrator -->
+          <button class="sidebar-tab-btn h-8 px-1 rounded-lg text-[11px] font-bold border border-slate-700/70 bg-slate-800/80 text-amber-300 hover:text-white hover:bg-slate-750 flex items-center justify-center gap-1 transition-all cursor-pointer shadow-sm" data-tab="calibrate" id="sidebarErdasTabBtn" title="استيراد ومعايرة صور الأقمار الصناعية ECW و ERDAS و GeoTIFF">
+            <i class="fa-solid fa-cloud-arrow-up text-[11px] text-amber-400"></i>
+            <span class="truncate">استيراد ECW</span>
+          </button>
 
-        <!-- Tab 3: OSM & Drawing (Immediately Visible) -->
-        <button class="sidebar-tab-btn px-3 py-2 text-xs font-bold border-b-2 border-transparent text-emerald-300 hover:text-emerald-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="draw" id="sidebarDrawTabBtn">
-          <i class="fa-solid fa-pen-ruler text-[12px] text-emerald-400"></i>
-          <span>الرسم و OSM</span>
-          <span id="drawnFeaturesBadge" class="text-[9px] bg-emerald-500/30 text-emerald-200 px-1.5 py-0.2 rounded-full font-mono border border-emerald-500/50">OSM</span>
-        </button>
+          <!-- 3. CAD Drawing & OSM Vector Extractor -->
+          <button class="sidebar-tab-btn h-8 px-1 rounded-lg text-[11px] font-bold border border-slate-700/70 bg-slate-800/80 text-emerald-300 hover:text-white hover:bg-slate-750 flex items-center justify-center gap-1 transition-all cursor-pointer shadow-sm" data-tab="draw" id="sidebarDrawTabBtn" title="أدوات الرسم والتخطيط العمراني واستخراج معالم OSM">
+            <i class="fa-solid fa-pen-ruler text-[11px] text-emerald-400"></i>
+            <span class="truncate">الرسم و OSM</span>
+          </button>
 
-        <!-- Tab 4: Archaeology -->
-        <button class="sidebar-tab-btn px-3 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="archaeology">
-          <i class="fa-solid fa-landmark text-[11px] text-amber-400"></i>
-          <span>آثار العراق</span>
-          <span class="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded-full font-mono border border-amber-500/30">40</span>
-        </button>
+          <!-- 4. Iraq Official Archaeology -->
+          <button class="sidebar-tab-btn h-8 px-1 rounded-lg text-[11px] font-bold border border-slate-700/70 bg-slate-800/80 text-amber-200 hover:text-white hover:bg-slate-750 flex items-center justify-center gap-1 transition-all cursor-pointer shadow-sm" data-tab="archaeology" title="المواقع الأثرية والتراثية الرسمية في العراق (40 موقعاً مسجلاً)">
+            <i class="fa-solid fa-landmark text-[10px] text-amber-400"></i>
+            <span class="truncate">آثار العراق</span>
+          </button>
+        </div>
 
-        <!-- Tab 5: Active Layers -->
-        <button class="sidebar-tab-btn px-3 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="active">
-          <i class="fa-solid fa-layer-group text-[11px]"></i>
-          <span>النشطة</span>
-          <span id="activeLayersTabBadge" class="bg-blue-600 text-white rounded-full px-1.5 py-0.2 text-[10px] font-mono">0</span>
-        </button>
+        <!-- Tier 2: GIS Analysis, Layer Management & Technical Logs (5 Operational Tasks) -->
+        <div class="grid grid-cols-5 gap-1">
+          <!-- 5. Active Layers Counter -->
+          <button class="sidebar-tab-btn h-7 px-0.5 rounded-lg text-[10.5px] font-semibold border border-slate-700/70 bg-slate-800/80 text-slate-300 hover:text-white hover:bg-slate-750 flex items-center justify-center gap-1 transition-all cursor-pointer" data-tab="active" title="الطبقات المفعلة حالياً على الخريطة">
+            <i class="fa-solid fa-layer-group text-[10px] text-sky-400"></i>
+            <span>النشطة</span>
+            <span id="activeLayersTabBadge" class="bg-blue-600/90 text-white rounded-full px-1 py-0.2 text-[9px] font-mono leading-none">0</span>
+          </button>
 
-        <!-- Tab 6: Add Layer -->
-        <button class="sidebar-tab-btn px-3 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="add-layer">
-          <i class="fa-solid fa-plus text-[11px]"></i>
-          <span>إضافة طبقة</span>
-        </button>
+          <!-- 6. Add Custom Layer -->
+          <button class="sidebar-tab-btn h-7 px-0.5 rounded-lg text-[10.5px] font-semibold border border-slate-700/70 bg-slate-800/80 text-slate-300 hover:text-white hover:bg-slate-750 flex items-center justify-center gap-1 transition-all cursor-pointer" data-tab="add-layer" title="إضافة خدمة جغرافية مخصصة (FeatureServer, WMS, GeoJSON)">
+            <i class="fa-solid fa-plus text-[10px] text-emerald-400"></i>
+            <span>إضافة</span>
+          </button>
 
-        <!-- Tab 7: Tools & Measurement -->
-        <button class="sidebar-tab-btn px-3 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="tools">
-          <i class="fa-solid fa-ruler-combined text-[11px]"></i>
-          <span>القياس</span>
-        </button>
+          <!-- 7. Measurements Tool -->
+          <button class="sidebar-tab-btn h-7 px-0.5 rounded-lg text-[10.5px] font-semibold border border-slate-700/70 bg-slate-800/80 text-slate-300 hover:text-white hover:bg-slate-750 flex items-center justify-center gap-1 transition-all cursor-pointer" data-tab="tools" title="أدوات القياس المساحي الدقيق (مسافات ومساحات)">
+            <i class="fa-solid fa-ruler-combined text-[10px] text-sky-400"></i>
+            <span>القياس</span>
+          </button>
 
-        <!-- Tab 8: Bookmarks -->
-        <button class="sidebar-tab-btn px-3 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors shrink-0" data-tab="bookmarks">
-          <i class="fa-solid fa-bookmark text-[11px]"></i>
-          <span>المواقع</span>
-        </button>
+          <!-- 8. Bookmarks -->
+          <button class="sidebar-tab-btn h-7 px-0.5 rounded-lg text-[10.5px] font-semibold border border-slate-700/70 bg-slate-800/80 text-slate-300 hover:text-white hover:bg-slate-750 flex items-center justify-center gap-1 transition-all cursor-pointer" data-tab="bookmarks" title="المواقع والمدن المحفوظة">
+            <i class="fa-solid fa-bookmark text-[10px] text-amber-400"></i>
+            <span>المواقع</span>
+          </button>
 
-        <!-- Tab 9: History -->
-        <button class="sidebar-tab-btn px-3 py-2 text-xs font-bold border-b-2 border-transparent text-sky-400 hover:text-sky-300 flex items-center gap-1.5 transition-colors shrink-0" data-tab="history">
-          <i class="fa-solid fa-clock-rotate-left text-[11px]"></i>
-          <span>سجل الأوامر</span>
-          <span class="text-[9px] bg-sky-500/20 text-sky-300 px-1.5 py-0.2 rounded-full font-mono border border-sky-500/30">60</span>
-        </button>
+          <!-- 9. Engineering & Commands History -->
+          <button class="sidebar-tab-btn h-7 px-0.5 rounded-lg text-[10.5px] font-semibold border border-slate-700/70 bg-slate-800/80 text-sky-300 hover:text-white hover:bg-slate-750 flex items-center justify-center gap-1 transition-all cursor-pointer" data-tab="history" title="سجل المحادثات والأوامر الهندسية والتقنية (70 أمراً واستشارة)">
+            <i class="fa-solid fa-clock-rotate-left text-[10px] text-sky-400"></i>
+            <span>السجل</span>
+          </button>
+        </div>
+
       </div>
 
       <!-- Tab Panels Container -->
@@ -1006,129 +1067,256 @@
           </div>
         </div>
 
-        <!-- =================== Panel: ERDAS IMAGINE & Satellite Calibration =================== -->
+        <!-- =================== Panel: ECW & ERDAS Satellite Raster Importer =================== -->
         <div class="tab-panel hidden space-y-4" data-panel="calibrate">
-          <!-- Intro badge -->
-          <div class="bg-gradient-to-br from-amber-950/40 via-slate-900 to-slate-900 border border-amber-500/40 rounded-xl p-3.5 space-y-2 text-xs text-amber-200 leading-relaxed shadow-lg">
+          <!-- Intro badge & attribution -->
+          <div class="bg-gradient-to-br from-amber-950/60 via-slate-900 to-slate-900 border border-amber-500/50 rounded-xl p-3.5 space-y-2 text-xs text-amber-200 leading-relaxed shadow-lg">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
-                <span class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30 text-sm">
+                <span class="w-8 h-8 rounded-lg bg-amber-500/25 text-amber-400 flex items-center justify-center border border-amber-500/40 text-sm shadow-inner">
                   <i class="fa-solid fa-satellite-dish"></i>
                 </span>
                 <div>
-                  <h4 class="font-bold text-xs text-white">استيراد وعرض خرائط ERDAS IMAGINE</h4>
-                  <div class="text-[10px] text-amber-300 font-semibold flex items-center gap-1 mt-0.5">
-                    <i class="fa-solid fa-user-gear text-[9px] text-amber-400"></i>
+                  <h4 class="font-bold text-xs text-white">استيراد ومعايرة صور الأقمار الصناعية و ECW</h4>
+                  <div class="text-[10.5px] text-amber-300 font-semibold flex items-center gap-1 mt-0.5">
+                    <i class="fa-solid fa-user-gear text-[9.5px] text-amber-400"></i>
                     <span>تصميم وتطوير الدكتور المهندس احمد لؤي البجاري</span>
                   </div>
                 </div>
               </div>
-              <span class="text-[9px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono border border-amber-500/40 font-bold">ERDAS .IMG / .ERS / ECW</span>
+              <span class="text-[9px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono border border-amber-500/40 font-bold">ECW / GeoTIFF / ERDAS</span>
             </div>
             <p class="text-[11px] text-slate-300 leading-relaxed">
-              محرك متكامل لقراءة ملفات رستر <strong>ERDAS IMAGINE (.img / HFA)</strong>، وبيانات <strong>ER Mapper (.ers)</strong>، وخرائط <strong>GeoTIFF</strong>، مع دعم خوادم <strong>ERDAS APOLLO WMS</strong> وموزاييك الأقمار الصناعية لمدن ومحافظات العراق.
+              منظومة متكاملة تدعم قراءة ومعايرة كافة امتدادات الرستر الفضائي: <strong>ECW</strong>، و <strong>GeoTIFF (.tif)</strong>، و <strong>ERDAS IMAGINE (.img / HFA)</strong>، وبيانات <strong>ER Mapper (.ers)</strong>، وحزم <strong>ArcView GIS (.zip)</strong>، مع فك شفرة أنظمة الإسقاط (UTM 37N / 38N / 39N) وملفات الإسناد.
             </p>
           </div>
 
-          <!-- ERDAS Live Presets for Iraq -->
-          <div class="bg-slate-900/90 border border-amber-500/30 rounded-xl p-3.5 space-y-2.5">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                <i class="fa-solid fa-bolt text-amber-400 text-xs"></i>
-                <span>نماذج خرائط وتحليلات ERDAS جاهزة في العراق:</span>
-              </span>
-              <span class="text-[10px] text-slate-400">انقر للعرض المباشر</span>
+          <!-- =========================================================================
+               Primary Geospatial File Importer Hub (Dedicated Buttons for All Formats)
+               ========================================================================= -->
+          <div class="bg-slate-900/95 border-2 border-amber-500/40 rounded-xl p-3.5 space-y-3 shadow-md">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+              <h5 class="text-xs font-bold text-white flex items-center gap-1.5">
+                <i class="fa-solid fa-file-arrow-up text-amber-400 text-sm"></i>
+                <span>استيراد ملفات الخرائط والرستر حسب الامتداد:</span>
+              </h5>
+              <span id="calibImageStatus" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">بانتظار اختيار ملف</span>
             </div>
 
-            <div class="grid grid-cols-1 gap-1.5">
-              <button type="button" id="loadErdasLandCoverBtn"
-                class="w-full py-2 px-3 rounded-xl bg-amber-950/40 hover:bg-amber-900/60 border border-amber-500/40 text-right text-xs text-amber-200 hover:text-white flex items-center justify-between transition-all cursor-pointer shadow-sm group">
-                <div class="flex items-center gap-2">
-                  <span class="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center text-xs group-hover:scale-110 transition-transform">
+            <!-- Dedicated 4-Button Grid for Specific Formats -->
+            <div class="grid grid-cols-2 gap-2">
+              <!-- 1. ECW Import Button -->
+              <button type="button" onclick="window.triggerFormatUpload('.ecw')"
+                class="p-2.5 rounded-xl bg-gradient-to-br from-amber-950/60 to-slate-900 hover:from-amber-900/80 hover:to-slate-850 border border-amber-500/60 hover:border-amber-400 text-right transition-all cursor-pointer shadow-sm group">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center text-xs group-hover:scale-110 transition-transform border border-amber-500/40">
+                    <i class="fa-solid fa-satellite-dish"></i>
+                  </span>
+                  <div>
+                    <div class="font-bold text-amber-300 text-xs">استيراد ملف ECW</div>
+                    <div class="text-[9.5px] font-mono text-amber-400/80">.ECW (Wavelet)</div>
+                  </div>
+                </div>
+                <p class="text-[10px] text-slate-300 leading-tight">صور الأقمار الصناعية عالية الضغط والدقة</p>
+              </button>
+
+              <!-- 2. GeoTIFF Import Button -->
+              <button type="button" onclick="window.triggerFormatUpload('.tif,.tiff,.geotiff')"
+                class="p-2.5 rounded-xl bg-gradient-to-br from-emerald-950/60 to-slate-900 hover:from-emerald-900/80 hover:to-slate-850 border border-emerald-500/60 hover:border-emerald-400 text-right transition-all cursor-pointer shadow-sm group">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs group-hover:scale-110 transition-transform border border-emerald-500/40">
+                    <i class="fa-solid fa-map-location-dot"></i>
+                  </span>
+                  <div>
+                    <div class="font-bold text-emerald-300 text-xs">استيراد GeoTIFF</div>
+                    <div class="text-[9.5px] font-mono text-emerald-400/80">.TIF / .TIFF</div>
+                  </div>
+                </div>
+                <p class="text-[10px] text-slate-300 leading-tight">رستر فضائي بإسناد مكاني وإسقاط UTM</p>
+              </button>
+
+              <!-- 3. ERDAS IMAGINE Import Button -->
+              <button type="button" onclick="window.triggerFormatUpload('.img,.ers,.hfa')"
+                class="p-2.5 rounded-xl bg-gradient-to-br from-cyan-950/60 to-slate-900 hover:from-cyan-900/80 hover:to-slate-850 border border-cyan-500/60 hover:border-cyan-400 text-right transition-all cursor-pointer shadow-sm group">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xs group-hover:scale-110 transition-transform border border-cyan-500/40">
                     <i class="fa-solid fa-layer-group"></i>
                   </span>
                   <div>
-                    <div class="font-bold text-white text-[11px]">بغداد: تصنيف استخدام الأراضي (ERDAS Land Cover)</div>
-                    <div class="text-[10px] text-slate-400">7 أصناف: سكن، زراعة، مياه نهر دجلة، مناطق حضرية وطرق</div>
+                    <div class="font-bold text-cyan-300 text-xs">استيراد ERDAS</div>
+                    <div class="text-[9.5px] font-mono text-cyan-400/80">.IMG / .ERS</div>
                   </div>
                 </div>
-                <span class="text-[9px] bg-amber-500/20 text-amber-300 font-mono px-2 py-0.5 rounded border border-amber-500/30 font-bold shrink-0">ERDAS .IMG</span>
+                <p class="text-[10px] text-slate-300 leading-tight">ملفات HFA وترويسة ER Mapper</p>
               </button>
 
-              <button type="button" id="loadErdasNdviBtn"
-                class="w-full py-2 px-3 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/40 text-right text-xs text-emerald-200 hover:text-white flex items-center justify-between transition-all cursor-pointer shadow-sm group">
-                <div class="flex items-center gap-2">
-                  <span class="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs group-hover:scale-110 transition-transform">
-                    <i class="fa-solid fa-seedling"></i>
+              <!-- 4. ArcView GIS ZIP Bundle Import Button -->
+              <button type="button" onclick="window.triggerFormatUpload('.zip')"
+                class="p-2.5 rounded-xl bg-gradient-to-br from-purple-950/60 to-slate-900 hover:from-purple-900/80 hover:to-slate-850 border border-purple-500/60 hover:border-purple-400 text-right transition-all cursor-pointer shadow-sm group">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="w-7 h-7 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs group-hover:scale-110 transition-transform border border-purple-500/40">
+                    <i class="fa-solid fa-file-zipper"></i>
                   </span>
                   <div>
-                    <div class="font-bold text-white text-[11px]">الموصل وسهل نينوى: مؤشر الغطاء النباتي (ERDAS NDVI)</div>
-                    <div class="text-[10px] text-slate-400">تحليل طيفي لمؤشر كثافة الخضرة والمحاصيل المروية</div>
+                    <div class="font-bold text-purple-300 text-xs">حزمة ArcView</div>
+                    <div class="text-[9.5px] font-mono text-purple-400/80">.ZIP Archive</div>
                   </div>
                 </div>
-                <span class="text-[9px] bg-emerald-500/20 text-emerald-300 font-mono px-2 py-0.5 rounded border border-emerald-500/30 font-bold shrink-0">Model Maker</span>
+                <p class="text-[10px] text-slate-300 leading-tight">أرشيف مضغوط يحوي الخارطة و TFW/PRJ</p>
               </button>
+            </div>
 
-              <button type="button" id="loadErdasMosaicBtn"
-                class="w-full py-2 px-3 rounded-xl bg-sky-950/40 hover:bg-sky-900/60 border border-sky-500/40 text-right text-xs text-sky-200 hover:text-white flex items-center justify-between transition-all cursor-pointer shadow-sm group">
-                <div class="flex items-center gap-2">
-                  <span class="w-6 h-6 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center text-xs group-hover:scale-110 transition-transform">
-                    <i class="fa-solid fa-border-all"></i>
-                  </span>
-                  <div>
-                    <div class="font-bold text-white text-[11px]">البصرة وشط العرب: موزاييك فضائي عالي الدقة (0.5m)</div>
-                    <div class="text-[10px] text-slate-400">دمج طيفي Pan-Sharpened وتصحيح هندسي دقيق</div>
-                  </div>
+            <!-- 5. Companion Rasters & World Files Button -->
+            <button type="button" onclick="window.triggerFormatUpload('.png,.jpg,.jpeg,.webp,.tfw,.prj,.pgw,.wld')"
+              class="w-full py-2 px-3 rounded-xl bg-slate-800/80 hover:bg-slate-750 border border-slate-700 hover:border-sky-500/50 text-right transition-all cursor-pointer flex items-center justify-between shadow-sm group">
+              <div class="flex items-center gap-2">
+                <span class="w-6 h-6 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center text-xs group-hover:scale-110 transition-transform">
+                  <i class="fa-solid fa-file-image"></i>
+                </span>
+                <div>
+                  <span class="font-bold text-slate-200 text-xs group-hover:text-white">استيراد صور مرافقة (PNG / JPG مع ملفات .TFW / .PRJ / .WLD)</span>
                 </div>
-                <span class="text-[9px] bg-sky-500/20 text-sky-300 font-mono px-2 py-0.5 rounded border border-sky-500/30 font-bold shrink-0">MosaicPro</span>
-              </button>
-            </div>
-          </div>
+              </div>
+              <span class="text-[9.5px] text-sky-300 font-mono bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">World Files</span>
+            </button>
 
-          <!-- ERDAS File Upload Drop Zone -->
-          <div class="bg-slate-900/90 border border-slate-700/80 rounded-xl p-3.5 space-y-3">
-            <div class="flex items-center justify-between">
-              <h5 class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                <i class="fa-solid fa-folder-open text-amber-400"></i>
-                <span>استيراد ملف خارطة ERDAS محلي</span>
-              </h5>
-              <span class="text-[10px] text-slate-400 font-mono">.IMG / .ERS / .TIF / .ECW</span>
-            </div>
-
-            <div id="erdasDropZone" class="rounded-xl p-4 text-center cursor-pointer space-y-2 border-2 border-dashed border-amber-500/40 hover:border-amber-400 bg-slate-950/60 hover:bg-amber-500/5 transition-all">
+            <!-- Universal Drag & Drop Area -->
+            <div id="ecwDropZone" class="ecw-dropzone rounded-xl p-4 text-center cursor-pointer space-y-2 border-2 border-dashed border-amber-500/50 hover:border-amber-400 bg-slate-950/70 hover:bg-amber-500/5 transition-all">
+              <!-- Hidden Inputs for File Selection -->
+              <input type="file" id="satelliteImageFileInput" accept=".zip,.ecw,.ers,.eww,.wld,.tfw,.pgw,.prj,.tif,.tiff,.img,.hfa,.jpg,.jpeg,.png,.webp,image/*" multiple class="hidden">
+              <input type="file" id="companionImageFileInput" accept="image/*,.tif,.tiff,image/tiff,.zip" class="hidden">
               <input type="file" id="erdasFileInput" accept=".img,.ers,.tif,.tiff,.ecw,.zip,image/*" class="hidden">
-              <div class="w-10 h-10 mx-auto rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 text-lg shadow-inner">
+
+              <div class="w-11 h-11 mx-auto rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 text-xl shadow-inner">
                 <i class="fa-solid fa-cloud-arrow-up"></i>
               </div>
               <div>
-                <div class="text-xs font-bold text-slate-200">اسحب وأفلت ملف ERDAS (.img / .ers / .tif) هنا أو انقر للاستعراض</div>
-                <div class="text-[10px] text-slate-400 mt-1">يدعم ملفات HFA (.img) وترويسة ERS وصور GeoTIFF الجغرافية</div>
+                <div class="text-xs font-bold text-white">اسحب وأفلت أي ملف رستر أو خارطة فضائية هنا</div>
+                <div class="text-[10.5px] text-slate-400 mt-1">
+                  يدعم صيغ <span class="font-mono text-amber-300 font-bold">.ECW</span>، <span class="font-mono text-emerald-300 font-bold">.TIF</span>، <span class="font-mono text-cyan-300 font-bold">.IMG/.ERS</span>، <span class="font-mono text-purple-300 font-bold">.ZIP</span>، <span class="font-mono text-sky-300 font-bold">.PNG/.JPG</span> مع ملفات الإسناد
+                </div>
+              </div>
+              <div class="flex items-center justify-center gap-2 pt-1.5">
+                <button type="button" id="triggerUploadBtn" class="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white rounded-lg text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer">
+                  <i class="fa-solid fa-folder-open text-xs"></i>
+                  <span>استعراض كافة الامتدادات المدعومة...</span>
+                </button>
               </div>
             </div>
 
-            <!-- Active Layer Controls (Opacity & Remove) -->
+            <!-- Direct URL / Service Input -->
+            <div class="flex items-center gap-2 pt-1">
+              <input type="url" id="satelliteImageUrlInput" placeholder="أو الصق رابط خدمة صور ImageServer أو رابط صورة مباشر..." class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500 font-mono">
+              <button type="button" id="loadFromUrlBtn" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-bold text-slate-200 hover:text-white transition-colors cursor-pointer shrink-0">تحميل</button>
+            </div>
+
+            <!-- Active Layer Display Controls (Opacity & Remove) -->
             <div class="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2">
               <div class="flex items-center justify-between text-xs">
                 <span class="text-slate-300 font-semibold flex items-center gap-1.5">
                   <i class="fa-solid fa-circle-half-stroke text-amber-400 text-xs"></i>
-                  <span>شفافية خارطة ERDAS:</span>
+                  <span>شفافية الخارطة الفضائية المعروضة:</span>
                 </span>
                 <span id="erdasOpacityLabel" class="font-mono text-amber-300 font-bold text-xs">85%</span>
               </div>
               <input type="range" id="erdasOpacitySlider" min="0" max="1" step="0.05" value="0.85"
                 class="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer">
-              <div class="flex justify-end pt-1">
+              <div class="flex items-center justify-between pt-1">
+                <button type="button" onclick="window.openGisExportModal()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-[11px] font-bold text-amber-300 hover:text-white transition-colors cursor-pointer flex items-center gap-1">
+                  <i class="fa-solid fa-box-archive text-amber-400 text-[10px]"></i>
+                  <span>استوديو تصدير ArcView</span>
+                </button>
                 <button type="button" id="erdasRemoveBtn"
-                  class="px-3 py-1 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/30 text-rose-300 text-[11px] font-bold rounded-lg cursor-pointer transition-colors flex items-center gap-1">
+                  class="px-2.5 py-1 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/30 text-rose-300 hover:text-white text-[11px] font-bold rounded-lg cursor-pointer transition-colors flex items-center gap-1">
                   <i class="fa-solid fa-trash-can text-[10px]"></i>
-                  <span>إزالة طبقة ERDAS من الخارطة</span>
+                  <span>إزالة الطبقة من الخارطة</span>
                 </button>
               </div>
             </div>
 
-            <!-- Metadata Box & Status Message -->
+            <!-- ERDAS Metadata Box & Status Message (if triggered) -->
             <div id="erdasMetaBox" class="hidden bg-slate-950/95 border border-amber-500/40 rounded-xl p-3 space-y-2"></div>
             <div id="erdasStatusMsg" class="hidden"></div>
+          </div>
+
+          <!-- Iraq Pre-Calibrated Satellite & Analytical Presets -->
+          <div class="bg-slate-900/90 border border-slate-700/80 rounded-xl p-3.5 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                <i class="fa-solid fa-bolt text-amber-400 text-xs"></i>
+                <span>نماذج فضائية وتحليلات جاهزة في العراق:</span>
+              </span>
+              <span class="text-[10px] text-slate-400">انقر للعرض والمعايرة الفورية</span>
+            </div>
+
+            <div class="grid grid-cols-1 gap-1.5">
+              <!-- Fadileh GeoTIFF -->
+              <button type="button" id="loadFadilehTiffBtn" class="w-full py-1.5 px-2.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-right text-[11px] text-amber-200 hover:text-white flex items-center justify-between transition-colors shadow-sm cursor-pointer">
+                <span class="flex items-center gap-1.5">
+                  <i class="fa-solid fa-satellite text-amber-400 text-xs"></i>
+                  <strong>الفضيلية</strong>: خارطة فضائية 64 كم² - شرق بغداد (UTM 38N)
+                </span>
+                <span class="text-[10px] text-amber-300 font-mono bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/30 font-bold">TIFF 64km²</span>
+              </button>
+
+              <!-- Baghdad ECW -->
+              <button type="button" id="loadBaghdadEcwBtn" class="w-full py-1.5 px-2.5 rounded-lg bg-slate-800/80 hover:bg-slate-750 border border-slate-700 text-right text-[11px] text-slate-200 hover:text-white flex items-center justify-between transition-colors cursor-pointer">
+                <span class="flex items-center gap-1.5">
+                  <i class="fa-solid fa-map-pin text-amber-400 text-xs"></i>
+                  <strong>بغداد</strong>: موزاييك نهر دجلة والكرخ والرصافة (UTM 38N - 0.3m/px)
+                </span>
+                <span class="text-[10px] text-amber-300 font-mono bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 font-bold">ECW Preset</span>
+              </button>
+
+              <!-- Basra ECW -->
+              <button type="button" id="loadBasraEcwBtn" class="w-full py-1.5 px-2.5 rounded-lg bg-slate-800/80 hover:bg-slate-750 border border-slate-700 text-right text-[11px] text-slate-200 hover:text-white flex items-center justify-between transition-colors cursor-pointer">
+                <span class="flex items-center gap-1.5">
+                  <i class="fa-solid fa-map-pin text-sky-400 text-xs"></i>
+                  <strong>البصرة</strong>: ميناء المعقل ومجرى شط العرب (UTM 38N - 0.5m/px)
+                </span>
+                <span class="text-[10px] text-sky-300 font-mono bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20 font-bold">ECW Preset</span>
+              </button>
+
+              <!-- Erbil ECW -->
+              <button type="button" id="loadErbilEcwBtn" class="w-full py-1.5 px-2.5 rounded-lg bg-slate-800/80 hover:bg-slate-750 border border-slate-700 text-right text-[11px] text-slate-200 hover:text-white flex items-center justify-between transition-colors cursor-pointer">
+                <span class="flex items-center gap-1.5">
+                  <i class="fa-solid fa-map-pin text-emerald-400 text-xs"></i>
+                  <strong>أربيل</strong>: قلعة أربيل والمركز التاريخي (UTM 38N - 0.2m/px)
+                </span>
+                <span class="text-[10px] text-emerald-300 font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 font-bold">ECW Preset</span>
+              </button>
+              <button type="button" id="loadSampleSatelliteBtn" class="hidden"></button>
+
+              <!-- ERDAS Land Cover -->
+              <button type="button" id="loadErdasLandCoverBtn"
+                class="w-full py-1.5 px-2.5 rounded-lg bg-amber-950/30 hover:bg-amber-900/50 border border-amber-500/30 text-right text-[11px] text-amber-200 hover:text-white flex items-center justify-between transition-all cursor-pointer shadow-sm group">
+                <span class="flex items-center gap-1.5">
+                  <i class="fa-solid fa-layer-group text-amber-400 text-xs"></i>
+                  <strong>بغداد</strong>: تصنيف استخدام الأراضي (ERDAS Land Cover - 7 أصناف)
+                </span>
+                <span class="text-[9px] bg-amber-500/20 text-amber-300 font-mono px-2 py-0.5 rounded border border-amber-500/30 font-bold">ERDAS .IMG</span>
+              </button>
+
+              <!-- ERDAS NDVI -->
+              <button type="button" id="loadErdasNdviBtn"
+                class="w-full py-1.5 px-2.5 rounded-lg bg-emerald-950/30 hover:bg-emerald-900/50 border border-emerald-500/30 text-right text-[11px] text-emerald-200 hover:text-white flex items-center justify-between transition-all cursor-pointer shadow-sm group">
+                <span class="flex items-center gap-1.5">
+                  <i class="fa-solid fa-seedling text-emerald-400 text-xs"></i>
+                  <strong>الموصل وسهل نينوى</strong>: مؤشر الغطاء النباتي (ERDAS NDVI)
+                </span>
+                <span class="text-[9px] bg-emerald-500/20 text-emerald-300 font-mono px-2 py-0.5 rounded border border-emerald-500/30 font-bold">Model Maker</span>
+              </button>
+
+              <!-- ERDAS Mosaic -->
+              <button type="button" id="loadErdasMosaicBtn"
+                class="w-full py-1.5 px-2.5 rounded-lg bg-sky-950/30 hover:bg-sky-900/50 border border-sky-500/30 text-right text-[11px] text-sky-200 hover:text-white flex items-center justify-between transition-all cursor-pointer shadow-sm group">
+                <span class="flex items-center gap-1.5">
+                  <i class="fa-solid fa-border-all text-sky-400 text-xs"></i>
+                  <strong>البصرة وشط العرب</strong>: موزاييك فضائي بدقة 0.5m (Pan-Sharpened)
+                </span>
+                <span class="text-[9px] bg-sky-500/20 text-sky-300 font-mono px-2 py-0.5 rounded border border-sky-500/30 font-bold">MosaicPro</span>
+              </button>
+            </div>
           </div>
 
           <!-- ERDAS APOLLO WMS Connector -->
@@ -1155,87 +1343,6 @@
               </div>
             </div>
           </div>
-
-          <!-- Step 1: Import Image / ECW -->
-          <div class="bg-slate-900/90 border border-slate-700/80 rounded-xl p-3.5 space-y-3">
-            <div class="flex items-center justify-between">
-              <h5 class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                <i class="fa-solid fa-cloud-arrow-up text-amber-400"></i>
-                <span>1. استيراد خريطة ECW أو صورة فضائية</span>
-              </h5>
-              <span id="calibImageStatus" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">لم يتم اختيار ملف</span>
-            </div>
-
-            <!-- Drag & Drop Zone for ECW, TIFF and Satellite Images -->
-            <div id="ecwDropZone" class="ecw-dropzone rounded-xl p-4 text-center cursor-pointer space-y-2 border border-dashed border-amber-500/40 hover:border-amber-400 bg-slate-950/50 hover:bg-amber-500/5 transition-all">
-              <input type="file" id="satelliteImageFileInput" accept=".zip,.ecw,.ers,.eww,.wld,.tfw,.pgw,.prj,.tif,.tiff,.jpg,.jpeg,.png,.webp,image/*" multiple class="hidden">
-              <input type="file" id="companionImageFileInput" accept="image/*,.tif,.tiff,image/tiff,.zip" class="hidden">
-              
-              <div class="w-10 h-10 mx-auto rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 text-lg shadow-inner">
-                <i class="fa-solid fa-file-zipper"></i>
-              </div>
-              <div>
-                <div class="text-xs font-bold text-slate-200">اسحب وأفلت حزمة ArcView ZIP أو ملف GeoTIFF / ECW هنا أو انقر للاستعراض</div>
-                <div class="text-[11px] text-slate-400 mt-0.5">يدعم استيراد حزم <span class="font-mono text-amber-300">.ZIP</span> المصدرة فوراً، وملفات <span class="font-mono text-emerald-300">GeoTIFF (.TIF)</span> وصور <span class="font-mono text-slate-300">PNG / JPG</span> مع ملفات الإسناد (<span class="font-mono text-sky-300">.tfw, .pgw, .prj, .wld</span>)</div>
-              </div>
-              <div class="flex items-center justify-center gap-2 pt-1">
-                <button type="button" id="triggerUploadBtn" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-medium transition-colors shadow flex items-center gap-1.5">
-                  <i class="fa-solid fa-folder-open text-xs"></i>
-                  <span>اختيار ملف أو حزمة ZIP (GeoTIFF / PNG / ECW)</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- Direct URL / Service Input -->
-            <div class="flex items-center gap-2">
-              <input type="url" id="satelliteImageUrlInput" placeholder="أو الصق رابط خدمة صور ImageServer أو رابط صورة مباشر..." class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500">
-              <button type="button" id="loadFromUrlBtn" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-medium text-slate-200 transition-colors">تحميل</button>
-            </div>
-
-            <!-- Ready-to-Test ECW Iraq Presets -->
-            <div class="space-y-1.5 pt-1">
-              <span class="text-[10px] font-semibold text-slate-400 block">نماذج خرائط فضائية جاهزة للمعايرة في العراق:</span>
-              <div class="grid grid-cols-1 gap-1.5">
-                <button type="button" id="loadFadilehTiffBtn" class="w-full py-1.5 px-2.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-right text-[11px] text-amber-200 hover:text-white flex items-center justify-between transition-colors shadow-sm">
-                  <span class="flex items-center gap-1.5">
-                    <i class="fa-solid fa-satellite text-amber-400 text-xs"></i>
-                    <strong>الفضيلية</strong>: خارطة فضائية 64 كم² - شرق بغداد (UTM 38N)
-                  </span>
-                  <span class="text-[10px] text-amber-300 font-mono bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/30">TIFF 64km²</span>
-                </button>
-                <button type="button" id="loadBaghdadEcwBtn" class="w-full py-1.5 px-2.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 border border-slate-700 text-right text-[11px] text-slate-200 hover:text-white flex items-center justify-between transition-colors">
-                  <span class="flex items-center gap-1.5">
-                    <i class="fa-solid fa-map-pin text-amber-400 text-xs"></i>
-                    <strong>بغداد</strong>: موزاييك نهر دجلة والكرخ والرصافة (UTM 38N - 0.3m/px)
-                  </span>
-                  <span class="text-[10px] text-amber-300 font-mono bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">ECW Preset</span>
-                </button>
-                <button type="button" id="loadBasraEcwBtn" class="w-full py-1.5 px-2.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 border border-slate-700 text-right text-[11px] text-slate-200 hover:text-white flex items-center justify-between transition-colors">
-                  <span class="flex items-center gap-1.5">
-                    <i class="fa-solid fa-map-pin text-sky-400 text-xs"></i>
-                    <strong>البصرة</strong>: ميناء المعقل ومجرى شط العرب (UTM 38N - 0.5m/px)
-                  </span>
-                  <span class="text-[10px] text-sky-300 font-mono bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">ECW Preset</span>
-                </button>
-                <button type="button" id="loadErbilEcwBtn" class="w-full py-1.5 px-2.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 border border-slate-700 text-right text-[11px] text-slate-200 hover:text-white flex items-center justify-between transition-colors">
-                  <span class="flex items-center gap-1.5">
-                    <i class="fa-solid fa-map-pin text-emerald-400 text-xs"></i>
-                    <strong>أربيل</strong>: قلعة أربيل والمركز التاريخي (UTM 38N - 0.2m/px)
-                  </span>
-                  <span class="text-[10px] text-emerald-300 font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">ECW Preset</span>
-                </button>
-                <button type="button" id="loadSampleSatelliteBtn" class="hidden"></button>
-
-                <!-- Direct Studio Launch Shortcut -->
-                <button type="button" onclick="window.openGisExportModal()" class="w-full py-2 px-2.5 rounded-lg bg-gradient-to-r from-amber-950/80 via-amber-900/60 to-slate-900 border border-amber-500/50 text-right text-xs text-amber-200 hover:text-white flex items-center justify-between transition-all shadow-sm cursor-pointer group">
-                  <span class="flex items-center gap-1.5 font-bold">
-                    <i class="fa-solid fa-box-archive text-amber-400 group-hover:scale-110 transition-transform"></i>
-                    <span>فتح استوديو خزن وتصدير الخارطة (ArcView GIS & GeoTIFF)</span>
-                  </span>
-                  <i class="fa-solid fa-arrow-left text-amber-400 text-[10px]"></i>
-                </button>
-              </div>
-            </div>
 
             <!-- ECW Metadata Inspector Box (appears when ECW is parsed) -->
             <div id="ecwMetadataBox" class="hidden bg-slate-950/95 border border-amber-500/40 rounded-xl p-3 space-y-2.5">
@@ -1959,7 +2066,7 @@
                 </div>
                 <span>سجل المحادثات والأوامر الهندسية</span>
               </div>
-              <span class="text-[10px] px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 font-mono font-bold border border-sky-500/40">60 أمراً واستشارة</span>
+              <span class="text-[10px] px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 font-mono font-bold border border-sky-500/40">70 أمراً واستشارة</span>
             </div>
 
             <div class="bg-amber-500/10 border border-amber-500/25 rounded-xl p-2.5 text-amber-300 font-bold flex items-center gap-2">
@@ -1968,7 +2075,7 @@
             </div>
 
             <p class="text-slate-300 leading-relaxed text-[11px]">
-              يتضمن التقرير الشامل توثيقاً لكافة الأوامر البرمجية منذ البداية (60 أمراً)، 4 مخططات هندسية تفاعلية SVG (مسار المعالجة، مصفوفة التحويل التوافقي 1:1، استوديو تصدير ArcView GIS، والمطابقة العكسية المغلقة)، بالإضافة إلى 4 جداول للمواصفات الرياضية والجيوديسية.
+              يتضمن التقرير الشامل توثيقاً لكافة الأوامر البرمجية منذ البداية (70 أمراً)، 4 مخططات هندسية تفاعلية SVG (مسار المعالجة، مصفوفة التحويل التوافقي 1:1، استوديو تصدير ArcView GIS، والمطابقة العكسية المغلقة)، بالإضافة إلى 4 جداول للمواصفات الرياضية والجيوديسية.
             </p>
           </div>
 
@@ -2915,7 +3022,7 @@
           <div>
             <div class="flex items-center gap-2">
               <h4 class="font-bold text-sm text-white">سجل المحادثات والأوامر الهندسية والتقنية</h4>
-              <span class="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 font-mono font-bold border border-sky-500/30">60 أمراً واستشارة</span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 font-mono font-bold border border-sky-500/30">70 أمراً واستشارة</span>
             </div>
             <div class="text-[11px] text-amber-300 font-semibold flex items-center gap-1.5 mt-0.5">
               <i class="fa-solid fa-user-gear text-[10px] text-amber-400"></i>
@@ -3357,10 +3464,10 @@
   <script src="js/osm-extractor.js?v=20261001_03"></script>
 
   <!-- ERDAS IMAGINE (.img / .ers / GeoTIFF / WMS) Map Loader Engine -->
-  <script src="js/erdas-loader.js?v=20261001_03"></script>
+  <script src="js/erdas-loader.js?v=20261005_01"></script>
 
   <!-- Living Atlas Engine Entry -->
-  <script src="js/atlas-core.js?v=20261002_03"></script>
+  <script src="js/atlas-core.js?v=20261005_01"></script>
 
   <!-- Global UI Quick Access Helpers -->
   <script>
@@ -3369,12 +3476,11 @@
       if (erdasBtn) {
         erdasBtn.click();
       }
-      const sidebar = document.getElementById('appSidebar');
-      if (sidebar) {
-        sidebar.classList.remove('translate-x-full', '-translate-x-full', 'hidden');
+      if (typeof window.togglePlatformSidebar === 'function') {
+        window.togglePlatformSidebar(true);
       }
       if (typeof window.showToast === 'function') {
-        window.showToast('🛰️ تم فتح استوديو خرائط ومعايرة ERDAS IMAGINE', 'info');
+        window.showToast('🛰️ تم فتح استوديو استيراد ومعايرة صور الأقمار الصناعية و ECW', 'info');
       }
     };
 
@@ -3386,8 +3492,9 @@
       } else {
         const drawBtn = document.querySelector('.sidebar-tab-btn[data-tab="draw"]');
         if (drawBtn) drawBtn.click();
-        const sidebar = document.getElementById('appSidebar');
-        if (sidebar) sidebar.classList.remove('translate-x-full', '-translate-x-full', 'hidden');
+        if (typeof window.togglePlatformSidebar === 'function') {
+          window.togglePlatformSidebar(true);
+        }
       }
     };
 
@@ -3396,9 +3503,8 @@
       if (drawBtn) {
         drawBtn.click();
       }
-      const sidebar = document.getElementById('appSidebar');
-      if (sidebar) {
-        sidebar.classList.remove('translate-x-full', '-translate-x-full', 'hidden');
+      if (typeof window.togglePlatformSidebar === 'function') {
+        window.togglePlatformSidebar(true);
       }
     };
   </script>

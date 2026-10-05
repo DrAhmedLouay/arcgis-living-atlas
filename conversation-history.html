@@ -4501,6 +4501,62 @@
 
         </div>
       </div>
+
+      <!-- =====================================================================
+           Order 70: Responsive Multi-Device Sidebar & Dedicated ECW/Raster Importer Hub
+           ===================================================================== -->
+      <div class="order-card bg-slate-900/60 rounded-2xl border border-amber-500/40 p-4 lg:p-6 space-y-4 hover:border-amber-500/70 transition-all shadow-md" data-category="features" data-index="70">
+        <div class="flex flex-col gap-3">
+          
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+              <span class="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center font-mono font-bold text-xs">
+                #70
+              </span>
+              <span class="text-xs font-bold text-amber-400 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30">
+                إصلاح ظهور شريط المهام الجانبي، إضافة أزرار استيراد ملفات ECW و GeoTIFF و ERDAS، ودعم متصفحات الحاسوب والآيباد والتابلت
+              </span>
+              <span class="text-[10px] text-slate-400 font-medium">
+                المرحلة 14: التوافقية المتعددة الأجهزة ومحرك استيراد الرستر الفضائي المتخصص
+              </span>
+            </div>
+
+            <div class="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
+              <i class="fa-regular fa-clock text-slate-500"></i>
+              <span>2026-10-05T15:00:00Z</span>
+            </div>
+          </div>
+
+          <!-- User Request Box -->
+          <div class="bg-slate-900/90 rounded-xl p-3.5 border border-slate-800/90 space-y-1">
+            <div class="text-[10px] font-bold text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
+              <i class="fa-solid fa-comment-dots text-xs"></i>
+              <span>نص طلب المستخدم / الأمر الموجه:</span>
+            </div>
+            <div class="text-sm font-semibold text-slate-100 leading-relaxed font-sans pr-1">
+              هذه قائمة المهام مختفية ازرارها ، عالج الخلل. اختفى زر استيراد فايل امتداد ecw وبقية الامتدادات، عالج الخلل، واجعل المنصة تعمل على متصفحات الحاسوب واجهزة الايباد والتابلت
+            </div>
+          </div>
+
+          <!-- System Response & Technical Architecture -->
+          <div class="space-y-2 text-xs">
+            <div class="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+              <i class="fa-solid fa-code-commit text-xs"></i>
+              <span>إعادة هندسة شريط المهام الجانبي، تدشين منصة استيراد الرستر الفضائي المخصصة، وتطوير التوافقية الشاملة للأجهزة اللوحية والحواسيب</span>
+            </div>
+            <p class="text-slate-300 leading-relaxed">
+              <strong>التشخيص والحلول الهندسية المنفذة:</strong>
+            </p>
+            <ul class="list-disc list-inside space-y-1 text-slate-300 pr-1 text-[11px]">
+              <li><strong>مصفوفة شريط المهام الثنائي المضمون (Dual-Tier 9-Task Ribbon):</strong> سبب اختفاء المهام كان تراكم 9 أزرار عريضة في صف أحادي ذو تمرير أفقي يتجاوز 850px بينما عرض القائمة 380px، فتمت إعادة هيكلتها إلى مصفوفة ثنائية ثابتة لا تحتاج تمرير أفقي: صف علوي بـ 4 مهام أساسية (المستكشف، استيراد ECW، الرسم و OSM، آثار العراق) وصف تشغيلي بـ 5 مهام (النشطة، إضافة، القياس، المواقع، السجل)، لتكون كافة المهام ظاهرة بنسبة 100% دوماً.</li>
+              <li><strong>منظومة استيراد ملفات ECW والرستر الفضائي المخصصة (Primary Geospatial Importer Hub):</strong> تم نقل قسم الاستيراد ليكون في قمة نافذة المعايرة، مع إضافة 4 أزرار مخصصة ملونة وواضحة جداً لكل صيغة: [استيراد ملف ECW (.ecw)]، [استيراد GeoTIFF (.tif)]، [استيراد ERDAS (.img/.ers)]، [استيراد حزمة ArcView (.zip)]، وزر خاص للصور المرافقة مع ملفات الإسناد (PNG/JPG + TFW/PRJ).</li>
+              <li><strong>منطقة السحب والإفلات الموحدة والربط التلقائي للمحركات:</strong> تدعم سحب وإفلات كافة الصيغ معاً أو الاستعراض الشامل، وتم توجيه صيغ ERDAS (.img / .hfa / .ers) مباشرة إلى محرك <code>AtlasErdasLoader</code> وصيغ ECW و GeoTIFF إلى محركاتها المعيارية.</li>
+              <li><strong>التوافقية التامة مع أجهزة الآيباد والتابلت ومتصفحات الحاسوب:</strong> تحويل القائمة الجانبية على الشاشات اللمسية والأجهزة اللوحية (عرض &le; 1024px) إلى درج عائم (Off-Canvas Drawer Overlay) فائق النعومة مع خلفية مدمجة وضبابية وظل عميق، وإضافة زر إغلاق صريح <code>#closeSidebarDrawerBtn</code> في لافتة المؤلف، وتفعيل زر القائمة العلوي <code>#toggleSidebarBtn</code> لكافة الأجهزة، مع تطبيق خصائص تسريع التمرير اللمسي <code>-webkit-overflow-scrolling: touch</code> وتجاوب اللمس السريع <code>touch-action: manipulation</code>.</li>
+            </ul>
+          </div>
+
+        </div>
+      </div>
     </section>
 
   </main>
@@ -4517,7 +4573,7 @@
       منظومة ArcGIS Living Atlas Iraq • أطلس البيانات المكانية التفاعلي واستوديو تصدير الخرائط الفضائية المصححة لبرامج ArcView GIS و GeoTIFF
     </div>
     <div class="text-[10px] text-slate-600 font-mono">
-      Generated automatically on 2026-09-30 • Full Historical Archive • 69 Engineering Commands
+      Generated automatically on 2026-10-05 • Full Historical Archive • 70 Engineering Commands
     </div>
   </footer>
 
